@@ -138,7 +138,6 @@ class HrModulesTest extends ApiTestCase
     }
 
     public function test_lookups_serve_every_list(): void
-
     {
         $this->as('aisha')->getJson($this->api('lookups'))
             ->assertOk()

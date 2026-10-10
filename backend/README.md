@@ -19,6 +19,19 @@ php artisan test            # 51 feature tests
 `CORS_ALLOWED_ORIGINS` in `.env` lists the React app's address
 (default `http://localhost:5173`, the Vite dev server).
 
+### The first administrator (production)
+
+A deployed database has no users - the deploy only migrates. Create the
+administrator once, on the server:
+
+```bash
+php artisan sadeed:create-admin admin@example.com   # asks for the password twice
+```
+
+Run again with the same email to reset that password (it also signs the
+account out everywhere). The password must be at least 12 characters and is
+stored hashed; it is never written to the repository.
+
 ### Demo sign-ins (password: `password`)
 
 | Email | Role | Employee |
