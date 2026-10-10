@@ -15,6 +15,8 @@ jobs:
     steps:
       # The site is built ON THE SERVER, from its own clone of the repo, and
       # nginx serves /var/www/elpnew/dist - so this is a single SSH step.
+      # The React app lives in frontend/ (the Laravel API in backend/); the
+      # build is copied back to /var/www/elpnew/dist so nginx is unchanged.
       - name: Deploy on VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -32,9 +34,19 @@ jobs:
             git reset --hard origin/main
 
             echo "==> Build"
+            cd frontend
             # npm install (not ci): rolldown-vite pulls platform-specific native
             # deps, so the macOS-generated lock file doesn't satisfy npm ci here.
             npm install --no-audit --no-fund
             npm run build
+
+            echo "==> Publish"
+            # Swap in the new build in one move, so nginx never serves a half-copied folder.
+            rm -rf /var/www/elpnew/dist.new
+            cp -r dist /var/www/elpnew/dist.new
+            rm -rf /var/www/elpnew/dist.old
+            if [ -d /var/www/elpnew/dist ]; then mv /var/www/elpnew/dist /var/www/elpnew/dist.old; fi
+            mv /var/www/elpnew/dist.new /var/www/elpnew/dist
+            rm -rf /var/www/elpnew/dist.old
 
             echo "==> Deploy complete"
