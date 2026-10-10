@@ -77,6 +77,29 @@ class EmployeeTest extends ApiTestCase
             ->assertJsonValidationErrors(['iban', 'swiftCode']);
     }
 
+    public function test_fields_left_empty_take_their_defaults_instead_of_failing(): void
+    {
+        // What the form sends when Annual Leave Days, Status and the dial
+        // codes are left empty: null. The record is still made.
+        $this->as('admin')->postJson($this->api('employees'), [
+            'employeeName' => 'Noor Al Said', 'dateOfJoining' => '2026-10-01', 'department' => 'Finance',
+            'occupation' => 'Accountant', 'salary' => 700,
+            'annualLeaveDays' => null, 'status' => null, 'dialCode' => null, 'workDialCode' => null,
+            'emergencyDialCode' => null, 'socialProtection' => null, 'housing' => null,
+        ])->assertCreated()
+            ->assertJsonPath('data.annualLeaveDays', 30)
+            ->assertJsonPath('data.status', 'Active')
+            ->assertJsonPath('data.dialCode', '+968')
+            ->assertJsonPath('data.socialProtection', true)
+            ->assertJsonPath('data.housing', 0);
+
+        // On an edit, an empty one keeps what the record has.
+        $this->as('admin')->patchJson($this->api('employees/7'), ['annualLeaveDays' => null, 'status' => null])
+            ->assertOk()
+            ->assertJsonPath('data.annualLeaveDays', 30)
+            ->assertJsonPath('data.status', 'Active');
+    }
+
     public function test_only_management_adds_or_changes_employees(): void
     {
         $this->as('aisha')->postJson($this->api('employees'), ['employeeName' => 'X'])->assertForbidden();

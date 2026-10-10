@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\CorrectionRequestController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\EmployeeDocumentController;
 use App\Http\Controllers\Api\EntitlementRequestController;
+use App\Http\Controllers\Api\FirmBankAccountController;
 use App\Http\Controllers\Api\GeneralRequestController;
 use App\Http\Controllers\Api\InvoiceAnalysisController;
 use App\Http\Controllers\Api\LeaveController;
@@ -32,6 +33,11 @@ Route::prefix('v1')->group(function () {
         Route::get('auth/me', [AuthController::class, 'me']);
         Route::post('auth/logout', [AuthController::class, 'logout']);
         Route::get('lookups', LookupController::class);
+
+        /* ----------------------------------------------- the firm's bank accounts */
+        Route::get('bank-accounts', [FirmBankAccountController::class, 'index']);
+        Route::post('bank-accounts', [FirmBankAccountController::class, 'store']);
+        Route::patch('bank-accounts/{bankAccount}', [FirmBankAccountController::class, 'update']);
 
         /* ------------------------------------------------------ employees */
         Route::get('employees/next-number', [EmployeeController::class, 'nextNumber']);

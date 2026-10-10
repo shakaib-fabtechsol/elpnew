@@ -9,6 +9,7 @@ use App\Services\Invoices\DemoInvoiceReader;
 use App\Services\Invoices\InvoiceReader;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Foundation\Console\ServeCommand;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -35,6 +36,21 @@ class AppServiceProvider extends ServiceProvider
 
         $this->registerWorkflowColumns();
         $this->registerGates();
+        $this->keepTempDirectoryForServe();
+    }
+
+    /**
+     * `php artisan serve` starts the web server with only a short list of
+     * environment variables, and TEMP / TMP are not on it. On Windows the
+     * server then has no temp folder of its own, falls back to C:\Windows,
+     * cannot write there - and every file upload fails with "unable to
+     * create a temporary file". Passing the two through fixes it.
+     */
+    private function keepTempDirectoryForServe(): void
+    {
+        ServeCommand::$passthroughVariables = array_values(array_unique([
+            ...ServeCommand::$passthroughVariables, 'TEMP', 'TMP',
+        ]));
     }
 
     /**

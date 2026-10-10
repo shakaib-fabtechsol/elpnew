@@ -65,7 +65,9 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // The firm's own clock: "today" on a payment or a leave is today in
+    // Oman, not in UTC (which is still yesterday until 4am there).
+    'timezone' => env('APP_TIMEZONE', 'Asia/Muscat'),
 
     /*
     |--------------------------------------------------------------------------

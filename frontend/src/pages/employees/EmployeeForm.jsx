@@ -1257,10 +1257,10 @@ export default function EmployeeForm({ self }) {
   const [profileTab, setProfileTab] = useState(() => location.state?.tab || "personal");
   // On the Requests page: the kind whose cards are showing, and the request
   // opened below them, if one has been.
-  // Nothing is chosen when Requests opens: the page shows its categories and
-  // waits for one to be clicked.
-  const [requestCategory, setRequestCategory] = useState(null);
-  const [requestsTab, setRequestsTab] = useState(null);
+  // Requests opens on its first category and that category's first kind
+  // (Financing, Salary Advance), so there is something to read straight away.
+  const [requestCategory, setRequestCategory] = useState(REQUEST_CATEGORIES[0].key);
+  const [requestsTab, setRequestsTab] = useState(REQUEST_CATEGORIES[0].items[0].key);
   // What is open under Employee Management: nothing until a card is chosen.
   const [managementTab, setManagementTab] = useState(null);
   // Said once Employee Information has been saved, until the person moves on.
@@ -1877,10 +1877,8 @@ export default function EmployeeForm({ self }) {
     // Requests opens on the request last chosen there, at its own tab - or,
     // the first time, on the first request of the kind showing.
     if (key === "requests") {
-      // Requests opens closed every time: the strip of categories, and
-      // nothing under it until one is chosen.
-      setRequestCategory(null);
-      setRequestsTab(null);
+      // Requests opens on the first category every time, its first kind shown.
+      openRequestCategory(REQUEST_CATEGORIES[0].key);
     }
     setActiveSection(key);
   };

@@ -123,6 +123,16 @@ export async function api(path, { method = "GET", body, query } = {}) {
       setToken("");
       window.dispatchEvent(new CustomEvent("sadeed:signed-out"));
     }
+    // A crash on the server answers with its own technical words (a database
+    // error, a stack trace): never shown to the person using the app.
+    if (response.status >= 500) {
+      console.error("Server error on " + method + " " + path + ":", json?.message || response.status);
+      throw new ApiError(
+        "Something went wrong on the server and this could not be saved. Please try again; if it keeps happening, tell the administrator.",
+        response.status
+      );
+    }
+
     throw new ApiError(
       json?.message ||
         (response.status === 403

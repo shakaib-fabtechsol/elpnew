@@ -157,8 +157,18 @@ class EmployeeRequest extends ApiRequest
             }
         }
 
-        if (array_key_exists('social_protection', $data)) {
+        // Left alone when empty: "not answered" is not "No" (see below).
+        if (isset($data['social_protection'])) {
             $data['social_protection'] = (bool) $data['social_protection'];
+        }
+
+        // These columns always hold a value. Sent empty, they are left out:
+        // a new record then takes the column's default (Active, +968, 30
+        // days...) and an existing one keeps what it has.
+        foreach (['status', 'dial_code', 'work_dial_code', 'emergency_dial_code', 'annual_leave_days', 'social_protection'] as $key) {
+            if (array_key_exists($key, $data) && $data[$key] === null) {
+                unset($data[$key]);
+            }
         }
 
         // Empty money fields are zero, not "nothing".

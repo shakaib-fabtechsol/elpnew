@@ -107,9 +107,9 @@ export default function BankEdit() {
     draft.openingBalance !== "" &&
     draft.accountType;
 
-  const save = () => {
+  const save = async () => {
     if (!checkRequired() || !canSave) return;
-    updateBankAccount(account.id, {
+    const saved = await updateBankAccount(account.id, {
       bankName: draft.bankName,
       bankBranch: draft.bankBranch,
       branchArea: draft.branchArea,
@@ -124,7 +124,7 @@ export default function BankEdit() {
       branchId: draft.branchId === "all" ? null : Number(draft.branchId),
       active: draft.active,
     });
-    navigate("/settings/firm");
+    if (saved) navigate("/settings/firm");
   };
 
   return (

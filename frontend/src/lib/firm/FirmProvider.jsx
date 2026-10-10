@@ -11,9 +11,10 @@ import {
   nextBranchNumber,
   nextDocumentId,
   nextTransferNo,
-  dayOffset,
   syncBankAccounts,
 } from "@/pages/firm/firmData";
+import { firmApi } from "@/lib/api/modules/firm";
+import { attempt } from "@/lib/api/notice";
 
 const nextId = (rows) => rows.reduce((max, r) => Math.max(max, r.id), 0) + 1;
 
@@ -30,6 +31,13 @@ export default function FirmProvider({ children }) {
   const [payments, setPayments] = useState(initialPayments);
   const [expenses, setExpenses] = useState(initialExpenses);
   const [transfers, setTransfers] = useState(initialTransfers);
+
+  // The accounts come from the API once somebody has signed in.
+  useEffect(() => {
+    const loaded = (event) => setBankAccounts(event.detail || []);
+    window.addEventListener("sadeed:bank-accounts", loaded);
+    return () => window.removeEventListener("sadeed:bank-accounts", loaded);
+  }, []);
 
   // The firm name is stored once and displayed everywhere it appears, the
   // browser tab included.
@@ -83,21 +91,26 @@ export default function FirmProvider({ children }) {
       removeDocument: (id) =>
         setDocuments((prev) => prev.filter((d) => d.id !== id)),
 
-      addBankAccount: (account) =>
-        setBankAccounts((prev) => [
-          ...prev,
-          { ...account, id: nextId(prev), openedAt: dayOffset(0), active: true },
-        ]),
+      // Bank accounts are kept on the server: an account added here is
+      // there after a reload and for everybody else. Each returns the saved
+      // account, or null when the server refused (the reason is shown).
+      addBankAccount: async (account) => {
+        const saved = await attempt(() => firmApi.addBankAccount(account));
+        if (saved) setBankAccounts((prev) => [...prev, saved]);
+        return saved;
+      },
 
-      updateBankAccount: (id, changes) =>
-        setBankAccounts((prev) =>
-          prev.map((a) => (a.id === id ? { ...a, ...changes } : a))
-        ),
+      updateBankAccount: async (id, changes) => {
+        const saved = await attempt(() => firmApi.updateBankAccount(id, changes));
+        if (saved) setBankAccounts((prev) => prev.map((a) => (a.id === id ? saved : a)));
+        return saved;
+      },
 
-      setAccountActive: (id, active) =>
-        setBankAccounts((prev) =>
-          prev.map((a) => (a.id === id ? { ...a, active } : a))
-        ),
+      setAccountActive: async (id, active) => {
+        const saved = await attempt(() => firmApi.updateBankAccount(id, { active }));
+        if (saved) setBankAccounts((prev) => prev.map((a) => (a.id === id ? saved : a)));
+        return saved;
+      },
 
       addExpense: (expense) =>
         setExpenses((prev) => [...prev, { ...expense, id: nextId(prev) }]),

@@ -442,9 +442,11 @@ export default function BankAccountsSection({ canEdit, canRecord }) {
     draft.openingBalance !== "" &&
     draft.accountType;
 
-  const saveAccount = () => {
+  const saveAccount = async () => {
     if (!checkRequired() || !canSaveAccount) return;
-    addBankAccount({
+    // Saved on the server; a refusal (a number already on the list) is
+    // shown and the form stays open as it was.
+    const saved = await addBankAccount({
       bankName: draft.bankName,
       bankBranch: draft.bankBranch,
       accountName: draft.accountName,
@@ -458,7 +460,7 @@ export default function BankAccountsSection({ canEdit, canRecord }) {
       openingBalance: Number(draft.openingBalance) || 0,
       active: draft.active,
     });
-    closeAddBank();
+    if (saved) closeAddBank();
   };
 
   // Money cannot be moved to the account it came from, and there has to be

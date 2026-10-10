@@ -16,3 +16,4 @@ import "./violations";
 import "./generalRequests";
 import "./circulars";
 import "./documents";
+import "./firm";
