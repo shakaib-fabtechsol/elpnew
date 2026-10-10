@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\LookupController;
 use App\Http\Controllers\Api\SalaryAdvanceController;
 use App\Http\Controllers\Api\SalaryPaymentController;
 use App\Http\Controllers\Api\SupplierController;
+use App\Http\Controllers\Api\UnifiedRequestController;
 use App\Http\Controllers\Api\ViolationController;
 use Illuminate\Support\Facades\Route;
 
@@ -79,6 +80,11 @@ Route::prefix('v1')->group(function () {
 
         Route::post('loans/{id}/installments', [LoanController::class, 'recordInstallment'])->whereNumber('id');
         Route::post('invoices/analyze', InvoiceAnalysisController::class)->middleware('throttle:30,1');
+
+        /* ------------------------------ the unified request (free text + AI) */
+        Route::post('requests/interpret', [UnifiedRequestController::class, 'interpret'])->middleware('throttle:20,1');
+        Route::post('requests/retype', [UnifiedRequestController::class, 'retype']);
+        Route::post('requests/submit', [UnifiedRequestController::class, 'submit']);
         Route::get('suppliers', [SupplierController::class, 'index']);
 
         /* ---------------------------------------------------------- leave */

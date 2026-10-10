@@ -20,8 +20,14 @@ export default function SessionGate({ children }) {
 
   useEffect(() => {
     const signedOut = () => setState("signedOut");
+    // Something was created outside the screen that lists it: load again.
+    const reload = () => setState((now) => (now === "ready" ? "loading" : now));
     window.addEventListener("sadeed:signed-out", signedOut);
-    return () => window.removeEventListener("sadeed:signed-out", signedOut);
+    window.addEventListener("sadeed:reload", reload);
+    return () => {
+      window.removeEventListener("sadeed:signed-out", signedOut);
+      window.removeEventListener("sadeed:reload", reload);
+    };
   }, []);
 
   useEffect(() => {

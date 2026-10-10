@@ -134,6 +134,8 @@ import PerformanceSection from "./sections/PerformanceSection";
 import ViolationsSection from "./sections/ViolationsSection";
 import EmployeeCircularsSection from "./sections/CircularsSection";
 import LeavesSection from "./sections/LeavesSection";
+import SmartRequest from "./sections/SmartRequest";
+import { createdRequest } from "@/lib/api/modules/unified";
 import GeneralRequestSection from "./sections/GeneralRequestSection";
 import DocumentIntake, { IntakeReview } from "./sections/DocumentIntake";
 import { INTAKE_FIELDS, fieldElementId, fieldStep, intakeType } from "./documentIntake";
@@ -449,6 +451,11 @@ const REQUEST_CATEGORIES = [
 const REQUEST_ITEMS = REQUEST_CATEGORIES.flatMap((category) =>
   category.items.map((item) => ({ ...item, category: category.key }))
 );
+
+/** Where a request made from the Smart Request box is listed: its type's own tab. */
+const SMART_REQUEST_ITEM = { leaveEncashment: "leavePay", endOfService: "gratuity" };
+const requestItemOf = (type) =>
+  REQUEST_ITEMS.find((item) => item.key === (SMART_REQUEST_ITEM[type] || type)) || null;
 
 /**
  * Adding an employee, one step at a time.
@@ -1243,8 +1250,10 @@ export default function EmployeeForm({ self }) {
   // added employee opens on Documents, the next thing they need.
   const location = useLocation();
   // A record opens on Employee Information; My Profile on its own first page.
+  // Coming back from a request made in the Smart Request box: its own list.
+  const [justCreated] = useState(() => (record && !self ? requestItemOf(createdRequest.read(record.id)?.type) : null));
   const opensOn = (state) =>
-    state?.section || (record && !self ? "profile" : "information");
+    (justCreated && "requests") || state?.section || (record && !self ? "profile" : "information");
   const [activeSection, setActiveSection] = useState(() => opensOn(location.state));
   // A link that names a section (Activity Review in the account menu) opens
   // it even when this page is already showing.
@@ -1259,15 +1268,17 @@ export default function EmployeeForm({ self }) {
   // opened below them, if one has been.
   // Requests opens on its first category and that category's first kind
   // (Financing, Salary Advance), so there is something to read straight away.
-  const [requestCategory, setRequestCategory] = useState(REQUEST_CATEGORIES[0].key);
-  const [requestsTab, setRequestsTab] = useState(REQUEST_CATEGORIES[0].items[0].key);
+  const [requestCategory, setRequestCategory] = useState(justCreated?.category || REQUEST_CATEGORIES[0].key);
+  const [requestsTab, setRequestsTab] = useState(justCreated?.key || REQUEST_CATEGORIES[0].items[0].key);
   // What is open under Employee Management: nothing until a card is chosen.
   const [managementTab, setManagementTab] = useState(null);
   // Said once Employee Information has been saved, until the person moves on.
   const [profileSaved, setProfileSaved] = useState(false);
   // Which side of Financial Benefits is open. Held here because the tabs
   // that choose it sit in the section's heading, which this page draws.
-  const [benefitsTab, setBenefitsTab] = useState("salaries");
+  const [benefitsTab, setBenefitsTab] = useState(
+    (justCreated?.section === "benefits" && justCreated.tab) || "salaries"
+  );
   // The section whose add form is open, if any. Held here because the button
   // that opens it lives in the page header, above the section itself.
   // A new employee's pay takes effect from today unless somebody says when.
@@ -2119,6 +2130,12 @@ export default function EmployeeForm({ self }) {
                 </p>
               )}
             </div>
+          )}
+
+          {/* One box in place of choosing a form: written in the employee's
+              own words, read into a request for them to check and send. */}
+          {isRequests && (
+            <SmartRequest employee={record} onCreated={(result) => createdRequest.reload(record.id, result)} />
           )}
 
           {/* Every kind of request in one row, each its mark in a box and its

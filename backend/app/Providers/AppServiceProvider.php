@@ -7,6 +7,9 @@ use App\Models\Employee;
 use App\Models\User;
 use App\Services\Invoices\DemoInvoiceReader;
 use App\Services\Invoices\InvoiceReader;
+use App\Services\Requests\GeminiRequestInterpreter;
+use App\Services\Requests\RequestInterpreter;
+use App\Services\Requests\RuleBasedRequestInterpreter;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Console\ServeCommand;
@@ -23,6 +26,12 @@ class AppServiceProvider extends ServiceProvider
         // The invoice reader is the one piece that becomes real AI later:
         // bind a real implementation here and nothing else changes.
         $this->app->bind(InvoiceReader::class, DemoInvoiceReader::class);
+
+        // The unified request box: read by Gemini when a key is set, by
+        // plain rules when it is not - the screens say which was used.
+        $this->app->bind(RequestInterpreter::class, fn () => filled(config('services.gemini.key'))
+            ? new GeminiRequestInterpreter(config('services.gemini.key'), config('services.gemini.model'))
+            : new RuleBasedRequestInterpreter);
     }
 
     /**
