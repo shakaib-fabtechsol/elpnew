@@ -13,8 +13,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # The site is built ON THE SERVER, from its own clone of the repo, and
-      # nginx serves /var/www/elpnew/dist - so this is a single SSH step.
+      # Everything is built ON THE SERVER, from its own clone of the repo:
+      # nginx serves /var/www/elpnew/dist and sends /api to the Laravel API
+      # (PM2, port 8002) - so this is a single SSH step.
       # The React app lives in frontend/ (the Laravel API in backend/); the
       # build is copied back to /var/www/elpnew/dist so nginx is unchanged.
       - name: Deploy on VPS
@@ -33,8 +34,23 @@ jobs:
             git fetch origin
             git reset --hard origin/main
 
-            echo "==> Build"
-            cd frontend
+            echo "==> Backend: composer + migrate + cache"
+            # The Laravel API. Its .env lives only on the server (never in git).
+            cd /var/www/elpnew/backend
+            composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+            grep -q "^APP_KEY=base64" .env || php artisan key:generate --force
+            php artisan migrate --force
+            php artisan config:cache
+            php artisan route:cache
+
+            echo "==> Restart the API via PM2 (start it if not running yet)"
+            # nginx sends /api to this port; 8000 and 8001 are the other sites'.
+            pm2 restart elpnew-api --update-env \
+              || pm2 start artisan --name elpnew-api --interpreter php -- serve --host=127.0.0.1 --port=8002
+            pm2 save
+
+            echo "==> Frontend: build"
+            cd /var/www/elpnew/frontend
             # npm install (not ci): rolldown-vite pulls platform-specific native
             # deps, so the macOS-generated lock file doesn't satisfy npm ci here.
             npm install --no-audit --no-fund
