@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EmployeeResource;
 use App\Models\User;
+use App\Services\Permissions\Access;
+use App\Services\Permissions\PermissionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -60,7 +62,11 @@ class AuthController extends Controller
             'permissions' => [
                 'manage' => $user->can('manage'),
                 'pay' => $user->can('pay'),
-                'seesEveryone' => $user->role->seesEveryone(),
+                'decide' => $user->can('decide'),
+                'seesEveryone' => Access::seesEveryone($user),
+                'scope' => Access::scope($user),
+                // Every "module.action" held today, delegated ones included.
+                'granted' => $user->employee ? Access::effective($user->employee) : PermissionCatalog::template($user->role->value)['grants'],
             ],
             'employee' => $user->employee ? new EmployeeResource($user->employee) : null,
         ];

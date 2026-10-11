@@ -27,7 +27,7 @@ class Circular extends Model
 
     protected function casts(): array
     {
-        return ['date' => 'date:Y-m-d'];
+        return ['date' => 'date:Y-m-d', 'brief' => 'array', 'brief_at' => 'datetime'];
     }
 
     protected static function booted(): void

@@ -69,7 +69,7 @@ class GeneralRequestController extends Controller
 
     public function decide(Request $request, int $id): GeneralRequestResource
     {
-        Gate::authorize('manage');
+        Gate::authorize('permission', 'generalRequests.approve');
         $record = $this->find($request, $id);
         if ($record->status !== 'Pending') {
             throw ValidationException::withMessages(['decision' => 'This request has already been decided.']);

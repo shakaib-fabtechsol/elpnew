@@ -6,10 +6,13 @@ use App\Http\Controllers\Api\AssistanceRequestController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BonusController;
 use App\Http\Controllers\Api\CircularController;
+use App\Http\Controllers\Api\CircularInsightController;
 use App\Http\Controllers\Api\CommissionController;
 use App\Http\Controllers\Api\CorrectionRequestController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\EmployeeDocumentController;
+use App\Http\Controllers\Api\EmployeeManagementController;
+use App\Http\Controllers\Api\EmployeePermissionController;
 use App\Http\Controllers\Api\EntitlementRequestController;
 use App\Http\Controllers\Api\FirmBankAccountController;
 use App\Http\Controllers\Api\GeneralRequestController;
@@ -53,6 +56,23 @@ Route::prefix('v1')->group(function () {
         Route::post('employees/{employee}/documents', [EmployeeDocumentController::class, 'store']);
         Route::get('employees/{employee}/documents/{document}/download', [EmployeeDocumentController::class, 'download']);
         Route::delete('employees/{employee}/documents/{document}', [EmployeeDocumentController::class, 'destroy']);
+
+        /* --------------------------------------------- employee management */
+        Route::get('employees-standing', [EmployeeManagementController::class, 'standing']);
+        Route::get('employees/{employee}/management', [EmployeeManagementController::class, 'show']);
+        Route::post('employees/{employee}/management/insight', [EmployeeManagementController::class, 'insight'])->middleware('throttle:20,1');
+        Route::post('employees/{employee}/evaluations', [EmployeeManagementController::class, 'storeEvaluation']);
+        Route::put('employees/{employee}/evaluations/{evaluation}', [EmployeeManagementController::class, 'updateEvaluation']);
+        Route::post('employees/{employee}/development', [EmployeeManagementController::class, 'storeAction']);
+        Route::patch('employees/{employee}/development/{action}', [EmployeeManagementController::class, 'updateAction']);
+
+        /* ---------------------------------------------- system permissions */
+        Route::get('employees/{employee}/permissions', [EmployeePermissionController::class, 'show']);
+        Route::put('employees/{employee}/permissions', [EmployeePermissionController::class, 'update']);
+        Route::post('employees/{employee}/permissions/review', [EmployeePermissionController::class, 'review']);
+        Route::post('employees/{employee}/permissions/assist', [EmployeePermissionController::class, 'assist'])->middleware('throttle:20,1');
+        Route::post('employees/{employee}/permissions/delegations', [EmployeePermissionController::class, 'delegate']);
+        Route::delete('employees/{employee}/permissions/delegations/{delegation}', [EmployeePermissionController::class, 'revoke']);
 
         Route::get('employees/{employee}/corrections', [CorrectionRequestController::class, 'index']);
         Route::post('employees/{employee}/corrections', [CorrectionRequestController::class, 'store']);
@@ -135,5 +155,10 @@ Route::prefix('v1')->group(function () {
         Route::post('circulars/{id}/revise', [CircularController::class, 'revise'])->whereNumber('id');
         Route::post('circulars/{id}/cancel', [CircularController::class, 'cancel'])->whereNumber('id');
         Route::post('circulars/{id}/acknowledge', [CircularController::class, 'acknowledge'])->whereNumber('id');
+        // Understood and followed up: the AI brief, questions, who opened it, compliance.
+        Route::post('circulars/{id}/brief', [CircularInsightController::class, 'brief'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::post('circulars/{id}/ask', [CircularInsightController::class, 'ask'])->whereNumber('id')->middleware('throttle:20,1');
+        Route::post('circulars/{id}/read', [CircularInsightController::class, 'read'])->whereNumber('id');
+        Route::get('circulars-compliance', [CircularInsightController::class, 'compliance']);
     });
 });

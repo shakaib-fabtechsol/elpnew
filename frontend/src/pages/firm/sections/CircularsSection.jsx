@@ -40,6 +40,7 @@ import {
   today,
 } from "@/lib/circulars/context";
 import CircularDetails from "./CircularDetails";
+import CircularCompliance from "./CircularCompliance";
 import { useFirm } from "@/lib/firm/context";
 import { GENERAL_BRANCH } from "../firmData";
 import { checkRequired } from "@/components/shared/formFields";
@@ -419,6 +420,14 @@ export default function CircularsSection({ canEdit }) {
             Circulars
           </h2>
         </div>
+      )}
+
+      {/* For whoever manages circulars: where acknowledgement stands, counted
+          again whenever a circular is issued or acknowledged. */}
+      {canEdit && !open && (
+        <CircularCompliance
+          version={circulars.length + ":" + circulars.reduce((sum, one) => sum + (one.acknowledgements?.length || 0), 0)}
+        />
       )}
 
       {/* The same toolbar every table in the system has: search on the left,

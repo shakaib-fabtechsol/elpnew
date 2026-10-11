@@ -12,6 +12,7 @@ use App\Services\Ai\OpenAiClient;
 use App\Services\Invoices\AiInvoiceReader;
 use App\Services\Invoices\DemoInvoiceReader;
 use App\Services\Invoices\InvoiceReader;
+use App\Services\Permissions\Access;
 use App\Services\Requests\GeminiRequestInterpreter;
 use App\Services\Requests\OpenAiRequestInterpreter;
 use App\Services\Requests\RequestInterpreter;
@@ -36,6 +37,10 @@ class AppServiceProvider extends ServiceProvider
             filled(config('services.gemini.key')) => new GeminiClient(config('services.gemini.key'), config('services.gemini.model')),
             default => new NullAiClient,
         });
+
+        // The circular brief, the management insight and the permission
+        // assistant take that same model through their constructors, so they
+        // need no binding of their own.
 
         // Invoices are read by that model. Without one the demo reader
         // stands in, and the screen says the reading is a sample.
@@ -119,10 +124,17 @@ class AppServiceProvider extends ServiceProvider
         // circulars and violations.
         Gate::define('manage', fn (User $user) => $user->role === Role::Admin);
 
-        // The financial department: pays what management approved.
-        Gate::define('pay', fn (User $user) => in_array($user->role, [Role::Admin, Role::Accounting], true));
+        // Paying and deciding follow System Permissions: by default the
+        // financial department pays and management decides, and either can
+        // be given to - or taken from - a person there.
+        Gate::define('pay', fn (User $user) => Access::allowsOnRequests($user, 'pay'));
+        Gate::define('decide', fn (User $user) => Access::allowsOnRequests($user, 'approve'));
 
-        // Anyone may see their own record; admin and accounting see everybody's.
-        Gate::define('view-employee', fn (User $user, Employee $employee) => $user->role->seesEveryone() || $user->employee_id === $employee->id);
+        // One named permission: Gate::authorize('permission', 'leaveRequests.approve').
+        Gate::define('permission', fn (User $user, string $key) => Access::allows($user, $key));
+
+        // Anyone may see their own record; beyond it, as far as their record
+        // access reaches - chosen departments, or everybody.
+        Gate::define('view-employee', fn (User $user, Employee $employee) => Access::reaches($user, $employee));
     }
 }

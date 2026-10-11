@@ -93,7 +93,7 @@ class LeaveController extends Controller
     /** Stage 2: the relevant department approves (passes it on) or refuses it. */
     public function departmentDecision(Request $request, int $id): LeaveResource
     {
-        Gate::authorize('manage');
+        Gate::authorize('permission', 'leaveRequests.approve');
         $leave = $this->find($request, $id);
         $data = $this->decisionInput($request);
 
@@ -121,7 +121,7 @@ class LeaveController extends Controller
     /** Stage 3: management's final decision. The balance is checked again here. */
     public function managementDecision(Request $request, int $id): LeaveResource
     {
-        Gate::authorize('manage');
+        Gate::authorize('permission', 'leaveRequests.approve');
         $leave = $this->find($request, $id);
         $data = $this->decisionInput($request);
 

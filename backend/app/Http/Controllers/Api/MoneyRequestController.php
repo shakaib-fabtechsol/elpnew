@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\Decision;
 use App\Enums\RequestStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ApiRequest;
@@ -11,6 +12,7 @@ use App\Http\Resources\MoneyRequestResource;
 use App\Http\Resources\RequestEventResource;
 use App\Models\Employee;
 use App\Models\User;
+use App\Services\Permissions\Access;
 use App\Services\RequestWorkflow;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -143,11 +145,15 @@ abstract class MoneyRequestController extends Controller
 
     public function decide(DecisionRequest $request, int $id): MoneyRequestResource
     {
-        Gate::authorize('manage');
+        Gate::authorize('decide');
         $record = $this->find($request->user(), $id);
 
         $this->beforeDecision($record, $request);
         $amount = $request->validated('approvedAmount');
+        // An approval is within the approver's authority or it is not theirs to give.
+        if (in_array($request->decision(), [Decision::Full, Decision::Partial], true)) {
+            Access::withinLimit($request->user(), 'approval', $amount === null ? $record->requestedAmount() : (float) $amount);
+        }
         $this->workflow->decide($record, $request->decision(), $amount === null ? null : (float) $amount, $request->validated('comment'), $request->user());
 
         return new $this->resource($this->load($record));
@@ -157,6 +163,7 @@ abstract class MoneyRequestController extends Controller
     {
         Gate::authorize('pay');
         $record = $this->find($request->user(), $id);
+        Access::withinLimit($request->user(), 'payment', $record->grantedAmount());
 
         $this->workflow->pay($record, $this->paymentFields($record, $request->columns()), $request->user());
 

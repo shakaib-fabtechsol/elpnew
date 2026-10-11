@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Permissions\Access;
 use App\Support\Numbering;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -141,6 +142,6 @@ class Leave extends Model
 
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        return $user->role->seesEveryone() ? $query : $query->where('employee_id', $user->employee_id);
+        return Access::restrict($query, $user);
     }
 }
