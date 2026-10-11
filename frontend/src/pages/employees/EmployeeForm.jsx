@@ -138,6 +138,7 @@ import ViolationsSection from "./sections/ViolationsSection";
 import EmployeeCircularsSection from "./sections/CircularsSection";
 import LeavesSection from "./sections/LeavesSection";
 import SmartRequest from "./sections/SmartRequest";
+import { can } from "@/lib/access";
 import SystemPermissionsSection from "./sections/SystemPermissionsSection";
 import { createdRequest } from "@/lib/api/modules/unified";
 import GeneralRequestSection from "./sections/GeneralRequestSection";
@@ -191,11 +192,12 @@ const SECTIONS = [
   },
   {
     // What the employee has asked of the firm, gathered under one heading.
+    // On My Profile too: a request is the employee's own to file, so the
+    // page they file it from is the one they open on themselves.
     key: "requests",
     label: "Requests",
     icon: LayoutGrid,
     noSave: true,
-    recordOnly: true,
   },
   {
     // Who the person is, what they do and how to reach them: three
@@ -1328,8 +1330,9 @@ export default function EmployeeForm({ self }) {
   // added employee opens on Documents, the next thing they need.
   const location = useLocation();
   // A record opens on Employee Information; My Profile on its own first page.
-  // Coming back from a request made in the Smart Request box: its own list.
-  const [justCreated] = useState(() => (record && !self ? requestItemOf(createdRequest.read(record.id)?.type) : null));
+  // Coming back from a request made in the Smart Request box: its own list,
+  // on My Profile as on a record - the employee files most of them there.
+  const [justCreated] = useState(() => (record ? requestItemOf(createdRequest.read(record.id)?.type) : null));
   const opensOn = (state) =>
     (justCreated && "requests") || state?.section || (record && !self ? "profile" : "information");
   const [activeSection, setActiveSection] = useState(() => opensOn(location.state));
@@ -1682,7 +1685,14 @@ export default function EmployeeForm({ self }) {
   const fileHeading = SECTIONS.find((s) => s.key === "information");
   // Employee Information shows the record in the same tabs it was added in.
   const isProfile = isEditMode && !self && activeSection === "profile";
-  const isRequests = isEditMode && !self && activeSection === "requests";
+  // Requests is the same page on My Profile: the employee asks there, and
+  // each list still keeps deciding and paying for whoever may do them.
+  const isRequests = isEditMode && activeSection === "requests";
+  // Where the arrow at the head of Requests leads back to: the record's first
+  // page - Employee Information on a record, Employee Data on My Profile.
+  const requestsBack = self
+    ? { key: "information", label: "Back to Employee Data" }
+    : { key: "profile", label: "Back to Employee Information" };
   // Adding and reading the record both go tab by tab; `tab` is the one open.
   const isTabbed = isAdding || isProfile;
   const tab = isAdding ? step : profileTab;
@@ -1728,7 +1738,13 @@ export default function EmployeeForm({ self }) {
    * Employees page. Two places to edit one record is two records waiting
    * to disagree - and nobody amends their own job title or joining date.
    */
-  const readOnly = Boolean(self);
+  // On a record opened by somebody else, only with the permission to change
+  // (or, while adding, to add) employee records. This is about the record's
+  // own fields: deciding and paying requests follow their own permissions,
+  // so the request sections are told only whether this is the person's own
+  // page (`self`), never `readOnly` - an accountant who cannot edit a record
+  // still pays what was approved on it.
+  const readOnly = Boolean(self) || !can(isEditMode ? "employees.edit" : "employees.create");
   // Nothing is being asked for on a page that only shows the record.
   const asksFor = !readOnly;
   // While adding, the number the server will give - a preview only; the
@@ -2226,19 +2242,19 @@ export default function EmployeeForm({ self }) {
           {isRequests && (
             <div className="space-y-3">
             <nav aria-label="Breadcrumb" className="text-sm">
-              <span className="text-primary/60">Administration</span>
+              <span className="text-primary/60">{self ? "My Profile" : "Administration"}</span>
               <span aria-hidden="true" className="px-2 text-primary/40">/</span>
               <span className="font-semibold text-primary" aria-current="page">Requests</span>
             </nav>
             <div className="flex items-center gap-4">
               <button
                 type="button"
-                onClick={() => selectSection("profile")}
-                title="Back to Employee Information"
+                onClick={() => selectSection(requestsBack.key)}
+                title={requestsBack.label}
                 className="flex size-9 shrink-0 items-center justify-center rounded-md text-primary transition-colors hover:bg-menu-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ArrowLeft className="size-5 rtl:rotate-180" aria-hidden="true" />
-                <span className="sr-only">Back to Employee Information</span>
+                <span className="sr-only">{requestsBack.label}</span>
               </button>
               <span aria-hidden="true" className="h-9 w-px bg-container-border" />
               <LayoutGrid strokeWidth={1.5} aria-hidden="true" className="size-8 shrink-0 text-primary" />
@@ -4063,7 +4079,7 @@ export default function EmployeeForm({ self }) {
                     employee={formData}
                     tab={benefitsTab}
                     onTabChange={setBenefitsTab}
-                    canEdit={!readOnly}
+                    canEdit={!self}
                     onSaveSalary={(payslip) =>
                       setFormData((prev) => ({ ...prev, ...payslip }))
                     }
@@ -4080,7 +4096,7 @@ export default function EmployeeForm({ self }) {
                     listOnly={isRequests}
                     tab={isRequests ? requestItem.tab : undefined}
                     employee={formData}
-                    canEdit={!readOnly}
+                    canEdit={!self}
                   />
                 )}
 
@@ -4110,11 +4126,11 @@ export default function EmployeeForm({ self }) {
                 {shownSection === "team" && <TeamInsights employee={record} />}
 
                 {shownSection === "violations" && (
-                  <ViolationsSection employee={formData} canEdit={!readOnly} />
+                  <ViolationsSection employee={formData} canEdit={!self} />
                 )}
 
                 {shownSection === "leaves" && (
-                  <LeavesSection employee={formData} canReview={!readOnly} />
+                  <LeavesSection employee={formData} canReview={!self} />
                 )}
 
                 {shownSection === "generalRequest" && (
@@ -4124,7 +4140,7 @@ export default function EmployeeForm({ self }) {
                     key={isRequests ? requestItem.key : "general"}
                     kind={(isRequests && requestItem.kind) || "general"}
                     employee={formData}
-                    canDecide={!readOnly}
+                    canDecide={!self}
                   />
                 )}
 

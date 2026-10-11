@@ -55,7 +55,7 @@ class CircularController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        Gate::authorize('manage');
+        Gate::authorize('permission', 'circulars.create');
         $circular = DB::transaction(function () use ($request) {
             $circular = Circular::create([...$this->validated($request), 'status' => Circular::ACTIVE, 'issued_by' => $request->user()->id]);
             $this->workflow->log($circular, 'Issued', null, Circular::ACTIVE, $request->user(), null, $circular->target_group);
@@ -74,7 +74,7 @@ class CircularController extends Controller
     /** A correction: a new circular in its place; the original is kept as it was. */
     public function revise(Request $request, int $id): JsonResponse
     {
-        Gate::authorize('manage');
+        Gate::authorize('permission', 'circulars.edit');
         $original = Circular::findOrFail($id);
         if ($original->status !== Circular::ACTIVE) {
             throw ValidationException::withMessages(['status' => 'Only an active circular can be revised.']);
@@ -93,7 +93,7 @@ class CircularController extends Controller
 
     public function cancel(Request $request, int $id): CircularResource
     {
-        Gate::authorize('manage');
+        Gate::authorize('permission', 'circulars.delete');
         $circular = Circular::findOrFail($id);
         $circular->update(['status' => Circular::CANCELLED]);
         $this->workflow->log($circular, 'Cancelled', Circular::ACTIVE, Circular::CANCELLED, $request->user());

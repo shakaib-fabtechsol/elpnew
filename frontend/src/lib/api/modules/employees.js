@@ -88,6 +88,16 @@ export const employeesApi = {
     return json.data;
   },
 
+  /**
+   * Document Intake: one paper read by AI into the record's fields. Returns
+   * { available: false } when no AI is connected, so the screen can fall
+   * back to its sample reading; throws when the reading itself failed.
+   */
+  async readPaper(file, typeKey) {
+    const json = await api("employees/papers/read", { method: "POST", body: { file, typeKey: typeKey || null } });
+    return json.data;
+  },
+
   async create(form) {
     const json = await api("employees", { method: "POST", body: employeeBody(form) });
     return employeeFromApi(json.data);

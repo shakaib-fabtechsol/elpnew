@@ -17,7 +17,9 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Monthly salaries. A salary is prepared as a request (REQ-004) with what
@@ -95,6 +97,7 @@ class SalaryPaymentController extends Controller
         DB::transaction(function () use ($payment, $request) {
             $data = $request->columns();
             $payment->fill([
+                ...$request->receiptColumns($payment->employee_id),
                 'payment_method' => $data['payment_method'],
                 'bank_account' => $data['bank_account'] ?? null,
                 'payment_reference' => $data['payment_reference'] ?? null,
@@ -109,6 +112,15 @@ class SalaryPaymentController extends Controller
         });
 
         return new SalaryPaymentResource($payment->load('employee'));
+    }
+
+    /** The transfer receipt, served to whoever may see the salary. */
+    public function receipt(Request $request, int $id): StreamedResponse
+    {
+        $payment = $this->find($request, $id);
+        abort_unless($payment->payment_receipt, 404);
+
+        return Storage::disk('local')->download($payment->payment_receipt, $payment->payment_receipt_name);
     }
 
     public function reject(Request $request, int $id): SalaryPaymentResource

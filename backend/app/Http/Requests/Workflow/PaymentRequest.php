@@ -3,11 +3,13 @@
 namespace App\Http\Requests\Workflow;
 
 use App\Http\Requests\ApiRequest;
+use Illuminate\Support\Facades\Storage;
 
 /** Financial Department Actions: how and when the approved amount was paid. */
 class PaymentRequest extends ApiRequest
 {
-    public const METHODS = ['Bank Transfer', 'Cheque', 'Cash'];
+    /** The methods the payment step offers on every screen (PAYMENT_METHODS in the app). */
+    public const METHODS = ['Bank Transfer', 'Cheque', 'Cash', 'Card', 'Direct Debit'];
 
     /** The financial department (and management) pays. */
     public function authorize(): bool
@@ -31,7 +33,41 @@ class PaymentRequest extends ApiRequest
             'expenseType' => ['nullable', 'string', 'max:60'],
             'category' => ['nullable', 'string', 'max:60'],
             'subcategory' => ['nullable', 'string', 'max:60'],
+            // The bank's proof of the transfer, kept with the payment.
+            'receipt' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ];
+    }
+
+    /** The payment's columns; the receipt is a file, stored by `receiptColumns()`. */
+    public function columns(): array
+    {
+        $columns = parent::columns();
+        unset($columns['receipt']);
+
+        return $columns;
+    }
+
+    /**
+     * Stores the receipt privately and returns the columns that point to it -
+     * nothing when none was attached. The name it was uploaded under is kept,
+     * because the stored one is a hash nobody would recognise.
+     */
+    public function receiptColumns(int $employeeId): array
+    {
+        $file = $this->file('receipt');
+
+        return $file ? [
+            'payment_receipt' => $file->store('payments/'.$employeeId, 'local'),
+            'payment_receipt_name' => $file->getClientOriginalName(),
+        ] : [];
+    }
+
+    /** Removes a receipt just stored for a payment that was then refused. */
+    public static function discard(array $receipt): void
+    {
+        if ($receipt) {
+            Storage::disk('local')->delete($receipt['payment_receipt']);
+        }
     }
 
     public function messages(): array

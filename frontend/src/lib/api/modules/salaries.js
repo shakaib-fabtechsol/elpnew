@@ -32,6 +32,8 @@ export function salaryFromApi(s) {
     method: s.paymentMethod || "",
     bankAccount: s.bankAccount || "",
     reference: s.paymentReference || "",
+    // The transfer receipt filed with the payment (GET .../{id}/receipt).
+    receiptName: s.paymentReceiptName || "",
     paymentDate: s.paymentDate || "",
   };
 }
@@ -65,6 +67,8 @@ export const salariesApi = {
         paymentDate: pay.paymentDate,
         bankAccount: pay.bankAccount || null,
         paymentReference: pay.reference || null,
+        // The bank's proof of the transfer; with it the call goes as multipart.
+        receipt: pay.receipt || undefined,
       },
     });
     return salaryFromApi(json.data);

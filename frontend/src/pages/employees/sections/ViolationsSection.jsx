@@ -42,6 +42,9 @@ import {
   DEDUCTION_PENALTY,
   NO_PENALTY,
   APPEAL_OUTCOMES,
+  PARTIAL_OUTCOME,
+  MODIFIED_PENALTY_TYPES,
+  finalPenalty,
   VIOLATION_STATUS_TONE,
   stagesDone,
   nextStage,
@@ -74,6 +77,8 @@ const draftFrom = (record) => ({
   appealGrounds: record?.appealGrounds || "",
   appealDocument: record?.appealDocument || "",
   appealOutcome: record?.appealOutcome || "",
+  modifiedPenaltyType: record?.modifiedPenaltyType || "",
+  modifiedDeductionAmount: record?.modifiedDeductionAmount || "",
   outcomeReasons: record?.outcomeReasons || "",
   outcomeDate: record?.outcomeDate || today(),
 });
@@ -256,7 +261,7 @@ export default function ViolationsSection({ employee, canEdit = true }) {
   const search = query.trim().toLowerCase();
   const shown = search
     ? mine.filter((v) =>
-        [v.violationNo, v.type, v.investigationStatus, v.investigator, v.penaltyType, v.approvedBy, v.status]
+        [v.violationNo, v.type, v.investigationStatus, v.investigator, v.penaltyType, v.modifiedPenaltyType, v.approvedBy, v.status]
           .join(" ")
           .toLowerCase()
           .includes(search)
@@ -345,8 +350,17 @@ export default function ViolationsSection({ employee, canEdit = true }) {
     setStage("outcome");
   };
 
+  // An appeal accepted in part puts another penalty in the place of the
+  // first, so that outcome is not complete until the new penalty is named -
+  // with its amount, where the new penalty is a deduction.
+  const partialOutcome = draft.appealOutcome === PARTIAL_OUTCOME;
   const canApproveOutcome = Boolean(
-    draft.appealOutcome && draft.outcomeDate && draft.outcomeReasons.trim()
+    draft.appealOutcome &&
+      draft.outcomeDate &&
+      draft.outcomeReasons.trim() &&
+      (!partialOutcome ||
+        (draft.modifiedPenaltyType &&
+          (draft.modifiedPenaltyType !== DEDUCTION_PENALTY || Number(draft.modifiedDeductionAmount) > 0)))
   );
 
   const saveOutcome = async () => {
@@ -586,6 +600,38 @@ export default function ViolationsSection({ employee, canEdit = true }) {
             placeholder="Select outcome"
             options={APPEAL_OUTCOMES}
           />
+          {/* Only an appeal accepted in part has a new penalty to name: the
+              one being replaced is shown beside it, read off the decision. */}
+          {partialOutcome && (
+            <>
+              <Settled id="violation-outcome-original" label="Original Penalty" value={record?.penaltyType} />
+              <Choice
+                id="violation-modified-penalty"
+                label="Modified Penalty Type"
+                required
+                value={draft.modifiedPenaltyType}
+                onChange={(v) => set("modifiedPenaltyType", v)}
+                placeholder="Select modified penalty"
+                options={MODIFIED_PENALTY_TYPES}
+              />
+              {/* Only a deduction has an amount to it. */}
+              {draft.modifiedPenaltyType === DEDUCTION_PENALTY && (
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="violation-modified-deduction" required>
+                    Modified Deduction Amount (<Rial />)
+                  </FieldLabel>
+                  <Input
+                    id="violation-modified-deduction"
+                    inputMode="decimal"
+                    className="text-end"
+                    value={draft.modifiedDeductionAmount}
+                    onChange={(e) => set("modifiedDeductionAmount", e.target.value.replace(/[^\d.]/g, ""))}
+                    placeholder="0.000"
+                  />
+                </div>
+              )}
+            </>
+          )}
           <DateEntry
             id="violation-outcome-date"
             label="Outcome Date"
@@ -673,6 +719,7 @@ export default function ViolationsSection({ employee, canEdit = true }) {
                   const tone =
                     VIOLATION_STATUS_TONE[violation.status] ||
                     VIOLATION_STATUS_TONE["Under Investigation"];
+                  const penalty = finalPenalty(violation);
                   return (
                     <Row key={violation.id}>
                       {/* The number opens the case at the stage it has reached. */}
@@ -698,7 +745,14 @@ export default function ViolationsSection({ employee, canEdit = true }) {
                         <Pair first={violation.investigationStatus} second={shortName(violation.investigator)} />
                       </Td>
                       <Td>
-                        <Pair first={violation.penaltyType} second={violation.penaltyDate && formatDate(violation.penaltyDate)} />
+                        {/* The penalty that stands. Where the appeal changed
+                            it, the one it replaced is said under it. */}
+                        <Pair first={penalty.type} second={violation.penaltyDate && formatDate(violation.penaltyDate)} />
+                        {penalty.modified && (
+                          <span className="block text-xs text-muted-foreground">
+                            Modified on appeal from {violation.penaltyType}
+                          </span>
+                        )}
                       </Td>
                       <Td>
                         <Pair first={shortName(violation.approvedBy)} second={violation.approvalDate && formatDate(violation.approvalDate)} />

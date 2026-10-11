@@ -65,6 +65,7 @@ import {
   FileClock,
   HandCoins,
   Send,
+  ShieldAlert,
 } from "lucide-react";
 import UploadIcon from "@/components/shared/UploadIcon";
 import { cn } from "@/lib/utils";
@@ -704,6 +705,7 @@ export default function EntitlementTab({
           bankAccount: payment.bankAccount,
           paymentDate: payment.paymentDate,
           reference: payment.reference.trim(),
+          receipt,
           // What happened on the case the trip was for goes with the payment.
           financeComment: courtLinked
             ? ("File update " + payment.updateDate + ": " + payment.updateText.trim()).slice(0, 300)
@@ -937,6 +939,18 @@ export default function EntitlementTab({
         <>
           <span className="block font-semibold text-primary">{value}</span>
           <span className="block text-xs text-muted-foreground">{record.reason}</span>
+          {/* What the invoice checks found, on the row itself: management
+              should not have to open a claim to learn it is suspicious. */}
+          {needsInvoice(record.kind) && record.risk?.level === "high" && (
+            <span
+              className="mt-1 inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700"
+              title={record.risk.reasons.join(" ")}
+            >
+              <ShieldAlert className="size-3.5" aria-hidden="true" />
+              High Risk
+              <span className="sr-only">: {record.risk.reasons[0]}</span>
+            </span>
+          )}
         </>
       ),
     },

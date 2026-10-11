@@ -90,6 +90,8 @@ export default function SupplierForm() {
   const [draft, setDraft] = useState(() => draftFrom(existing));
   const [loadedId, setLoadedId] = useState(id);
   const [error, setError] = useState("");
+  // While the save is out, the button waits rather than sending twice.
+  const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState("information");
 
   // Moving straight from one supplier to another reloads the form.
@@ -109,20 +111,23 @@ export default function SupplierForm() {
   const sections = SECTIONS.filter((section) => isEdit || !section.existingOnly);
   const isInformation = activeSection === "information";
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (saving) return;
     if (!canSave) {
       setError("A supplier needs at least a name and a category.");
       return;
     }
     const { dialCode, phone, ...rest } = draft;
     const record = { ...rest, phone: phone ? dialCode + " " + phone : "" };
-    if (isEdit) {
-      updateSupplier(existing.id, record);
-    } else {
-      addSupplier(record);
-    }
-    navigate("/suppliers");
+    setSaving(true);
+    const saved = isEdit
+      ? await updateSupplier(existing.id, record)
+      : await addSupplier(record);
+    setSaving(false);
+    // Refused by the server (a VAT number already on the list, say): the
+    // reason is on screen, and the form stays open on what was typed.
+    if (saved) navigate("/suppliers");
   };
 
   if (isEdit && !existing) {
@@ -163,7 +168,7 @@ export default function SupplierForm() {
         {/* Payments are a record of what happened, so there is nothing to
             save while they are on screen. */}
         {isInformation && (
-          <Button type="submit" form="supplier-form">
+          <Button type="submit" form="supplier-form" disabled={saving}>
             <Save className="me-2 h-4 w-4" />
             {isEdit ? "Save Changes" : "Save Supplier"}
           </Button>

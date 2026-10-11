@@ -1,7 +1,7 @@
 import { api, fetchAll } from "../client";
 import { registerLoader } from "../session";
 import { dateOnly, num, replaceAll } from "../store";
-import { initialViolations, DEDUCTION_PENALTY } from "@/pages/employees/violationData";
+import { initialViolations, DEDUCTION_PENALTY, PARTIAL_OUTCOME } from "@/pages/employees/violationData";
 
 /**
  * Violations (/violations and its five stages).
@@ -44,6 +44,7 @@ export function violationFromApi(v) {
     appealOutcome: v.appealOutcome || "",
     outcomeReasons: v.outcomeReasons || "",
     modifiedPenaltyType: v.modifiedPenaltyType || "",
+    modifiedDeductionAmount: v.modifiedDeductionAmount == null ? "" : num(v.modifiedDeductionAmount),
     outcomeApprovedBy: v.outcomeApprovedBy || "",
     outcomeDate: v.outcomeDate || "",
     status: v.status,
@@ -92,12 +93,21 @@ export const violationsApi = {
       appealDocument: document || null,
     }),
 
-  /** 5. How the appeal was settled. */
-  outcome: (id, draft) =>
-    post(`violations/${id}/outcome`, {
+  /**
+   * 5. How the appeal was settled. Only a partly accepted appeal carries a
+   * penalty to put in the place of the first, and only a deduction an amount -
+   * a choice made and then changed away from is not sent with the one kept.
+   */
+  outcome: (id, draft) => {
+    const partial = draft.appealOutcome === PARTIAL_OUTCOME;
+    return post(`violations/${id}/outcome`, {
       appealOutcome: draft.appealOutcome,
       outcomeReasons: draft.outcomeReasons.trim(),
-    }),
+      modifiedPenaltyType: partial ? draft.modifiedPenaltyType || null : null,
+      modifiedDeductionAmount:
+        partial && draft.modifiedPenaltyType === DEDUCTION_PENALTY ? Number(draft.modifiedDeductionAmount) : null,
+    });
+  },
 };
 
 registerLoader("violations", async () => {

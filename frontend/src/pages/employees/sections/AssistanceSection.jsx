@@ -267,6 +267,7 @@ export default function AssistanceSection({
         paymentDate: review.paymentDate,
         bankAccount: review.bankAccount,
         reference: review.reference.trim(),
+        receipt,
         expenseType: open?.expenseType,
         category: open?.category,
         subcategory: open?.subcategory,

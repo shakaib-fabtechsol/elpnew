@@ -235,6 +235,7 @@ export default function BonusSection({
         bankAccount: payment.bankAccount,
         paidOn: payment.paidOn,
         reference: payment.reference.trim(),
+        receipt,
       })
     );
     if (saved) close();

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { extractDemo, mapExtraction, needsReview, requiredFields } from "./documentIntake";
+import { CONFIDENCE_FLOOR, extractDemo, intakeType, mapExtraction, needsReview, requiredFields } from "./documentIntake";
+import { employeesApi } from "@/lib/api/modules/employees";
 
 // How long the demo takes to read a paper, so the step shows it working.
 const READ_MS = 900;
@@ -22,17 +23,59 @@ export function useDocumentIntake(formData, setFormData) {
   });
   const nextId = useRef(0);
 
-  /** Reads the given papers, then maps everything read into the draft. */
+  /**
+   * What one paper says. Read by the AI on the server; where no AI is
+   * connected the sample reading stands in (and is marked `sample`), and a
+   * reading that failed leaves the paper to be typed in by hand.
+   */
+  const readOne = async (doc) => {
+    if (!doc.size || !doc.file) return extractDemo(doc);
+    try {
+      const read = await employeesApi.readPaper(doc.file, doc.typeKey);
+      if (!read.available) return { ...extractDemo(doc), sample: true };
+      const type = intakeType(read.typeKey);
+      return {
+        typeKey: read.typeKey,
+        fields: read.fields,
+        number: type?.numberKey ? read.fields[type.numberKey]?.value || "" : "",
+        expiry: type?.expiryKey ? read.fields[type.expiryKey]?.value || "" : "",
+        qualification: read.qualification || null,
+        // Somebody already on file with this civil ID, said before saving.
+        duplicateOf: read.duplicateOf || null,
+        status: Object.values(read.fields).some((field) => field.confidence < CONFIDENCE_FLOOR) ? "review" : "processed",
+        sample: false,
+      };
+    } catch (error) {
+      return { status: "failed", typeKey: doc.typeKey || "other", fields: {}, problem: error?.message || "This paper could not be read." };
+    }
+  };
+
+  /** Puts one paper's reading in its place, then maps everything read into the draft. */
+  const settle = (id, reading) => {
+    const { docs: now, formData: current, meta: previous } = latest.current;
+    // Removed, or replaced by another copy, while it was being read.
+    if (!now.some((doc) => doc.id === id)) return;
+    const read = now.map((doc) => (doc.id === id ? { ...doc, ...reading } : doc));
+    const { meta: mapped, fills } = mapExtraction(read, current, previous);
+    latest.current = { ...latest.current, docs: read, meta: mapped };
+    setDocs(read);
+    setMeta(mapped);
+    if (Object.keys(fills).length) setFormData((prev) => ({ ...prev, ...fills }));
+  };
+
+  /** Reads the given papers, each as soon as its own reading comes back. */
   const readLater = (ids) =>
     setTimeout(() => {
-      const { docs: now, formData: current, meta: previous } = latest.current;
-      const read = now.map((doc) =>
-        ids.includes(doc.id) ? { ...doc, ...extractDemo(doc) } : doc
-      );
-      const { meta: mapped, fills } = mapExtraction(read, current, previous);
-      setDocs(read);
-      setMeta(mapped);
-      if (Object.keys(fills).length) setFormData((prev) => ({ ...prev, ...fills }));
+      latest.current.docs
+        .filter((doc) => ids.includes(doc.id))
+        .forEach((doc) => {
+          const copy = doc.file;
+          readOne(doc).then((reading) => {
+            // A newer copy of the same paper is being read instead.
+            const still = latest.current.docs.find((one) => one.id === doc.id);
+            if (still && still.file === copy) settle(doc.id, reading);
+          });
+        });
     }, READ_MS);
 
   const fromFile = (file, typeKey) => {

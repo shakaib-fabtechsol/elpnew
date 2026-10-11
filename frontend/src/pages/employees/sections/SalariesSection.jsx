@@ -56,7 +56,7 @@ import {
 import { useViolations } from "@/lib/violations/context";
 import { useAdvances } from "@/lib/advances/context";
 import { owedAdvances, deductedFrom } from "../advanceSalaryData";
-import { DEDUCTION_PENALTY } from "../violationData";
+import { finalPenalty } from "../violationData";
 import {
   loanRecords,
   loansFor,
@@ -472,8 +472,9 @@ export default function SalariesSection({
       .filter(
         (violation) =>
           violation.employee === employee?.name &&
-          violation.penaltyType === DEDUCTION_PENALTY &&
-          Number(violation.deductionAmount) > 0 &&
+          // The penalty that stands: one modified on appeal takes the place
+          // of the one first decided, amount and all.
+          finalPenalty(violation).amount > 0 &&
           violation.penaltyDate
       )
       .reduce((months, violation) => {
@@ -485,7 +486,7 @@ export default function SalariesSection({
           year,
           total: 0,
         };
-        found.total += Number(violation.deductionAmount);
+        found.total += finalPenalty(violation).amount;
         months[key] = found;
         return months;
       }, {})
@@ -614,7 +615,7 @@ export default function SalariesSection({
     // One already transferred is only being looked at.
     if (!settled) {
       const saved = await send(() =>
-        salariesApi.transfer(openId, { ...payment, reference: payment.reference.trim() })
+        salariesApi.transfer(openId, { ...payment, reference: payment.reference.trim(), receipt })
       );
       if (!saved) return;
       keep(saved);
@@ -1262,8 +1263,10 @@ export default function SalariesSection({
             advances={advances}
             net={net}
             history={history}
+            // The firm asks on the employee's behalf from their record; on
+            // My Profile the employee asks for their own.
             onNew={
-              canEdit && !adding
+              (canEdit || advance) && !adding
                 ? () => {
                     setNewAdvance(true);
                     onOpenAdd?.();

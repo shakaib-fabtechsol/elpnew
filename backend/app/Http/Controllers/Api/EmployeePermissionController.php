@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\EmployeePermission;
 use App\Models\PermissionDelegation;
 use App\Models\PermissionEvent;
+use App\Models\User;
 use App\Services\Permissions\Access;
 use App\Services\Permissions\PermissionAdvisor;
 use App\Services\Permissions\PermissionCatalog;
@@ -15,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -156,6 +158,70 @@ class EmployeePermissionController extends Controller
         return response()->json(['data' => $this->page($employee)]);
     }
 
+    /**
+     * POST /employees/{employee}/permissions/account
+     *
+     * The employee's login account. Without one the permissions set here
+     * have nobody to apply to. The password is made here, shown once to
+     * whoever created the account to hand over, and never stored readable.
+     */
+    public function createAccount(Request $request, Employee $employee): JsonResponse
+    {
+        $this->mayChange($request, $employee);
+        abort_if($employee->user()->exists(), 422, 'This employee already has a login account.');
+        $data = $request->validate([
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
+            'role' => ['required', Rule::enum(Role::class)],
+        ], ['email.unique' => 'Another account already signs in with this email.']);
+
+        $password = Str::password(14, symbols: false);
+        DB::transaction(function () use ($employee, $data, $password, $request) {
+            User::create(['name' => $employee->name, 'email' => $data['email'], 'password' => $password, 'role' => $data['role'], 'employee_id' => $employee->id]);
+            PermissionEvent::create([
+                'employee_id' => $employee->id, 'user_id' => $request->user()->id, 'action' => 'account',
+                'summary' => 'Login account created ('.$data['email'].', '.Role::from($data['role'])->label().').',
+            ]);
+        });
+
+        return response()->json(['data' => [...$this->page($employee->unsetRelation('user')), 'temporaryPassword' => $password]], 201);
+    }
+
+    /** PATCH - the account's role; POST .../reset - a new password, signing every device out. */
+    public function updateAccount(Request $request, Employee $employee): JsonResponse
+    {
+        $this->mayChange($request, $employee);
+        $user = $employee->user()->firstOrFail();
+        $data = $request->validate(['role' => ['required', Rule::enum(Role::class)]]);
+
+        if ($user->role->value !== $data['role']) {
+            DB::transaction(function () use ($user, $data, $employee, $request) {
+                $from = $user->role->label();
+                $user->update(['role' => $data['role']]);
+                PermissionEvent::create([
+                    'employee_id' => $employee->id, 'user_id' => $request->user()->id, 'action' => 'account',
+                    'summary' => 'Account role changed from '.$from.' to '.Role::from($data['role'])->label().'.',
+                ]);
+            });
+        }
+
+        return response()->json(['data' => $this->page($employee->unsetRelation('user'))]);
+    }
+
+    public function resetPassword(Request $request, Employee $employee): JsonResponse
+    {
+        $this->mayChange($request, $employee);
+        $user = $employee->user()->firstOrFail();
+
+        $password = Str::password(14, symbols: false);
+        DB::transaction(function () use ($user, $password, $employee, $request) {
+            $user->update(['password' => $password]);
+            $user->tokens()->delete();
+            PermissionEvent::create(['employee_id' => $employee->id, 'user_id' => $request->user()->id, 'action' => 'account', 'summary' => 'Password reset; every device signed out.']);
+        });
+
+        return response()->json(['data' => [...$this->page($employee->unsetRelation('user')), 'temporaryPassword' => $password]]);
+    }
+
     /* ---------------------------------------------------------- helpers */
 
     /** Changing needs the permission, and is never done on one's own record. */
@@ -241,6 +307,9 @@ class EmployeePermissionController extends Controller
             // A management account holds everything, whatever is ticked here.
             'fullAccess' => $employee->user?->role === Role::Admin,
             'hasAccount' => $employee->user !== null,
+            'account' => $employee->user ? ['email' => $employee->user->email, 'role' => $employee->user->role->value, 'roleLabel' => $employee->user->role->label()] : null,
+            'roles' => array_map(fn (Role $role) => ['value' => $role->value, 'label' => $role->label()], Role::cases()),
+            'suggestedEmail' => $employee->work_email,
             'delegated' => Access::delegated($employee),
             'effective' => Access::effective($employee),
             'risks' => PermissionCatalog::review($settings),

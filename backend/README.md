@@ -109,7 +109,8 @@ each record also carries `statusLabel` - the module's own wording
 | `PUT/POST {type}/{id}` | correct a Pending one / resubmit a Returned one |
 | `DELETE {type}/{id}` | withdraw |
 | `POST {type}/{id}/decision` | `{ decision: full|partial|return|reject, approvedAmount, comment }` |
-| `POST {type}/{id}/payment` | `{ paymentMethod, paymentDate, bankAccount, paymentReference, financeComment }` |
+| `POST {type}/{id}/payment` | `{ paymentMethod, paymentDate, bankAccount, paymentReference, financeComment, receipt }` - method is Bank Transfer, Cheque, Cash, Card or Direct Debit; `receipt` is an optional pdf/jpg/png (multipart) |
+| `GET {type}/{id}/receipt` | the transfer receipt attached to the payment (`paymentReceiptName` on the record) |
 | `GET {type}/{id}/history` | |
 | `POST loans/{id}/installments` | record a repayment or deferral |
 | `POST invoices/analyze` | `file` + `kind` → invoice reading + risk checks |

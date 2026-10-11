@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 
 class SalaryPaymentResource extends ApiResource
 {
-    protected array $except = ['paid_by'];
+    protected array $except = ['paid_by', 'payment_receipt'];
 
     private const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 

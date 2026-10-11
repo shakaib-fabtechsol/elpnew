@@ -376,7 +376,7 @@ export default function LoansSection({
   const processPayout = async () => {
     if (!checkRequired() || !canPay || !granted || !canDecide) return;
     const saved = await send(() =>
-      loansApi.pay(openId, { ...payout, reference: payout.reference.trim() })
+      loansApi.pay(openId, { ...payout, reference: payout.reference.trim(), receipt })
     );
     if (!saved) return;
     keep(saved);

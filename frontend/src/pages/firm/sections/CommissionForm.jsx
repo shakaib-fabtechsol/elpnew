@@ -742,6 +742,8 @@ export default function CommissionForm({
       paymentDate: payment.paymentDate,
       reference: payment.reference.trim(),
       receipt: receipt?.name || "",
+      // The file itself, for the payment call to send.
+      receiptFile: receipt,
       paymentNotes: (payment.notes || "").trim(),
     });
   };

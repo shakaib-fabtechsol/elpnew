@@ -40,6 +40,7 @@ import BranchesSection from "./sections/BranchesSection";
 import BankAccountsSection from "./sections/BankAccountsSection";
 import TransactionsSection from "./sections/TransactionsSection";
 import CommissionSection from "./sections/CommissionSection";
+import { can } from "@/lib/access";
 
 /**
  * The profile's sections, in the order the company is read: what it is, where
@@ -219,7 +220,7 @@ export default function LawFirmProfile() {
                 <FirmInformationSection canEdit={isAdmin} />
               )}
               {activeSection === "circulars" && (
-                <CircularsSection canEdit={isAdmin} />
+                <CircularsSection canEdit={isAdmin || can("circulars.create", "circulars.edit")} />
               )}
               {activeSection === "branches" && (
                 <BranchesSection canEdit={isAdmin} />

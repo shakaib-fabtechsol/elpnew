@@ -48,6 +48,8 @@ export function assistanceFromApi(a) {
     bankAccount: a.bankAccount || "",
     account: a.bankAccount || "",
     reference: a.paymentReference || "",
+    // The transfer receipt filed with the payment (GET .../{id}/receipt).
+    receiptName: a.paymentReceiptName || "",
     proof: fileName(a.proof),
     notes: a.notes || "",
     statusLabel: a.statusLabel,
@@ -104,6 +106,8 @@ export const assistanceApi = {
         expenseType: pay.expenseType || null,
         category: pay.category || null,
         subcategory: pay.subcategory || null,
+        // The bank's proof of the transfer; with it the call goes as multipart.
+        receipt: pay.receipt || undefined,
       },
     });
     return assistanceFromApi(json.data);

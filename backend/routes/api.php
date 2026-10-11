@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\CorrectionRequestController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\EmployeeDocumentController;
 use App\Http\Controllers\Api\EmployeeManagementController;
+use App\Http\Controllers\Api\EmployeePaperController;
 use App\Http\Controllers\Api\EmployeePermissionController;
 use App\Http\Controllers\Api\EntitlementRequestController;
 use App\Http\Controllers\Api\FirmBankAccountController;
@@ -48,6 +49,8 @@ Route::prefix('v1')->group(function () {
         /* ------------------------------------------------------ employees */
         Route::get('employees/next-number', [EmployeeController::class, 'nextNumber']);
         Route::get('employees/short-name', [EmployeeController::class, 'shortName']);
+        // Document Intake: one paper read by AI into the record's fields.
+        Route::post('employees/papers/read', EmployeePaperController::class)->middleware('throttle:40,1');
         Route::apiResource('employees', EmployeeController::class);
         Route::get('employees/{employee}/requests-overview', [EmployeeController::class, 'requestsOverview']);
         Route::get('employees/{employee}/leave-balance', [LeaveController::class, 'balance']);
@@ -71,6 +74,9 @@ Route::prefix('v1')->group(function () {
         Route::put('employees/{employee}/permissions', [EmployeePermissionController::class, 'update']);
         Route::post('employees/{employee}/permissions/review', [EmployeePermissionController::class, 'review']);
         Route::post('employees/{employee}/permissions/assist', [EmployeePermissionController::class, 'assist'])->middleware('throttle:20,1');
+        Route::post('employees/{employee}/permissions/account', [EmployeePermissionController::class, 'createAccount']);
+        Route::patch('employees/{employee}/permissions/account', [EmployeePermissionController::class, 'updateAccount']);
+        Route::post('employees/{employee}/permissions/account/reset', [EmployeePermissionController::class, 'resetPassword']);
         Route::post('employees/{employee}/permissions/delegations', [EmployeePermissionController::class, 'delegate']);
         Route::delete('employees/{employee}/permissions/delegations/{delegation}', [EmployeePermissionController::class, 'revoke']);
 
@@ -98,6 +104,7 @@ Route::prefix('v1')->group(function () {
             Route::delete("$uri/{id}", [$controller, 'destroy'])->whereNumber('id');
             Route::post("$uri/{id}/decision", [$controller, 'decide'])->whereNumber('id');
             Route::post("$uri/{id}/payment", [$controller, 'pay'])->whereNumber('id');
+            Route::get("$uri/{id}/receipt", [$controller, 'receipt'])->whereNumber('id');
             Route::get("$uri/{id}/history", [$controller, 'history'])->whereNumber('id');
         }
 
@@ -114,6 +121,8 @@ Route::prefix('v1')->group(function () {
         Route::post('requests/retype', [UnifiedRequestController::class, 'retype']);
         Route::post('requests/submit', [UnifiedRequestController::class, 'submit']);
         Route::get('suppliers', [SupplierController::class, 'index']);
+        Route::post('suppliers', [SupplierController::class, 'store']);
+        Route::patch('suppliers/{supplier}', [SupplierController::class, 'update']);
 
         /* ---------------------------------------------------------- leave */
         Route::get('leaves', [LeaveController::class, 'index']);
@@ -145,6 +154,7 @@ Route::prefix('v1')->group(function () {
         Route::post('salaries', [SalaryPaymentController::class, 'store']);
         Route::get('salaries/{id}', [SalaryPaymentController::class, 'show'])->whereNumber('id');
         Route::post('salaries/{id}/transfer', [SalaryPaymentController::class, 'transfer'])->whereNumber('id');
+        Route::get('salaries/{id}/receipt', [SalaryPaymentController::class, 'receipt'])->whereNumber('id');
         Route::post('salaries/{id}/reject', [SalaryPaymentController::class, 'reject'])->whereNumber('id');
 
         /* ------------------------------------------------------- circulars */

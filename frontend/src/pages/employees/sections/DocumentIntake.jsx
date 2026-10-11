@@ -443,6 +443,25 @@ export default function DocumentIntake({
           )}
         </section>
 
+        {/* Said plainly when the values did not come off the papers themselves,
+            and when a paper could not be read or is somebody's already on file. */}
+        {docs.some((doc) => doc.sample) && (
+          <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            AI reading is not switched on, so the values filled in are a sample and not read from these papers. Check and
+            correct every field.
+          </p>
+        )}
+        {docs
+          .filter((doc) => doc.problem || doc.duplicateOf)
+          .map((doc) => (
+            <p key={doc.id} role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              <span className="font-semibold">{doc.fileName}: </span>
+              {doc.duplicateOf
+                ? "this civil ID is already on file for " + doc.duplicateOf.name + " (" + doc.duplicateOf.empNo + ")."
+                : doc.problem}
+            </p>
+          ))}
+
         {/* What the papers have done for the profile so far. */}
         {docs.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border border-green-100 bg-green-50/40 px-4 py-3">

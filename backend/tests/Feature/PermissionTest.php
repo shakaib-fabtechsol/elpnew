@@ -150,6 +150,74 @@ class PermissionTest extends ApiTestCase
         $this->as('aisha')->getJson($this->api('auth/me'))->assertJsonPath('data.permissions.pay', false);
     }
 
+    public function test_confidential_parts_of_a_record_need_their_own_permission(): void
+    {
+        // Reaching the record is not seeing its salary, bank details or papers.
+        $this->grant(self::AISHA, ['grants' => [...PermissionCatalog::template('lawyer')['grants'], 'employees.view'], 'scope' => 'department', 'departments' => ['Legal Services']]);
+        $this->as('aisha')->getJson($this->api('employees/'.self::AHMED))->assertOk()
+            ->assertJsonPath('data.salary', null)->assertJsonPath('data.netSalary', null)
+            ->assertJsonPath('data.iban', null)->assertJsonPath('data.civilId', null)
+            ->assertJsonPath('data.restricted', ['payroll', 'bankDetails', 'identity'])
+            ->assertJsonPath('data.name', 'Ahmed Al Balushi');
+
+        $this->grant(self::AISHA, ['grants' => [...PermissionCatalog::template('lawyer')['grants'], 'payroll.view'], 'scope' => 'department', 'departments' => ['Legal Services']]);
+        $this->as('aisha')->getJson($this->api('employees/'.self::AHMED))
+            ->assertJsonPath('data.salary', 800)->assertJsonPath('data.restricted', ['bankDetails', 'identity']);
+
+        // Her own record is always whole; management sees everything.
+        $this->as('aisha')->getJson($this->api('employees/'.self::AISHA))->assertJsonPath('data.restricted', []);
+        $this->as('admin')->getJson($this->api('employees/'.self::AHMED))->assertJsonPath('data.restricted', [])->assertJsonPath('data.salary', 800);
+    }
+
+    public function test_changing_records_and_issuing_circulars_follow_their_permissions(): void
+    {
+        $circular = ['date' => '2026-10-01', 'targetGroup' => 'All Employees', 'content' => 'Office closed on 18 November.'];
+        $this->as('aisha')->patchJson($this->api('employees/'.self::AHMED), ['position' => 'Senior Associate'])->assertForbidden();
+        $this->as('aisha')->postJson($this->api('circulars'), $circular)->assertForbidden();
+
+        $this->grant(self::AISHA, ['grants' => [...PermissionCatalog::template('lawyer')['grants'], 'employees.edit', 'circulars.create'], 'scope' => 'department', 'departments' => ['Legal Services']]);
+
+        $this->as('aisha')->patchJson($this->api('employees/'.self::AHMED), ['position' => 'Senior Associate'])->assertOk()->assertJsonPath('data.position', 'Senior Associate');
+        // Editing reaches only as far as her record access does.
+        $this->as('aisha')->patchJson($this->api('employees/'.self::SARAH), ['position' => 'x'])->assertForbidden();
+        // Editing is not adding.
+        $this->as('aisha')->postJson($this->api('employees'), ['employeeName' => 'New Person', 'salary' => 500, 'dateOfJoining' => '2026-01-05', 'department' => 'Legal Services', 'occupation' => 'Lawyer'])->assertForbidden();
+        $this->as('aisha')->postJson($this->api('circulars'), $circular)->assertCreated();
+    }
+
+    public function test_a_login_account_is_created_with_a_password_shown_once(): void
+    {
+        $page = $this->as('admin')->getJson($this->api('employees/'.self::SARAH.'/permissions'))->assertJsonPath('data.hasAccount', false)->json('data');
+        $this->assertCount(4, $page['roles']);
+
+        $made = $this->as('admin')->postJson($this->api('employees/'.self::SARAH.'/permissions/account'), ['email' => 'sarah@sadeed.om', 'role' => 'accounting'])
+            ->assertCreated()
+            ->assertJsonPath('data.hasAccount', true)
+            ->assertJsonPath('data.account.email', 'sarah@sadeed.om')
+            ->assertJsonPath('data.settings.template', 'accounting')
+            ->assertJsonPath('data.history.0.action', 'account')
+            ->json('data');
+        $this->assertSame(14, strlen($made['temporaryPassword']));
+
+        // She signs in with it, and it is not handed out again.
+        $this->postJson($this->api('auth/login'), ['email' => 'sarah@sadeed.om', 'password' => $made['temporaryPassword']])->assertOk()->assertJsonPath('data.user.role', 'accounting');
+        $this->as('admin')->getJson($this->api('employees/'.self::SARAH.'/permissions'))->assertJsonMissingPath('data.temporaryPassword');
+
+        // One account each; one email each; never one's own.
+        $this->as('admin')->postJson($this->api('employees/'.self::SARAH.'/permissions/account'), ['email' => 'other@sadeed.om', 'role' => 'lawyer'])->assertUnprocessable();
+        $this->as('admin')->postJson($this->api('employees/5/permissions/account'), ['email' => 'sarah@sadeed.om', 'role' => 'lawyer'])->assertUnprocessable()->assertJsonValidationErrors('email');
+        $this->as('ahmed')->postJson($this->api('employees/5/permissions/account'), ['email' => 'x@sadeed.om', 'role' => 'admin'])->assertForbidden();
+
+        // A reset gives a new password and the old one stops working.
+        $reset = $this->as('admin')->postJson($this->api('employees/'.self::SARAH.'/permissions/account/reset'))->assertOk()->json('data.temporaryPassword');
+        $this->assertNotSame($made['temporaryPassword'], $reset);
+        $this->postJson($this->api('auth/login'), ['email' => 'sarah@sadeed.om', 'password' => $made['temporaryPassword']])->assertStatus(422);
+        $this->postJson($this->api('auth/login'), ['email' => 'sarah@sadeed.om', 'password' => $reset])->assertOk();
+
+        $this->as('admin')->patchJson($this->api('employees/'.self::SARAH.'/permissions/account'), ['role' => 'lawyer'])
+            ->assertOk()->assertJsonPath('data.account.role', 'lawyer')->assertJsonPath('data.history.0.summary', 'Account role changed from Accounting to Lawyer.');
+    }
+
     public function test_the_access_review_names_what_deserves_a_second_look(): void
     {
         $risks = $this->as('admin')->postJson($this->api('employees/'.self::AISHA.'/permissions/review'), $this->state([

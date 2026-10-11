@@ -11,7 +11,9 @@ use Illuminate\Http\Request;
  */
 class MoneyRequestResource extends ApiResource
 {
-    protected array $except = ['decided_by', 'paid_by'];
+    // The receipt goes out by name (paymentReceiptName) and is fetched from
+    // /{requests}/{id}/receipt, not from wherever it is stored.
+    protected array $except = ['decided_by', 'paid_by', 'payment_receipt'];
 
     protected function extra(Request $request): array
     {

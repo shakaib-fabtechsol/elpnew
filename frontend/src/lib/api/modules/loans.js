@@ -74,6 +74,8 @@ export function loanFromApi(l) {
     method: l.paymentMethod || "",
     bankAccount: l.bankAccount || "",
     reference: l.paymentReference || "",
+    // The transfer receipt filed with the payment (GET .../{id}/receipt).
+    receiptName: l.paymentReceiptName || "",
     paidBy: l.paidBy || "",
     statusLabel: l.statusLabel,
     history: l.history || [],
@@ -133,6 +135,8 @@ export const loansApi = {
         bankAccount: pay.bankAccount || null,
         paymentReference: pay.reference || null,
         financeComment: pay.financeComment || null,
+        // The bank's proof of the transfer; with it the call goes as multipart.
+        receipt: pay.receipt || undefined,
       },
     });
     return loanFromApi(json.data);

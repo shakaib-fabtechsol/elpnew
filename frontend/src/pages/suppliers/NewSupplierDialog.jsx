@@ -23,6 +23,7 @@ import { checkRequired } from "@/components/shared/formFields";
 export default function NewSupplierDialog({ open, onOpenChange, onCreated }) {
   const { addSupplier } = useSuppliers();
   const [draft, setDraft] = useState(emptySupplier);
+  const [saving, setSaving] = useState(false);
 
   const set = (name, value) => setDraft((prev) => ({ ...prev, [name]: value }));
 
@@ -31,11 +32,14 @@ export default function NewSupplierDialog({ open, onOpenChange, onCreated }) {
     onOpenChange(false);
   };
 
-  const save = () => {
-    if (!checkRequired() || !canSaveSupplier(draft)) return;
-    const record = toSupplierRecord(draft);
-    addSupplier(record);
-    onCreated?.(record);
+  const save = async () => {
+    if (saving || !checkRequired() || !canSaveSupplier(draft)) return;
+    setSaving(true);
+    const saved = await addSupplier(toSupplierRecord(draft));
+    setSaving(false);
+    // Refused by the server: the reason is shown and the dialog stays open.
+    if (!saved) return;
+    onCreated?.(saved);
     close();
   };
 
@@ -63,7 +67,7 @@ export default function NewSupplierDialog({ open, onOpenChange, onCreated }) {
           <Button variant="outline" onClick={close}>
             Cancel
           </Button>
-          <Button onClick={save}>
+          <Button onClick={save} disabled={saving}>
             Save Supplier
           </Button>
         </DialogFooter>

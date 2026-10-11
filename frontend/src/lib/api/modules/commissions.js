@@ -52,6 +52,8 @@ export function commissionFromApi(c) {
     method: c.paymentMethod || "",
     paymentDate: c.paymentDate || "",
     reference: c.paymentReference || "",
+    // The transfer receipt filed with the payment (GET .../{id}/receipt).
+    receiptName: c.paymentReceiptName || "",
     paymentNotes: c.financeComment || c.managementComment || "",
     decidedBy: c.decidedBy || "",
     paidBy: c.paidBy || "",
@@ -119,6 +121,8 @@ export const commissionsApi = {
           bankAccount: pay.bankAccount || null,
           paymentReference: pay.reference || null,
           financeComment: pay.financeComment || null,
+          // The bank's proof of the transfer; with it the call goes as multipart.
+          receipt: pay.receipt || undefined,
         },
       })
     );

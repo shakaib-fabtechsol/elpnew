@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Clock, History, Loader2, Plus, ShieldAlert, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Clock, History, KeyRound, Loader2, Plus, ShieldAlert, ShieldCheck, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -85,6 +85,10 @@ export default function SystemPermissionsSection({ employee }) {
   const [instruction, setInstruction] = useState("");
   const [proposal, setProposal] = useState(null);
   const [lending, setLending] = useState(null); // the temporary-access form, when open
+  // The login account: what is being typed to create one, and the password
+  // just made - shown once, here, and nowhere afterwards.
+  const [account, setAccount] = useState({ email: "", role: "" });
+  const [password, setPassword] = useState("");
 
   const take = (data) => {
     setPage(data);
@@ -213,6 +217,22 @@ export default function SystemPermissionsSection({ employee }) {
     }
   };
 
+  /** Creates the account, changes its role or resets its password. */
+  const onAccount = async (call, done) => {
+    setBusy("account");
+    setPassword("");
+    try {
+      const data = await call();
+      take(data);
+      if (data.temporaryPassword) setPassword(data.temporaryPassword);
+      notify(done, "success");
+    } catch (error) {
+      notifyError(error);
+    } finally {
+      setBusy("");
+    }
+  };
+
   const revoke = async (id) => {
     setBusy("revoking");
     try {
@@ -243,12 +263,112 @@ export default function SystemPermissionsSection({ employee }) {
           can never be locked out of its own settings.
         </Banner>
       )}
-      {!page.hasAccount && (
-        <Banner icon={ShieldAlert}>
-          This employee has no login account yet. The permissions set here take effect when one is created.
-        </Banner>
-      )}
       {own && <Banner icon={ShieldAlert}>Nobody sets their own permissions. Another administrator changes these for you.</Banner>}
+
+      {/* ------------------------------------------------- login account */}
+      <Panel
+        title="Login Account"
+        icon={KeyRound}
+        note={
+          page.hasAccount
+            ? "How this employee signs in. Their permissions apply to this account."
+            : "This employee cannot sign in yet. The permissions below take effect once an account is created."
+        }
+      >
+        {page.hasAccount ? (
+          <div className="grid items-end gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="form-field space-y-2">
+              <Label htmlFor="account-email">Sign-In Email</Label>
+              <Input id="account-email" value={page.account.email} readOnly disabled />
+            </div>
+            <div className="form-field space-y-2">
+              <Label htmlFor="account-role">Account Role</Label>
+              <Select
+                value={page.account.role}
+                onValueChange={(role) => role !== page.account.role && onAccount(() => permissionsApi.changeRole(employeeId, role), "Account role changed.")}
+                disabled={locked}
+              >
+                <SelectTrigger id="account-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {page.roles.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>
+                      {role.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {canEdit && (
+              <div>
+                <Button type="button" variant="outline" onClick={() => onAccount(() => permissionsApi.resetPassword(employeeId), "Password reset.")} disabled={Boolean(busy)}>
+                  {busy === "account" && <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />}
+                  Reset Password
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : canEdit ? (
+          <div className="grid items-end gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="form-field space-y-2 lg:col-span-2">
+              <Label htmlFor="account-email">
+                Sign-In Email<span className="ms-0.5 text-destructive">*</span>
+              </Label>
+              <Input
+                id="account-email"
+                type="email"
+                value={account.email || (account.touched ? "" : page.suggestedEmail || "")}
+                maxLength={255}
+                onChange={(e) => setAccount((prev) => ({ ...prev, email: e.target.value, touched: true }))}
+                disabled={Boolean(busy)}
+              />
+            </div>
+            <div className="form-field space-y-2">
+              <Label htmlFor="account-role">
+                Account Role<span className="ms-0.5 text-destructive">*</span>
+              </Label>
+              <Select value={account.role} onValueChange={(role) => setAccount((prev) => ({ ...prev, role }))} disabled={Boolean(busy)}>
+                <SelectTrigger id="account-role">
+                  <SelectValue placeholder="Please Select" />
+                </SelectTrigger>
+                <SelectContent>
+                  {page.roles.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>
+                      {role.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!account.role || !(account.email || (!account.touched && page.suggestedEmail)) || Boolean(busy)}
+                onClick={() =>
+                  onAccount(
+                    () => permissionsApi.createAccount(employeeId, { email: (account.email || page.suggestedEmail || "").trim(), role: account.role }),
+                    "Login account created."
+                  )
+                }
+              >
+                {busy === "account" ? <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" /> : <Plus className="me-2 h-4 w-4" aria-hidden="true" />}
+                Create Account
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {password && (
+          <div role="status" className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
+            <p className="font-semibold">
+              Temporary password: <span className="select-all font-mono text-base">{password}</span>
+            </p>
+            <p className="mt-0.5">It is shown this once and cannot be read again. Give it to the employee; a new one can be made with Reset Password.</p>
+          </div>
+        )}
+      </Panel>
 
       {/* ------------------------------------------------ access profile */}
       <Panel title="Access Profile" note="Where this employee starts from, how far their access reaches and how much they may sign off">

@@ -55,6 +55,8 @@ export function bonusFromApi(b) {
     method: b.paymentMethod || "",
     bankAccount: b.bankAccount || "",
     reference: b.paymentReference || "",
+    // The transfer receipt filed with the payment (GET .../{id}/receipt).
+    receiptName: b.paymentReceiptName || "",
     attachment: fileName(b.attachment),
     notes: b.notes || "",
     statusLabel: b.statusLabel,
@@ -111,6 +113,8 @@ export const bonusesApi = {
         expenseType: pay.expenseType || null,
         category: pay.category || null,
         subcategory: pay.subcategory || null,
+        // The bank's proof of the transfer; with it the call goes as multipart.
+        receipt: pay.receipt || undefined,
       },
     });
     return bonusFromApi(json.data);

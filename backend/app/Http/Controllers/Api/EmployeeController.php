@@ -45,7 +45,7 @@ class EmployeeController extends Controller
 
     public function store(EmployeeRequest $request): JsonResponse
     {
-        Gate::authorize('manage');
+        Gate::authorize('permission', 'employees.create');
         $employee = Employee::create($request->columns());
 
         return (new EmployeeResource($employee->refresh()))->response()->setStatusCode(201);
@@ -60,7 +60,9 @@ class EmployeeController extends Controller
 
     public function update(EmployeeRequest $request, Employee $employee): EmployeeResource
     {
-        Gate::authorize('manage');
+        Gate::authorize('permission', 'employees.edit');
+        // And only a record their access reaches.
+        Gate::authorize('view-employee', $employee);
         $employee->update($request->columns());
 
         return new EmployeeResource($employee->refresh());
@@ -69,7 +71,8 @@ class EmployeeController extends Controller
     /** Archived, never erased: requests and payments still point at the record. */
     public function destroy(Employee $employee): JsonResponse
     {
-        Gate::authorize('manage');
+        Gate::authorize('permission', 'employees.delete');
+        Gate::authorize('view-employee', $employee);
         $employee->delete();
 
         return response()->json(null, 204);
@@ -78,7 +81,7 @@ class EmployeeController extends Controller
     /** GET /employees/next-number - what the Add Employee header shows. */
     public function nextNumber(): JsonResponse
     {
-        Gate::authorize('manage');
+        Gate::authorize('permission', 'employees.create');
         $value = (int) DB::table('sequences')->where('series', 'EMP')->value('value');
 
         return response()->json(['data' => ['empNo' => 'EMP-'.str_pad((string) ($value + 1), 4, '0', STR_PAD_LEFT)]]);
@@ -93,7 +96,7 @@ class EmployeeController extends Controller
      */
     public function shortName(Request $request): JsonResponse
     {
-        Gate::authorize('manage');
+        abort_unless(Access::allows($request->user(), 'employees.create', 'employees.edit'), 403);
         $data = $request->validate([
             'name' => ['nullable', 'string', 'max:255'],
             'nameAr' => ['nullable', 'string', 'max:255'],

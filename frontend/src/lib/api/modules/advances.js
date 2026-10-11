@@ -41,6 +41,8 @@ export function advanceFromApi(a) {
     method: a.paymentMethod || "",
     paymentDate: a.paymentDate || "",
     reference: a.paymentReference || "",
+    // The transfer receipt filed with the payment (GET .../{id}/receipt).
+    receiptName: a.paymentReceiptName || "",
     financeComment: a.financeComment || "",
     paidOn: paid ? a.paymentDate || dateOnly(a.paidAt) : "",
     paidBy: a.paidBy || "",
@@ -94,6 +96,8 @@ export const advancesApi = {
         expenseType: pay.expenseType || null,
         category: pay.category || null,
         subcategory: pay.subcategory || null,
+        // The bank's proof of the transfer; with it the call goes as multipart.
+        receipt: pay.receipt || undefined,
       },
     });
     return advanceFromApi(json.data);

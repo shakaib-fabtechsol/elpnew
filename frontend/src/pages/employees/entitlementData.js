@@ -1,3 +1,7 @@
+import { CURRENT_USER } from "@/pages/dashboard/dashboardData";
+import { shortName } from "@/lib/shortName";
+import { INVOICE_KINDS } from "./invoiceAI";
+
 /**
  * What the firm owes an employee beyond the monthly salary.
  *
@@ -189,6 +193,40 @@ export const entitlementHistory = (record) => {
 };
 
 export const initialEntitlements = [];
+
+/**
+ * Invoice claims the checks marked high risk and nobody has decided yet, for
+ * the notification bell - so management hears of a duplicate invoice or a
+ * repeated medication without opening the request first.
+ *
+ * Only for those who decide requests: to anybody else it is not theirs to act
+ * on. A claim handed back to the employee is left out until it is sent again
+ * (it reads Pending here, with the decision "completion").
+ */
+export function highRiskInvoiceAlerts() {
+  const permissions = CURRENT_USER.permissions;
+  if (!permissions?.decide && !permissions?.manage) return [];
+
+  return initialEntitlements
+    .filter(
+      (row) =>
+        INVOICE_KINDS.includes(row.kind) &&
+        row.status === ENTITLEMENT_PENDING &&
+        row.decision !== "completion" &&
+        row.risk?.level === "high"
+    )
+    .map((row) => ({
+      id: "invoice-risk:" + row.id,
+      title: shortName(row.employee),
+      detail: row.requestNo + ": " + (row.risk.reasons[0] || "Review required"),
+      // The bell lists by date; a claim is dated the day it was made.
+      expiryDate: row.requestDate,
+      state: "expired",
+      status: "High-Risk Invoice",
+      kind: "invoiceRisk",
+      href: "/employees/" + row.employeeId,
+    }));
+}
 
 /**
  * The letters each kind of request is numbered under.

@@ -21,8 +21,10 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * The endpoints every SADEED money request has, written once:
@@ -34,6 +36,7 @@ use Illuminate\Validation\ValidationException;
  *   DELETE /{requests}/{id}            withdraw before a decision
  *   POST   /{requests}/{id}/decision   Management Decision        (management)
  *   POST   /{requests}/{id}/payment    Financial Department Actions (admin, accounting)
+ *   GET    /{requests}/{id}/receipt    the transfer receipt attached to the payment
  *   GET    /{requests}/{id}/history    the timeline
  *
  * A module says which model, resource and form it uses, and adds its own
@@ -165,9 +168,24 @@ abstract class MoneyRequestController extends Controller
         $record = $this->find($request->user(), $id);
         Access::withinLimit($request->user(), 'payment', $record->grantedAmount());
 
-        $this->workflow->pay($record, $this->paymentFields($record, $request->columns()), $request->user());
+        $receipt = $request->receiptColumns($record->employee_id);
+        try {
+            $this->workflow->pay($record, $this->paymentFields($record, [...$request->columns(), ...$receipt]), $request->user());
+        } catch (ValidationException $refused) {
+            PaymentRequest::discard($receipt);
+            throw $refused;
+        }
 
         return new $this->resource($this->load($record));
+    }
+
+    /** The transfer receipt, served to whoever may see the request - never from a public URL. */
+    public function receipt(Request $request, int $id): StreamedResponse
+    {
+        $record = $this->find($request->user(), $id);
+        abort_unless($record->payment_receipt, 404);
+
+        return Storage::disk('local')->download($record->payment_receipt, $record->payment_receipt_name);
     }
 
     public function history(Request $request, int $id): AnonymousResourceCollection

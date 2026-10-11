@@ -10,6 +10,8 @@ class Supplier extends Model
 {
     use SoftDeletes;
 
+    public const STATUSES = ['Active', 'Inactive'];
+
     protected $guarded = ['id', 'supplier_no'];
 
     protected function casts(): array

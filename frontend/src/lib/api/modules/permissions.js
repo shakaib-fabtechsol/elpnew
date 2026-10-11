@@ -44,6 +44,19 @@ export const permissionsApi = {
     ).data;
   },
 
+  /** The login account: the result carries `temporaryPassword`, once. */
+  async createAccount(employeeId, { email, role }) {
+    return (await api(`employees/${employeeId}/permissions/account`, { method: "POST", body: { email, role } })).data;
+  },
+
+  async changeRole(employeeId, role) {
+    return (await api(`employees/${employeeId}/permissions/account`, { method: "PATCH", body: { role } })).data;
+  },
+
+  async resetPassword(employeeId) {
+    return (await api(`employees/${employeeId}/permissions/account/reset`, { method: "POST" })).data;
+  },
+
   async revoke(employeeId, delegationId) {
     return (await api(`employees/${employeeId}/permissions/delegations/${delegationId}`, { method: "DELETE" })).data;
   },

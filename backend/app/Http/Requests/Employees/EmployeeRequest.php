@@ -29,10 +29,10 @@ class EmployeeRequest extends ApiRequest
         'Primary Court Lawyer', 'Appeal Court Lawyer', 'Non-Practicing Lawyer',
     ];
 
-    /** Only management adds or changes a record - checked before the body is. */
+    /** Adding and changing a record each need their permission - checked before the body is. */
     public function authorize(): bool
     {
-        return (bool) $this->user()?->can('manage');
+        return (bool) $this->user()?->can('permission', $this->isMethod('post') ? 'employees.create' : 'employees.edit');
     }
 
     /**

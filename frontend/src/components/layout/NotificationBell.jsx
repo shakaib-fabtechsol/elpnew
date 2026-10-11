@@ -15,6 +15,7 @@ import {
   writeAlertIds,
 } from "@/lib/notifications/expiryAlerts";
 import { employeeDocumentAlerts } from "@/pages/employees/employeeData";
+import { highRiskInvoiceAlerts } from "@/pages/employees/entitlementData";
 
 /** How often the reminder sounds while anything is still unread. */
 const REMINDER_MINUTES = 10;
@@ -64,7 +65,7 @@ export default function NotificationBell() {
 
   // Clients' papers and employees' papers, in one list, soonest first. Each
   // alert says whose it is, what it is and where it opens.
-  const alerts = [
+  const expiring = [
     ...expiryAlerts(clients).map((alert) => ({
       ...alert,
       title: alert.clientName,
@@ -73,6 +74,12 @@ export default function NotificationBell() {
     })),
     ...employeeDocumentAlerts(),
   ].sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
+  // Invoice claims the checks marked high risk, for those who decide them.
+  // They wait on a decision, so they sit above the papers, newest first.
+  const risky = highRiskInvoiceAlerts().sort((a, b) =>
+    b.expiryDate.localeCompare(a.expiryDate)
+  );
+  const alerts = [...risky, ...expiring];
   const [readIds, setReadIds] = useState(readAlertIds);
   const [open, setOpen] = useState(false);
 
@@ -112,7 +119,9 @@ export default function NotificationBell() {
           className="relative me-1"
           title={
             hasUnread
-              ? unread.length + " documents expiring or expired"
+              ? risky.length
+                ? unread.length + " unread alerts"
+                : unread.length + " documents expiring or expired"
               : "Notifications"
           }
         >
@@ -138,7 +147,7 @@ export default function NotificationBell() {
         className="max-h-96 w-80 overflow-y-auto bg-white p-0"
       >
         <p className="border-b px-4 py-3 text-sm font-semibold text-primary">
-          Expiry Alerts
+          {risky.length ? "Alerts" : "Expiry Alerts"}
           <span className="ms-1 font-normal text-muted-foreground">
             ({alerts.length})
           </span>

@@ -114,6 +114,8 @@ export function entitlementFromApi(a) {
     // Only a payment made has a date: the history and "last similar" read it so.
     paymentDate: paid ? a.paymentDate || dateOnly(a.paidAt) : "",
     reference: a.paymentReference || "",
+    // The transfer receipt filed with the payment (GET .../{id}/receipt).
+    receiptName: a.paymentReceiptName || "",
     financeComment: a.financeComment || "",
     paidBy: a.paidBy || "",
     statusLabel: a.statusLabel,
@@ -210,6 +212,8 @@ export const entitlementsApi = {
           expenseType: pay.expenseType || null,
           category: pay.category || null,
           subcategory: pay.subcategory || null,
+          // The bank's proof of the transfer; with it the call goes as multipart.
+          receipt: pay.receipt || undefined,
         },
       })
     );

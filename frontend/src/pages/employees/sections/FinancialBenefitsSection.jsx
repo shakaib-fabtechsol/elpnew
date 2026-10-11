@@ -173,6 +173,7 @@ function CommissionTab({ employee, adding, onCloseAdd, onOpenAdd, canDecide = tr
           .filter(Boolean)
           .join(" "),
         reference: record.reference,
+        receipt: record.receiptFile,
         financeComment: record.paymentNotes,
       });
     const saved =

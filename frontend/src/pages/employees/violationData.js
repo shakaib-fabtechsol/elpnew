@@ -57,6 +57,27 @@ export const APPEAL_OUTCOMES = [
 /** The one outcome that takes the penalty away again. */
 export const CANCELLING_OUTCOME = "Accept Appeal and Cancel Penalty";
 
+/** The one outcome that puts another penalty in the place of the first. */
+export const PARTIAL_OUTCOME = "Partially Accept Appeal and Modify Penalty";
+
+/**
+ * What a penalty can be modified to on appeal. Not "No Penalty": taking the
+ * penalty away altogether is the appeal accepted, which is its own outcome.
+ */
+export const MODIFIED_PENALTY_TYPES = PENALTY_TYPES.filter((type) => type !== NO_PENALTY);
+
+/**
+ * The penalty that stands: the one the appeal put in its place where it was
+ * modified, otherwise the one first decided. `modified` says which, and
+ * `amount` is the deduction that goes with it, if it is one.
+ */
+export const finalPenalty = (record) => {
+  const modified = Boolean(record?.modifiedPenaltyType);
+  const type = modified ? record.modifiedPenaltyType : record?.penaltyType || "";
+  const amount = modified ? record.modifiedDeductionAmount : record?.deductionAmount;
+  return { type, modified, amount: type === DEDUCTION_PENALTY ? Number(amount) || 0 : 0 };
+};
+
 /** Where a violation has got to, as the status column reads it. */
 export const VIOLATION_STATUS_TONE = {
   "Under Investigation": { dot: "bg-amber-400", chip: "bg-amber-100 text-amber-900" },

@@ -39,6 +39,7 @@ import {
   accessHold,
 } from "./employeeData";
 import { readDocumentControl } from "@/lib/settings/documentControl";
+import { can } from "@/lib/access";
 
 /** A fact with its heading beside it, where the pair fits on one line. */
 /**
@@ -710,7 +711,8 @@ export default function EmployeesList() {
         icon={Users}
         title="Employees"
         note="Manage employee information"
-        onAdd={() => navigate("/employees/create")}
+        // Offered only to somebody who may add an employee.
+        onAdd={can("employees.create") ? () => navigate("/employees/create") : undefined}
         addLabel="Add Employee"
       />
 
