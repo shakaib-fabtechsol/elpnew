@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\AiOverviewController;
+use App\Http\Controllers\Api\AiSearchController;
 use App\Http\Controllers\Api\AssistanceRequestController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BonusController;
@@ -81,6 +83,10 @@ Route::prefix('v1')->group(function () {
 
         Route::post('loans/{id}/installments', [LoanController::class, 'recordInstallment'])->whereNumber('id');
         Route::post('invoices/analyze', InvoiceAnalysisController::class)->middleware('throttle:30,1');
+
+        /* ------------------------------------ AI readings (no record is saved) */
+        Route::post('ai/overview', AiOverviewController::class)->middleware('throttle:40,1');
+        Route::post('ai/search', AiSearchController::class)->middleware('throttle:30,1');
 
         /* ------------------------------ the unified request (free text + AI) */
         Route::post('requests/interpret', [UnifiedRequestController::class, 'interpret'])->middleware('throttle:20,1');

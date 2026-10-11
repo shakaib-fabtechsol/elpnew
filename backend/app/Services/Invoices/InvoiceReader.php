@@ -8,9 +8,9 @@ use Illuminate\Http\UploadedFile;
  * Reads an uploaded invoice: number, date, supplier (with VAT number), what it
  * was for, its lines and totals, and how sure the reading is of each.
  *
- * DemoInvoiceReader stands in until the AI service is connected; a real
- * reader (e.g. one sending the file to Claude) implements this interface and
- * is bound in AppServiceProvider - the checks and the API stay as they are.
+ * AiInvoiceReader sends the file to the AI model; DemoInvoiceReader stands in
+ * when no AI service is connected. Which is used is decided in
+ * AppServiceProvider - the checks and the API are the same for both.
  */
 interface InvoiceReader
 {

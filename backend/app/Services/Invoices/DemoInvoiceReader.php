@@ -5,7 +5,8 @@ namespace App\Services\Invoices;
 use Illuminate\Http\UploadedFile;
 
 /**
- * DEMO reader - there is no AI service yet. A file is read as one of a few
+ * DEMO reader - used only when no AI key is configured (AiInvoiceReader is
+ * the real one). A file is read as one of a few
  * sample invoices, chosen by its name so the same file always reads the same
  * way. A file named with "dup", "duplicate" or "repeat" is read as a copy of
  * the employee's last invoice, so the duplicate alerts can be seen.

@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { money } from "@/lib/money";
 import { longDate } from "@/pages/employees/sections/AdvanceSalarySection";
 import { Tile, Ring, TILE_TINT, chanceOf } from "@/pages/employees/sections/AdvanceOverview";
+import { useAiOverview, withAi } from "@/lib/api/modules/ai";
 
 /** Today where the user is, not in UTC. */
 const todayIso = () => {
@@ -133,7 +134,19 @@ export default function RequestOverview({
 }) {
   const [showAll, setShowAll] = useState(false);
   const Icon = icon;
-  const read = readRequests(rows, { money: inMoney, unit });
+  // The page's own figures, with the AI's reading of the same history laid
+  // over them once it arrives (and where an AI service is answering).
+  const ai = useAiOverview({
+    kind: title,
+    measure: inMoney ? "money" : unit ? unit.toLowerCase() : "count",
+    history: rows.map((row) => ({
+      date: row.date || null,
+      amount: row.amount === undefined || row.amount === "" ? null : Number(row.amount),
+      status: String(row.status || ""),
+      type: row.type || null,
+    })),
+  });
+  const read = withAi(readRequests(rows, { money: inMoney, unit }), ai);
   const chance = chanceOf(read.probability);
   const today = todayIso();
   const figure = (value) => (inMoney ? money(value) : unit ? value + " " + unit : value);
@@ -224,7 +237,9 @@ export default function RequestOverview({
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-primary">AI Recommendation</p>
                   <p className="mt-1 text-base font-bold leading-tight text-primary">{money(read.recommended)}</p>
-                  <p className="mt-1 text-[11px] leading-snug text-primary/70">Based on past approved requests.</p>
+                  <p className="mt-1 text-[11px] leading-snug text-primary/70">
+                    {read.recommendedNote || "Based on past approved requests."}
+                  </p>
                 </div>
               </div>
               {onApply && (
@@ -264,7 +279,9 @@ export default function RequestOverview({
               </span>
               <div className="min-w-0">
                 <p className={cn("text-sm font-bold leading-tight", chance.ink)}>{chance.word}</p>
-                <p className="mt-0.5 text-[11px] leading-snug text-primary/70">Based on how earlier requests were decided.</p>
+                <p className="mt-0.5 text-[11px] leading-snug text-primary/70">
+                  {read.probabilityNote || "Based on how earlier requests were decided."}
+                </p>
               </div>
             </div>
           </div>

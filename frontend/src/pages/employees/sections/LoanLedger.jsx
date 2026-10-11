@@ -47,6 +47,7 @@ import {
 import { amount, netSalary } from "../employeeData";
 import { longDate } from "./AdvanceSalarySection";
 import { Tile, Ring, TILE_TINT, chanceOf } from "./AdvanceOverview";
+import { useAiOverview } from "@/lib/api/modules/ai";
 
 /** How each standing of a loan is marked. */
 const LOAN_CHIP = {
@@ -196,13 +197,30 @@ export default function LoanLedger({
   const remaining = Math.max(0, net * LOAN_LIMIT_MONTHS - owed - asked);
   // What is usually borrowed, held to what is left.
   const usual = granted.length ? sum(granted, "total") / granted.length : net * 3;
-  const recommended = roundDown(Math.min(usual, remaining));
+  const ownRecommended = roundDown(Math.min(usual, remaining));
   // Repaid on time and not over-committed reads as likely; a request already
   // waiting, or nothing left to borrow, does not.
-  const probability =
+  const ownProbability =
     asked > 0 || remaining <= 0
       ? 20
       : Math.max(40, Math.min(95, 92 - overdueRows.length * 12 - Math.round((owed / Math.max(net * LOAN_LIMIT_MONTHS, 1)) * 20)));
+  // The AI's reading of the same loans, held to the same limit. A request
+  // already waiting, or nothing left to borrow, is the system's to say: the
+  // page's own figure stands there.
+  const ai = useAiOverview({
+    kind: "Loan",
+    measure: "money",
+    history: loans.map((loan) => ({
+      date: loan.start || null,
+      amount: loan.total,
+      status: loan.status,
+      type: loan.overdue?.length ? loan.overdue.length + " overdue installment(s)" : null,
+    })),
+    facts: { remaining, outstanding: owed, pendingRequests: asked, netSalary: net, overdueInstallments: overdueRows.length },
+  });
+  const settled = asked > 0 || remaining <= 0;
+  const recommended = settled ? ownRecommended : (ai?.recommended ?? ownRecommended);
+  const probability = settled ? ownProbability : (ai?.probability ?? ownProbability);
   const chance = chanceOf(probability);
 
   const unfoldOverdue = () =>
@@ -366,7 +384,7 @@ export default function LoanLedger({
               <p className="text-xs font-semibold text-primary">AI Recommendation</p>
               <p className="mt-1 text-lg font-bold leading-tight text-primary">{amount(recommended)}</p>
               <p className="mt-1 text-xs leading-snug text-primary/70">
-                Based on your salary, existing loans and policy.
+                {(!settled && ai?.recommendedReason) || "Based on your salary, existing loans and policy."}
               </p>
               {/* Always there, as the design has it. Where it cannot be used
                   yet it is greyed, with the reason under it rather than
@@ -399,7 +417,7 @@ export default function LoanLedger({
                 <p className="mt-0.5 text-xs leading-snug text-primary/70">
                   {asked > 0
                     ? "A loan request is already awaiting approval."
-                    : "Based on your financial profile and repayment history."}
+                    : ai?.probabilityReason || "Based on your financial profile and repayment history."}
                 </p>
               </div>
             </div>
