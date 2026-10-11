@@ -21,10 +21,23 @@ import { cn } from "@/lib/utils";
  * (code that is not a component included), with pageLoader.show() and
  * pageLoader.hide(); <GlobalLoader /> is mounted once and draws it.
  */
-export const LOADER_COLOR = "#36d7b7";
+/**
+ * The theme's own primary colour, read from the stylesheet rather than
+ * written here - so the clock is navy on the light theme, the lighter blue
+ * the dark theme uses, and follows the theme if it is ever changed.
+ */
+export const LOADER_COLOR = "var(--primary)";
 
-/** The clock itself. `size` is its width in pixels. */
-export function Loader({ size = 18, color = LOADER_COLOR, className, label = "Loading" }) {
+/**
+ * The clock itself. `size` is its width in pixels.
+ *
+ * On its own - over a card or the page - it is the theme's primary colour.
+ * Small, beside words or in a button, it takes the colour of the text it
+ * sits in: white on a filled button, navy on an outlined one, so it can
+ * always be seen against whatever it is on.
+ */
+export function Loader({ size = 18, color, className, label = "Loading" }) {
+  color = color || (size >= 28 ? LOADER_COLOR : "currentColor");
   return (
     <span role="status" className={cn("inline-flex shrink-0 items-center justify-center", className)}>
       <ClockLoader color={color} size={size} aria-hidden="true" />
