@@ -19,7 +19,8 @@ use Illuminate\Validation\Rule;
  *
  * The limits themselves (what is left, what the policy allows) are worked out
  * by the system and sent in as facts: the model reads them, it does not set
- * them, and its suggestion is held to them here whatever it answers. With no
+ * them, and its suggestion is held to them here whatever it answers. A list
+ * with no requests yet is read too, from the policy figures alone. With no
  * AI connected, or none answering, `available` is false and the screen keeps
  * the figures it works out itself.
  */
@@ -39,9 +40,11 @@ class AiOverviewController extends Controller
             'facts.*' => ['nullable', 'numeric'],
         ]);
 
-        // Nothing to read, or nobody to read it: the screen's own figures stand.
-        if (! $ai->available() || ! $data['history']) {
-            return response()->json(['data' => ['available' => false, 'engine' => $ai->available() ? $ai->engine() : 'rules']]);
+        // Nobody to read it: the screen's own figures stand. An empty history
+        // is still read - a first request has policy figures to go on, and
+        // the card should say so rather than show a figure nobody worked out.
+        if (! $ai->available()) {
+            return response()->json(['data' => ['available' => false, 'engine' => 'rules']]);
         }
 
         $facts = array_filter($data['facts'] ?? [], fn ($value) => $value !== null);
@@ -102,6 +105,7 @@ class AiOverviewController extends Controller
         - "recommendedReason": one short sentence saying why that amount (or why none).
         - "probability": your estimate from 0 to 100 that a request like the recommended one would be approved, judged from how past requests were decided, what is still pending or owed, and the policy figures. It is an estimate, not a promise: with few decided requests stay near the middle.
         - "probabilityReason": one short sentence naming what the estimate rests on.
+        - When the history is empty this is the employee's first request of this kind. Say so plainly. Suggest an amount only if the policy figures give a basis for one (a modest part of "remaining", never all of it); otherwise null. Put the probability near the middle (45 to 60) and say it rests on policy alone because nothing has been decided yet. The insights then say what the policy figures allow and that there is no history yet - never describe past requests that do not exist.
         - "insights": up to three short, concrete observations the employee would find useful (a pattern in what they ask for, repeated rejections, something still pending, how close they are to a limit). Plain English, one sentence each, addressed as "you". No advice beyond the data.
         TEXT;
     }

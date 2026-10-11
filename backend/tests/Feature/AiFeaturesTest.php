@@ -131,17 +131,28 @@ class AiFeaturesTest extends ApiTestCase
         Http::assertSentCount(1);
     }
 
-    public function test_with_no_history_or_no_ai_the_screen_keeps_its_own_figures(): void
+    public function test_with_no_ai_the_screen_keeps_its_own_figures(): void
     {
-        // No key at all.
         $this->as('aisha')->postJson($this->api('ai/overview'), $this->overview())
             ->assertOk()->assertJsonPath('data.available', false);
+    }
 
-        // A key, but nothing to read: the model is not asked.
-        $this->openai(['recommended' => 1, 'recommendedReason' => '', 'probability' => 1, 'probabilityReason' => '', 'insights' => []]);
+    public function test_a_list_with_no_requests_yet_is_still_read_from_policy(): void
+    {
+        $this->openai([
+            'recommended' => 200, 'recommendedReason' => 'A first request, well within the 400 OMR remaining.',
+            'probability' => 55, 'probabilityReason' => 'Nothing has been decided yet; this rests on policy alone.',
+            'insights' => ['You have not made a salary advance request yet.'],
+        ]);
+
         $this->as('aisha')->postJson($this->api('ai/overview'), $this->overview(['history' => []]))
-            ->assertOk()->assertJsonPath('data.available', false);
-        Http::assertNothingSent();
+            ->assertOk()
+            ->assertJsonPath('data.available', true)
+            ->assertJsonPath('data.recommended', 200)
+            ->assertJsonPath('data.probability', 55)
+            ->assertJsonPath('data.insights.0', 'You have not made a salary advance request yet.');
+
+        Http::assertSent(fn ($request) => str_contains($request['messages'][1]['content'][0]['text'], '"history":[]'));
     }
 
     public function test_when_the_ai_is_down_the_overview_says_it_is_not_available(): void
