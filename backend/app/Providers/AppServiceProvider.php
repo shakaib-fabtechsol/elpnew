@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\Invoices\DemoInvoiceReader;
 use App\Services\Invoices\InvoiceReader;
 use App\Services\Requests\GeminiRequestInterpreter;
+use App\Services\Requests\OpenAiRequestInterpreter;
 use App\Services\Requests\RequestInterpreter;
 use App\Services\Requests\RuleBasedRequestInterpreter;
 use Illuminate\Database\Eloquent\Model;
@@ -27,11 +28,14 @@ class AppServiceProvider extends ServiceProvider
         // bind a real implementation here and nothing else changes.
         $this->app->bind(InvoiceReader::class, DemoInvoiceReader::class);
 
-        // The unified request box: read by Gemini when a key is set, by
-        // plain rules when it is not - the screens say which was used.
-        $this->app->bind(RequestInterpreter::class, fn () => filled(config('services.gemini.key'))
-            ? new GeminiRequestInterpreter(config('services.gemini.key'), config('services.gemini.model'))
-            : new RuleBasedRequestInterpreter);
+        // The unified request box: read by OpenAI when it has a key, by
+        // Gemini when only that one does, by plain rules when neither does -
+        // the screens say which was used.
+        $this->app->bind(RequestInterpreter::class, fn () => match (true) {
+            filled(config('services.openai.key')) => new OpenAiRequestInterpreter(config('services.openai.key'), config('services.openai.model')),
+            filled(config('services.gemini.key')) => new GeminiRequestInterpreter(config('services.gemini.key'), config('services.gemini.model')),
+            default => new RuleBasedRequestInterpreter,
+        });
     }
 
     /**

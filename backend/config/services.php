@@ -28,8 +28,14 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
-    // Google Gemini reads the unified request box (free text and documents).
-    // Without a key the request is read with plain rules instead.
+    // Who reads the unified request box (free text and documents): OpenAI
+    // when it has a key, otherwise Google Gemini when it has one, otherwise
+    // plain rules.
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+        'model' => env('OPENAI_MODEL', 'gpt-6-luna'),
+    ],
+
     'gemini' => [
         'key' => env('GEMINI_API_KEY'),
         'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),

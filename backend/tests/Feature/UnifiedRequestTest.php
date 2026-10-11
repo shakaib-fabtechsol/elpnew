@@ -22,6 +22,18 @@ class UnifiedRequestTest extends ApiTestCase
         ]);
     }
 
+    /** Switches the OpenAI reader on and makes it answer with `$answer`. */
+    private function openai(array $answer, int $status = 200): void
+    {
+        config(['services.openai.key' => 'test-openai-key', 'services.openai.model' => 'gpt-test']);
+        Http::fake([
+            'api.openai.com/*' => Http::response(
+                ['choices' => [['message' => ['role' => 'assistant', 'content' => json_encode($answer)], 'finish_reason' => 'stop']]],
+                $status,
+            ),
+        ]);
+    }
+
     private function value(array $draft, string $key): mixed
     {
         return collect($draft['fields'])->firstWhere('key', $key)['value'] ?? null;
@@ -312,6 +324,77 @@ class UnifiedRequestTest extends ApiTestCase
         Http::assertSent(fn ($request) => str_contains($request['contents'][0]['parts'][0]['text'], '"fromDate":"2026-11-01"')
             && str_contains($request['contents'][0]['parts'][0]['text'], 'move it one week later')
             && str_contains($request['systemInstruction']['parts'][0]['text'], 'Net monthly salary'));
+    }
+
+    public function test_openai_reads_a_request_with_a_strict_schema(): void
+    {
+        // Strict mode answers with every field, the unused ones null.
+        $this->openai([
+            'type' => 'leave', 'confidence' => 0.95, 'summary' => 'Annual leave from 1 to 5 November 2026.',
+            'leaveType' => 'Annual Leave', 'fromDate' => '2026-11-01', 'toDate' => '2026-11-05',
+            'reason' => 'Family visit.', 'amount' => null, 'purpose' => null, 'invoice' => null,
+        ]);
+
+        $draft = $this->as('ahmed')->postJson($this->api('requests/interpret'), ['text' => 'I need annual leave from 1 to 5 November for a family visit'])
+            ->assertOk()
+            ->assertJsonPath('data.type', 'leave')
+            ->assertJsonPath('data.engine', 'openai')
+            ->assertJsonPath('data.missing', [])
+            ->assertJsonPath('data.notes', [])
+            ->json('data');
+
+        $this->assertSame('2026-11-01', $this->value($draft, 'fromDate'));
+
+        Http::assertSent(function ($request) {
+            $schema = $request['response_format']['json_schema'];
+
+            return $request->hasHeader('Authorization', 'Bearer test-openai-key')
+                && $request->url() === 'https://api.openai.com/v1/chat/completions'
+                && $request['model'] === 'gpt-test'
+                && ! isset($request['temperature'])
+                && $schema['strict'] === true
+                // Strict mode: every property required, nothing extra allowed.
+                && $schema['schema']['additionalProperties'] === false
+                && $schema['schema']['required'] === array_keys($schema['schema']['properties'])
+                && in_array(null, $schema['schema']['properties']['leaveType']['enum'], true)
+                && str_contains($request['messages'][0]['content'], 'Net monthly salary');
+        });
+    }
+
+    public function test_openai_is_used_ahead_of_gemini_when_both_have_a_key(): void
+    {
+        config(['services.gemini.key' => 'gemini-key']);
+        $this->openai(['type' => 'loan', 'confidence' => 0.9, 'summary' => 'A loan.', 'amount' => 500]);
+
+        $this->as('aisha')->postJson($this->api('requests/interpret'), ['text' => 'I want a loan of 500'])
+            ->assertOk()
+            ->assertJsonPath('data.engine', 'openai');
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'googleapis.com'));
+    }
+
+    public function test_openai_is_sent_a_pdf_as_a_file_and_a_photo_as_an_image(): void
+    {
+        $this->openai(['type' => 'medical', 'confidence' => 0.9, 'summary' => 'A medical claim.', 'invoice' => null]);
+
+        $this->as('aisha')->post($this->api('requests/interpret'), ['file' => UploadedFile::fake()->create('bill.pdf', 80, 'application/pdf')], ['Accept' => 'application/json'])->assertOk();
+        Http::assertSent(fn ($request) => ($request['messages'][1]['content'][1]['type'] ?? null) === 'file'
+            && str_starts_with($request['messages'][1]['content'][1]['file']['file_data'], 'data:application/pdf;base64,'));
+
+        $this->as('aisha')->post($this->api('requests/interpret'), ['file' => UploadedFile::fake()->image('bill.jpg')], ['Accept' => 'application/json'])->assertOk();
+        Http::assertSent(fn ($request) => ($request['messages'][1]['content'][1]['type'] ?? null) === 'image_url'
+            && str_starts_with($request['messages'][1]['content'][1]['image_url']['url'], 'data:image/jpeg;base64,'));
+    }
+
+    public function test_when_openai_is_down_or_over_its_limit_the_plain_reader_takes_over(): void
+    {
+        $this->openai([], 429);
+
+        $this->as('aisha')->postJson($this->api('requests/interpret'), ['text' => 'I want a loan of 500'])
+            ->assertOk()
+            ->assertJsonPath('data.type', 'loan')
+            ->assertJsonPath('data.engine', 'rules')
+            ->assertJsonPath('data.notes.0', 'The AI usage limit has been reached for now, so the request was read with basic rules. Please check every field.');
     }
 
     public function test_choosing_the_type_by_hand_gives_that_types_fields(): void
