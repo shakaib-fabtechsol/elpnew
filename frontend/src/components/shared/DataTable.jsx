@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import AiSearch from "./AiSearch";
+import { CardLoader } from "./Loader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -25,7 +26,7 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
-  ChevronRight,  Loader2,
+  ChevronRight,
   Plus,
   X,
   Sparkles,
@@ -485,9 +486,7 @@ export default function DataTable({
       <div className="block">
           <div className="relative">
             {isLoading && (
-              <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
+              <CardLoader className="rounded-lg" />
             )}
 
             {/* Frozen, the table has no scroll box of its own: the page is the

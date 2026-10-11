@@ -48,6 +48,7 @@ import { amount, netSalary } from "../employeeData";
 import { longDate } from "./AdvanceSalarySection";
 import { Tile, Ring, TILE_TINT, chanceOf } from "./AdvanceOverview";
 import { useAiOverview } from "@/lib/api/modules/ai";
+import { CardLoader } from "@/components/shared/Loader";
 
 /** How each standing of a loan is marked. */
 const LOAN_CHIP = {
@@ -207,7 +208,7 @@ export default function LoanLedger({
   // The AI's reading of the same loans, held to the same limit. A request
   // already waiting, or nothing left to borrow, is the system's to say: the
   // page's own figure stands there.
-  const ai = useAiOverview({
+  const { reading: ai, loading: aiLoading } = useAiOverview({
     kind: "Loan",
     measure: "money",
     history: loans.map((loan) => ({
@@ -349,7 +350,9 @@ export default function LoanLedger({
         </div>
       )}
 
-      <section className="space-y-4 rounded-xl border bg-blue-50/40 p-4 sm:p-5">
+      <section className="relative space-y-4 rounded-xl border bg-blue-50/40 p-4 sm:p-5">
+        {/* This card's own loader, while its AI reading is on the way. */}
+        {aiLoading && <CardLoader label="Reading your request history" />}
         <div className="flex flex-wrap items-start gap-3">
           <Sparkles className="mt-0.5 size-7 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
@@ -384,7 +387,7 @@ export default function LoanLedger({
               <p className="text-xs font-semibold text-primary">AI Recommendation</p>
               <p className="mt-1 text-lg font-bold leading-tight text-primary">{amount(recommended)}</p>
               <p className="mt-1 text-xs leading-snug text-primary/70">
-                {(!settled && ai?.recommendedReason) || "Based on your salary, existing loans and policy."}
+                {(!settled && ai?.recommended != null && ai.recommendedReason) || "Based on your salary, existing loans and policy."}
               </p>
               {/* Always there, as the design has it. Where it cannot be used
                   yet it is greyed, with the reason under it rather than

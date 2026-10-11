@@ -28,9 +28,14 @@ export const aiApi = {
 const overviews = new Map();
 
 /**
- * The AI's reading of one request list, or null while it is on its way,
- * where there is nothing to read, or where no AI is answering - in each of
- * which the overview shows the figures it works out itself.
+ * The AI's reading of one request list, as { reading, loading }.
+ *
+ * `reading` is null while it is on its way, or where no AI is answering - in
+ * which case the overview shows the figures it works out itself. A list with
+ * no requests yet is read as well, from the policy figures alone, so the
+ * card covers a first request too. `loading` is true only while a reading has
+ * been asked for and has not come back, which is when the card shows its
+ * own loader.
  *
  * `history` is the list's own rows as { date, amount, status, type }; `facts`
  * the policy figures the page has already worked out (remaining, limit...).
@@ -40,7 +45,7 @@ export function useAiOverview({ kind, measure, history, facts }) {
   const [got, setGot] = useState({ asked: "", reading: null });
 
   useEffect(() => {
-    if (!history.length || overviews.has(asked)) return undefined;
+    if (overviews.has(asked)) return undefined;
     let cancelled = false;
     aiApi
       .overview(JSON.parse(asked))
@@ -50,16 +55,21 @@ export function useAiOverview({ kind, measure, history, facts }) {
         if (!cancelled) setGot({ asked, reading: kept });
       })
       // A reading that fails is simply not shown: the page's own figures stand.
-      .catch(() => {});
+      .catch(() => {
+        overviews.set(asked, null);
+        if (!cancelled) setGot({ asked, reading: null });
+      });
     return () => {
       cancelled = true;
     };
     // `asked` carries everything the reading depends on.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asked]);
 
-  if (!history.length) return null;
-  return overviews.get(asked) ?? (got.asked === asked ? got.reading : null);
+  const answered = overviews.has(asked) || got.asked === asked;
+  return {
+    reading: overviews.get(asked) ?? (got.asked === asked ? got.reading : null),
+    loading: !answered,
+  };
 }
 
 /**
@@ -74,7 +84,10 @@ export function withAi(read, ai) {
     recommended: ai.recommended ?? read.recommended,
     probability: ai.probability ?? read.probability,
     insights: ai.insights?.length ? ai.insights : read.insights,
-    recommendedNote: ai.recommendedReason || "",
+    // The AI's reason goes with the AI's figure. Where it suggested none and
+    // the page's own figure is shown, that figure keeps its own explanation -
+    // "no basis to suggest an amount" under a sum would contradict it.
+    recommendedNote: ai.recommended != null ? ai.recommendedReason || "" : "",
     probabilityNote: ai.probabilityReason || "",
     byAi: true,
   };

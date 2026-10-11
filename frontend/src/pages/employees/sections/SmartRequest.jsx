@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, CircleCheck, FileText, Info, Loader2, Plus, Send, Sparkles, X } from "lucide-react";
+import { Check, CircleCheck, FileText, Info, Plus, Send, Sparkles, X } from "lucide-react";
+import { Loader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -296,6 +297,14 @@ export default function SmartRequest({ employee }) {
                       )}
                     </li>
                   ))}
+                  {/* While the AI reads, its reply is on its way: said in the
+                      conversation, where the reply will land, rather than by
+                      covering what has already been written. */}
+                  {busy && (
+                    <li className="flex">
+                      <AiThinking>{busy === "retyping" ? "Preparing that request type…" : "Reading your request…"}</AiThinking>
+                    </li>
+                  )}
                 </ol>
               )}
 
@@ -357,7 +366,7 @@ export default function SmartRequest({ employee }) {
                   )}
                   <Button type="button" onClick={send} disabled={(!text.trim() && !pending) || Boolean(busy)}>
                     {busy === "reading" ? (
-                      <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />
+                      <Loader size={16} label="Reading" className="me-2" />
                     ) : (
                       <Sparkles className="me-2 size-4" aria-hidden="true" />
                     )}
@@ -371,6 +380,17 @@ export default function SmartRequest({ employee }) {
           {/* ----------------------------------------- 2. Review Request */}
           {stage === "review" && draft?.type && (
             <div className="space-y-5">
+              {/* What is happening, in one line above the request - the
+                  request itself stays readable while it happens. */}
+              {busy && (
+                <AiThinking wide>
+                  {busy === "sending"
+                    ? "Submitting your request…"
+                    : busy === "changing"
+                      ? "Applying your change…"
+                      : "Updating the request…"}
+                </AiThinking>
+              )}
               {person && (
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-container-border bg-muted/40 px-4 py-3 text-sm">
                   <div>
@@ -460,7 +480,7 @@ export default function SmartRequest({ employee }) {
                     disabled={Boolean(busy)}
                   />
                   <Button type="button" variant="outline" onClick={applyChange} disabled={!change.trim() || Boolean(busy)}>
-                    {busy === "changing" && <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />}
+                    {busy === "changing" && <Loader size={16} label="Applying" className="me-2" />}
                     Apply Change
                   </Button>
                 </div>
@@ -472,7 +492,7 @@ export default function SmartRequest({ employee }) {
                 </Button>
                 <Button type="button" onClick={submit} disabled={!canSubmit}>
                   {busy === "sending" ? (
-                    <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />
+                    <Loader size={16} label="Sending" className="me-2" />
                   ) : (
                     <Send className="me-2 size-4" aria-hidden="true" />
                   )}
@@ -546,6 +566,28 @@ function StepTrack({ steps, at }) {
 }
 
 /** What the AI understood, and the questions it still has. */
+/** The AI at work: its name, the clock and what it is doing, where its answer will appear. */
+function AiThinking({ wide, children }) {
+  return (
+    <div
+      role="status"
+      className={cn(
+        "flex items-center gap-3 rounded-lg border border-container-border bg-muted/40 px-4 py-3 text-sm text-primary",
+        !wide && "max-w-[85%]"
+      )}
+    >
+      <Loader size={18} label="" />
+      <span>
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-primary/70">
+          <Sparkles className="size-3.5" aria-hidden="true" />
+          SADEED AI
+        </span>
+        {children}
+      </span>
+    </div>
+  );
+}
+
 function AiReply({ entry }) {
   return (
     <div className="max-w-[85%] space-y-2 rounded-lg border border-container-border bg-muted/40 px-4 py-3 text-sm text-primary">

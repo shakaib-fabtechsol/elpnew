@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Minus, Plus, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
+import { Minus, Plus, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
+import { CardLoader, Loader, LoadingCard } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,10 +76,7 @@ function useManagement(employeeId) {
 
 function Loading() {
   return (
-    <p role="status" className="flex items-center justify-center gap-2 py-10 text-sm text-primary">
-      <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-      Loading…
-    </p>
+    <LoadingCard />
   );
 }
 
@@ -210,7 +208,9 @@ export function ManagementOverview({ employee, onOpen }) {
         )}
       </section>
 
-      <section className="space-y-4 rounded-xl border border-container-border p-4 sm:p-5">
+      <section className="relative space-y-4 rounded-xl border border-container-border p-4 sm:p-5">
+        {/* This card's own loader, while the AI writes the insight. */}
+        {busy === "insight" && <CardLoader label="Writing the insight" />}
         <Heading
           title={
             <span className="flex items-center gap-2">
@@ -226,7 +226,7 @@ export function ManagementOverview({ employee, onOpen }) {
           action={
             <Button type="button" variant={insight ? "outline" : "default"} onClick={write} disabled={Boolean(busy)}>
               {busy === "insight" ? (
-                <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />
+                <Loader size={16} className="me-2" />
               ) : (
                 <Sparkles className="me-2 size-4" aria-hidden="true" />
               )}
@@ -436,7 +436,7 @@ export function EvaluationsPanel({ employee }) {
               Cancel
             </Button>
             <Button type="button" onClick={save} disabled={!ready || busy}>
-              {busy && <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />}
+              {busy && <Loader size={16} className="me-2" />}
               Save Evaluation
             </Button>
           </div>
@@ -613,7 +613,7 @@ export function DevelopmentPlan({ employee }) {
                 if (ok) setForm(null);
               }}
             >
-              {busy && <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />}
+              {busy && <Loader size={16} className="me-2" />}
               Save Action
             </Button>
           </div>

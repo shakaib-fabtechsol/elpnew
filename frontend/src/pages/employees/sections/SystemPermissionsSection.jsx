@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Clock, History, KeyRound, Loader2, Plus, ShieldAlert, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Clock, History, KeyRound, Plus, ShieldAlert, ShieldCheck, Sparkles, X } from "lucide-react";
+import { CardLoader, Loader, LoadingCard } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -137,10 +138,7 @@ export default function SystemPermissionsSection({ employee }) {
   if (failed) return <EmptyState>{failed}</EmptyState>;
   if (!page || !draft) {
     return (
-      <p role="status" className="flex items-center justify-center gap-2 py-10 text-sm text-primary">
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        Loading permissions…
-      </p>
+      <LoadingCard label="Loading permissions" />
     );
   }
 
@@ -303,7 +301,7 @@ export default function SystemPermissionsSection({ employee }) {
             {canEdit && (
               <div>
                 <Button type="button" variant="outline" onClick={() => onAccount(() => permissionsApi.resetPassword(employeeId), "Password reset.")} disabled={Boolean(busy)}>
-                  {busy === "account" && <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />}
+                  {busy === "account" && <Loader size={16} className="me-2" />}
                   Reset Password
                 </Button>
               </div>
@@ -353,7 +351,7 @@ export default function SystemPermissionsSection({ employee }) {
                   )
                 }
               >
-                {busy === "account" ? <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" /> : <Plus className="me-2 h-4 w-4" aria-hidden="true" />}
+                {busy === "account" ? <Loader size={16} className="me-2" /> : <Plus className="me-2 h-4 w-4" aria-hidden="true" />}
                 Create Account
               </Button>
             </div>
@@ -462,6 +460,7 @@ export default function SystemPermissionsSection({ employee }) {
         <Panel
           title="AI Permission Assistant"
           icon={Sparkles}
+          loading={busy === "asking"}
           note="Say what this employee should be able to do. The change is proposed for you to check - nothing is saved until you save it."
         >
           <div className="flex flex-wrap gap-3">
@@ -483,7 +482,7 @@ export default function SystemPermissionsSection({ employee }) {
             />
             <Button type="button" onClick={() => ask(instruction.trim())} disabled={!instruction.trim() || Boolean(busy)}>
               {busy === "asking" ? (
-                <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />
+                <Loader size={16} className="me-2" />
               ) : (
                 <Sparkles className="me-2 size-4" aria-hidden="true" />
               )}
@@ -637,7 +636,7 @@ export default function SystemPermissionsSection({ employee }) {
             onClick={save}
             disabled={(!dirty && page.settings.custom) || Boolean(busy) || (draft.scope === "department" && !draft.departments.length)}
           >
-            {busy === "saving" && <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />}
+            {busy === "saving" && <Loader size={16} className="me-2" />}
             Save Permissions
           </Button>
         </div>
@@ -754,9 +753,11 @@ export default function SystemPermissionsSection({ employee }) {
 }
 
 /** One titled block of the page, its action on the heading row. */
-function Panel({ title, note, icon: Icon, action, children }) {
+function Panel({ title, note, icon: Icon, action, loading, children }) {
   return (
-    <section className="space-y-4 rounded-xl border border-container-border bg-card p-4 sm:p-5">
+    <section className="relative space-y-4 rounded-xl border border-container-border bg-card p-4 sm:p-5">
+      {/* This card's own loader, while it waits on the AI. */}
+      {loading && <CardLoader />}
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-lg font-bold text-primary">
@@ -900,7 +901,7 @@ function LendForm({ page, value, onChange, onCancel, onSave, busy, labelOf, empl
           Cancel
         </Button>
         <Button type="button" onClick={onSave} disabled={!ready || busy}>
-          {busy && <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />}
+          {busy && <Loader size={16} className="me-2" />}
           Give Access
         </Button>
       </div>

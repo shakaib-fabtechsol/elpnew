@@ -19,6 +19,7 @@ import { statusOf } from "../assistanceData";
 import { longDate } from "./AdvanceSalarySection";
 import { Tile, Ring, TILE_TINT, chanceOf } from "./AdvanceOverview";
 import { useAiOverview, withAi } from "@/lib/api/modules/ai";
+import { CardLoader } from "@/components/shared/Loader";
 
 /**
  * The most a person may be given in assistance in one calendar year, in
@@ -126,7 +127,7 @@ function readAssistance(rows, employee) {
 export default function AssistanceOverview({ rows, employee, onNew, onApply, onOpen, onViewAll }) {
   const own = readAssistance(rows, employee);
   // The AI's reading of the same requests, held to what is left this year.
-  const ai = useAiOverview({
+  const { reading: ai, loading: aiLoading } = useAiOverview({
     kind: "Financial Assistance",
     measure: "money",
     history: rows.map((row) => ({
@@ -192,7 +193,9 @@ export default function AssistanceOverview({ rows, employee, onNew, onApply, onO
         </Button>
       </div>
 
-      <section className="space-y-4 rounded-xl border bg-blue-50/40 p-4 sm:p-5">
+      <section className="relative space-y-4 rounded-xl border bg-blue-50/40 p-4 sm:p-5">
+        {/* This card's own loader, while its AI reading is on the way. */}
+        {aiLoading && <CardLoader label="Reading your request history" />}
         <div className="flex flex-wrap items-start gap-3">
           <Sparkles className="mt-0.5 size-7 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
@@ -207,8 +210,8 @@ export default function AssistanceOverview({ rows, employee, onNew, onApply, onO
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <div className={cn("flex min-w-0 flex-col rounded-xl border p-3", TILE_TINT.plain.box)}>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={cn("flex min-w-0 flex-col rounded-xl border p-4", TILE_TINT.plain.box)}>
             <div className="flex gap-2.5">
               <span
                 aria-hidden="true"
@@ -217,11 +220,11 @@ export default function AssistanceOverview({ rows, employee, onNew, onApply, onO
                 <Lightbulb className="size-4.5" />
               </span>
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-primary">AI Recommendation</p>
-                <p className="mt-1 text-base font-bold leading-tight text-primary">
+                <p className="text-sm font-semibold text-primary">AI Recommendation</p>
+                <p className="mt-1 text-xl font-bold leading-tight text-primary">
                   {amount(read.recommended)}
                 </p>
-                <p className="mt-1 text-[11px] leading-snug text-primary/70">
+                <p className="mt-1 text-sm leading-snug text-primary/70">
                   {read.recommendedNote || "Based on your salary and past requests."}
                 </p>
               </div>
@@ -242,27 +245,27 @@ export default function AssistanceOverview({ rows, employee, onNew, onApply, onO
                 Apply Recommended Amount
               </Button>
               {blocked && (
-                <p className="mt-1 text-[11px] leading-snug text-amber-700">
+                <p className="mt-1 text-sm leading-snug text-amber-700">
                   Available once the pending request is completed.
                 </p>
               )}
             </div>
           </div>
-          <div className={cn("min-w-0 rounded-xl border p-3", TILE_TINT.good.box)}>
-            <p className="text-xs font-semibold text-primary">Approval Probability</p>
-            <div className="mt-1 flex items-center gap-2">
+          <div className={cn("min-w-0 rounded-xl border p-4", TILE_TINT.good.box)}>
+            <p className="text-sm font-semibold text-primary">Approval Probability</p>
+            <div className="mt-2 flex items-center gap-4">
               <span className="shrink-0 [&>svg]:size-14">
                 <Ring percent={read.probability} tone={chance.ring} />
               </span>
               <div className="min-w-0">
-                <p className={cn("text-sm font-bold leading-tight", chance.ink)}>{chance.word}</p>
-                <p className="mt-0.5 text-[11px] leading-snug text-primary/70">
+                <p className={cn("text-lg font-bold leading-tight", chance.ink)}>{chance.word}</p>
+                <p className="mt-0.5 text-sm leading-snug text-primary/70">
                   {read.probabilityNote || "Based on how earlier requests were decided."}
                 </p>
               </div>
             </div>
           </div>
-          <Tile dense
+          <Tile
             icon={Database}
             label="Remaining Eligible Amount"
             value={amount(read.remaining)}
@@ -270,13 +273,13 @@ export default function AssistanceOverview({ rows, employee, onNew, onApply, onO
             tint={read.remaining > 0 ? "good" : "bad"}
             note="Available amount based on current policy limits."
           />
-          <Tile dense
+          <Tile
             icon={CalendarDays}
             label="Next Eligible Date"
             value={longDate(read.nextIso)}
             note="Next date you can submit a new request."
           />
-          <Tile dense
+          <Tile
             icon={ClipboardList}
             label="Outstanding Requests"
             value={read.outstanding}

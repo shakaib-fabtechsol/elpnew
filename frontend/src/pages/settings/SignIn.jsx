@@ -4,7 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, Loader2, LogIn } from "lucide-react";
+import { Eye, EyeOff, LogIn } from "lucide-react";
+import { Loader } from "@/components/shared/Loader";
 import { useFirm } from "@/lib/firm/context";
 import { signIn } from "@/lib/api/session";
 import logo from "@/assets/logonew.jpeg";
@@ -105,7 +106,7 @@ export default function SignIn({ onSignedIn }) {
 
             <Button type="submit" className="w-full" disabled={busy || !email || !password}>
               {busy ? (
-                <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                <Loader size={16} label="Signing in" className="me-2" />
               ) : (
                 <LogIn className="me-2 h-4 w-4" />
               )}
