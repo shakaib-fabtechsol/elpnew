@@ -106,6 +106,7 @@ class AiOverviewController extends Controller
         - "probability": your estimate from 0 to 100 that a request like the recommended one would be approved, judged from how past requests were decided, what is still pending or owed, and the policy figures. It is an estimate, not a promise: with few decided requests stay near the middle.
         - "probabilityReason": one short sentence naming what the estimate rests on.
         - When the history is empty this is the employee's first request of this kind. Say so plainly. Suggest an amount only if the policy figures give a basis for one (a modest part of "remaining", never all of it); otherwise null. Put the probability near the middle (45 to 60) and say it rests on policy alone because nothing has been decided yet. The insights then say what the policy figures allow and that there is no history yet - never describe past requests that do not exist.
+        - Write for the employee, not about your inputs: never mention "policy figures", what was or was not "provided", or missing data. Where there is no figure to go on, simply leave it out - for example "This will be your first leave request." and "Its outcome will depend on management's review."
         - "insights": up to three short, concrete observations the employee would find useful (a pattern in what they ask for, repeated rejections, something still pending, how close they are to a limit). Plain English, one sentence each, addressed as "you". No advice beyond the data.
         TEXT;
     }
