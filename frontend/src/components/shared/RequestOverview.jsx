@@ -227,9 +227,9 @@ export default function RequestOverview({
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {inMoney ? (
-            <div className={cn("flex min-w-0 flex-col rounded-xl border p-3", TILE_TINT.plain.box)}>
+            <div className={cn("flex min-w-0 flex-col rounded-xl border p-4", TILE_TINT.plain.box)}>
               <div className="flex gap-2.5">
                 <span
                   aria-hidden="true"
@@ -238,9 +238,9 @@ export default function RequestOverview({
                   <Lightbulb className="size-4.5" />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-primary">AI Recommendation</p>
-                  <p className="mt-1 text-base font-bold leading-tight text-primary">{money(read.recommended)}</p>
-                  <p className="mt-1 text-[11px] leading-snug text-primary/70">
+                  <p className="text-sm font-semibold text-primary">AI Recommendation</p>
+                  <p className="mt-1 text-xl font-bold leading-tight text-primary">{money(read.recommended)}</p>
+                  <p className="mt-1 text-sm leading-snug text-primary/70">
                     {read.recommendedNote || "Based on past approved requests."}
                   </p>
                 </div>
@@ -258,7 +258,7 @@ export default function RequestOverview({
                     Apply Recommended Amount
                   </Button>
                   {read.recommended <= 0 && (
-                    <p className="mt-1 text-[11px] leading-snug text-amber-700">
+                    <p className="mt-1 text-sm leading-snug text-amber-700">
                       Available once a request has been approved.
                     </p>
                   )}
@@ -267,29 +267,27 @@ export default function RequestOverview({
             </div>
           ) : (
             <Tile
-              dense
               icon={Percent}
               label="Approval Rate"
               value={read.rate + "%"}
               note="Of the requests already decided."
             />
           )}
-          <div className={cn("min-w-0 rounded-xl border p-3", TILE_TINT.good.box)}>
-            <p className="text-xs font-semibold text-primary">Approval Probability</p>
-            <div className="mt-1 flex items-center gap-2">
+          <div className={cn("min-w-0 rounded-xl border p-4", TILE_TINT.good.box)}>
+            <p className="text-sm font-semibold text-primary">Approval Probability</p>
+            <div className="mt-2 flex items-center gap-4">
               <span className="shrink-0 [&>svg]:size-14">
                 <Ring percent={read.probability} tone={chance.ring} />
               </span>
               <div className="min-w-0">
-                <p className={cn("text-sm font-bold leading-tight", chance.ink)}>{chance.word}</p>
-                <p className="mt-0.5 text-[11px] leading-snug text-primary/70">
+                <p className={cn("text-lg font-bold leading-tight", chance.ink)}>{chance.word}</p>
+                <p className="mt-0.5 text-sm leading-snug text-primary/70">
                   {read.probabilityNote || "Based on how earlier requests were decided."}
                 </p>
               </div>
             </div>
           </div>
           <Tile
-            dense
             icon={Wallet}
             label={inMoney ? "Total Approved Amount" : unit ? "Total Approved " + unit : "Approved Requests"}
             value={inMoney || unit ? figure(read.approvedTotal) : read.counts.approved}
@@ -298,7 +296,6 @@ export default function RequestOverview({
             note="Across all approved requests."
           />
           <Tile
-            dense
             icon={ClipboardList}
             label="Pending Requests"
             value={read.counts.pending}

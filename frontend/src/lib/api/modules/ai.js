@@ -84,7 +84,10 @@ export function withAi(read, ai) {
     recommended: ai.recommended ?? read.recommended,
     probability: ai.probability ?? read.probability,
     insights: ai.insights?.length ? ai.insights : read.insights,
-    recommendedNote: ai.recommendedReason || "",
+    // The AI's reason goes with the AI's figure. Where it suggested none and
+    // the page's own figure is shown, that figure keeps its own explanation -
+    // "no basis to suggest an amount" under a sum would contradict it.
+    recommendedNote: ai.recommended != null ? ai.recommendedReason || "" : "",
     probabilityNote: ai.probabilityReason || "",
     byAi: true,
   };

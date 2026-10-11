@@ -128,7 +128,7 @@ export const TILE_TINT = {
  * the top line, so the figure below has the tile's whole width and never
  * runs out of it.
  */
-export function Tile({ icon, label, value, note, tone = "text-primary", tint = "plain", compact, dense, children }) {
+export function Tile({ icon, label, value, note, tone = "text-primary", tint = "plain", compact, children }) {
   const Icon = icon;
   const look = TILE_TINT[tint];
   if (compact) {
@@ -151,21 +151,20 @@ export function Tile({ icon, label, value, note, tone = "text-primary", tint = "
     );
   }
   return (
-    <div className={cn("flex min-w-0 gap-2.5 rounded-xl border p-3", look.box)}>
+    <div className={cn("flex min-w-0 gap-3 rounded-xl border p-4", look.box)}>
       <span
         aria-hidden="true"
-        className={cn("flex size-9 shrink-0 items-center justify-center rounded-full", look.mark)}
+        className={cn("flex size-10 shrink-0 items-center justify-center rounded-full", look.mark)}
       >
-        <Icon className="size-4.5" />
+        <Icon className="size-5" />
       </span>
       <div className="min-w-0">
-        <p className="text-xs font-semibold text-primary">{label}</p>
-        {/* `dense`: a row of five or more, where the figure stays one size. */}
-        <p className={cn("mt-1 text-base font-bold leading-tight", !dense && "xl:text-lg", tone)}>{value}</p>
+        <p className="text-sm font-semibold text-primary">{label}</p>
+        {/* Three to a row, so every tile has room for its figure at one size
+            and for a sentence under it. */}
+        <p className={cn("mt-1 text-xl font-bold leading-tight wrap-anywhere", tone)}>{value}</p>
         {children}
-        {note && (
-          <p className={cn("mt-1 leading-snug text-primary/70", dense ? "text-[11px]" : "text-xs")}>{note}</p>
-        )}
+        {note && <p className="mt-1.5 text-sm leading-snug text-primary/70">{note}</p>}
       </div>
     </div>
   );
@@ -289,7 +288,7 @@ export default function AdvanceOverview({
         </div>
 
         {/* The six readings on one line wherever there is room for them. */}
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Tile
             icon={UserRound}
             label="Eligibility"
@@ -341,13 +340,13 @@ export default function AdvanceOverview({
             tint="good"
             note="Available amount based on current policy limits."
           />
-          <div className={cn("min-w-0 rounded-xl border p-3", TILE_TINT.good.box)}>
-            <p className="text-xs font-semibold text-primary">Approval Probability</p>
-            <div className="mt-1 flex items-center gap-2">
+          <div className={cn("min-w-0 rounded-xl border p-4", TILE_TINT.good.box)}>
+            <p className="text-sm font-semibold text-primary">Approval Probability</p>
+            <div className="mt-2 flex items-center gap-4">
               <Ring percent={read.probability} tone={chance.ring} />
               <div className="min-w-0">
-                <p className={cn("text-sm font-bold leading-tight", chance.ink)}>{chance.word}</p>
-                <p className="mt-0.5 text-xs leading-snug text-primary/70">
+                <p className={cn("text-lg font-bold leading-tight", chance.ink)}>{chance.word}</p>
+                <p className="mt-1 text-sm leading-snug text-primary/70">
                   {read.probabilityNote || "Based on how earlier requests were decided."}
                 </p>
               </div>

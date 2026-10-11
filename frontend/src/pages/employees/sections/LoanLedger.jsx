@@ -387,7 +387,7 @@ export default function LoanLedger({
               <p className="text-xs font-semibold text-primary">AI Recommendation</p>
               <p className="mt-1 text-lg font-bold leading-tight text-primary">{amount(recommended)}</p>
               <p className="mt-1 text-xs leading-snug text-primary/70">
-                {(!settled && ai?.recommendedReason) || "Based on your salary, existing loans and policy."}
+                {(!settled && ai?.recommended != null && ai.recommendedReason) || "Based on your salary, existing loans and policy."}
               </p>
               {/* Always there, as the design has it. Where it cannot be used
                   yet it is greyed, with the reason under it rather than
