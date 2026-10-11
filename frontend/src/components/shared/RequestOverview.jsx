@@ -29,6 +29,7 @@ import { money } from "@/lib/money";
 import { longDate } from "@/pages/employees/sections/AdvanceSalarySection";
 import { Tile, Ring, TILE_TINT, chanceOf } from "@/pages/employees/sections/AdvanceOverview";
 import { useAiOverview, withAi } from "@/lib/api/modules/ai";
+import { CardLoader } from "@/components/shared/Loader";
 
 /** Today where the user is, not in UTC. */
 const todayIso = () => {
@@ -136,7 +137,7 @@ export default function RequestOverview({
   const Icon = icon;
   // The page's own figures, with the AI's reading of the same history laid
   // over them once it arrives (and where an AI service is answering).
-  const ai = useAiOverview({
+  const { reading: ai, loading: aiLoading } = useAiOverview({
     kind: title,
     measure: inMoney ? "money" : unit ? unit.toLowerCase() : "count",
     history: rows.map((row) => ({
@@ -209,7 +210,9 @@ export default function RequestOverview({
         )}
       </div>
 
-      <section className="space-y-4 rounded-xl border bg-blue-50/40 p-4 sm:p-5">
+      <section className="relative space-y-4 rounded-xl border bg-blue-50/40 p-4 sm:p-5">
+        {/* This card's own loader, while its AI reading is on the way. */}
+        {aiLoading && <CardLoader label="Reading your request history" />}
         <div className="flex flex-wrap items-start gap-3">
           <Sparkles className="mt-0.5 size-7 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">

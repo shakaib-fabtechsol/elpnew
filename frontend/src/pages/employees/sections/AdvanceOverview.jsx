@@ -36,6 +36,7 @@ import { longDate } from "./AdvanceSalarySection";
 import SalaryLedger from "./SalaryLedger";
 import { shortName } from "@/lib/shortName";
 import { useAiOverview, withAi } from "@/lib/api/modules/ai";
+import { CardLoader } from "@/components/shared/Loader";
 
 const isoOf = (date) =>
   date.getFullYear() +
@@ -222,7 +223,7 @@ export default function AdvanceOverview({
   const [showAll, setShowAll] = useState(false);
   const own = readAdvances(advances, employee, net);
   // The AI's reading of the same requests, held to the same limit.
-  const ai = useAiOverview({
+  const { reading: ai, loading: aiLoading } = useAiOverview({
     kind: "Salary Advance",
     measure: "money",
     history: advancesFor(advances, employee?.name).map((request) => ({
@@ -267,7 +268,9 @@ export default function AdvanceOverview({
         )}
       </div>
 
-      <section className="space-y-4 rounded-xl border bg-blue-50/40 p-4 sm:p-5">
+      <section className="relative space-y-4 rounded-xl border bg-blue-50/40 p-4 sm:p-5">
+        {/* This card's own loader, while its AI reading is on the way. */}
+        {aiLoading && <CardLoader label="Reading your request history" />}
         <div className="flex flex-wrap items-start gap-3">
           <Sparkles className="mt-0.5 size-7 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">

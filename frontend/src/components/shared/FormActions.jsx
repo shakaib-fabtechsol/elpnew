@@ -1,4 +1,5 @@
-import { Save, Loader2 } from "lucide-react";
+import { Save } from "lucide-react";
+import { Loader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -37,7 +38,7 @@ export default function FormActions({
         aria-busy={saving || undefined}
       >
         {saving ? (
-          <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          <Loader size={16} label="Saving" />
         ) : (
           <Save aria-hidden="true" />
         )}

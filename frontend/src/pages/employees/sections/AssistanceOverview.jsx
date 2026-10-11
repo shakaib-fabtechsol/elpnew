@@ -19,6 +19,7 @@ import { statusOf } from "../assistanceData";
 import { longDate } from "./AdvanceSalarySection";
 import { Tile, Ring, TILE_TINT, chanceOf } from "./AdvanceOverview";
 import { useAiOverview, withAi } from "@/lib/api/modules/ai";
+import { CardLoader } from "@/components/shared/Loader";
 
 /**
  * The most a person may be given in assistance in one calendar year, in
@@ -126,7 +127,7 @@ function readAssistance(rows, employee) {
 export default function AssistanceOverview({ rows, employee, onNew, onApply, onOpen, onViewAll }) {
   const own = readAssistance(rows, employee);
   // The AI's reading of the same requests, held to what is left this year.
-  const ai = useAiOverview({
+  const { reading: ai, loading: aiLoading } = useAiOverview({
     kind: "Financial Assistance",
     measure: "money",
     history: rows.map((row) => ({
@@ -192,7 +193,9 @@ export default function AssistanceOverview({ rows, employee, onNew, onApply, onO
         </Button>
       </div>
 
-      <section className="space-y-4 rounded-xl border bg-blue-50/40 p-4 sm:p-5">
+      <section className="relative space-y-4 rounded-xl border bg-blue-50/40 p-4 sm:p-5">
+        {/* This card's own loader, while its AI reading is on the way. */}
+        {aiLoading && <CardLoader label="Reading your request history" />}
         <div className="flex flex-wrap items-start gap-3">
           <Sparkles className="mt-0.5 size-7 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">

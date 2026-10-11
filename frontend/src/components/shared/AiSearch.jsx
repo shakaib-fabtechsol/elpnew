@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
+import { Loader } from "./Loader";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { aiApi } from "@/lib/api/modules/ai";
@@ -99,7 +100,7 @@ export default function AiSearch({
   return (
     <div className={cn("relative w-full sm:w-80 lg:w-96", className)}>
       {reading ? (
-        <Loader2 className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-primary" />
+        <Loader size={16} label="Reading your question" className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2" />
       ) : (
         <Sparkles className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
       )}

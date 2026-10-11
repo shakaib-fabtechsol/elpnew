@@ -28,9 +28,13 @@ export const aiApi = {
 const overviews = new Map();
 
 /**
- * The AI's reading of one request list, or null while it is on its way,
- * where there is nothing to read, or where no AI is answering - in each of
- * which the overview shows the figures it works out itself.
+ * The AI's reading of one request list, as { reading, loading }.
+ *
+ * `reading` is null while it is on its way, where there is nothing to read,
+ * or where no AI is answering - in each of which the overview shows the
+ * figures it works out itself. `loading` is true only while a reading has
+ * been asked for and has not come back, which is when the card shows its
+ * own loader.
  *
  * `history` is the list's own rows as { date, amount, status, type }; `facts`
  * the policy figures the page has already worked out (remaining, limit...).
@@ -50,7 +54,10 @@ export function useAiOverview({ kind, measure, history, facts }) {
         if (!cancelled) setGot({ asked, reading: kept });
       })
       // A reading that fails is simply not shown: the page's own figures stand.
-      .catch(() => {});
+      .catch(() => {
+        overviews.set(asked, null);
+        if (!cancelled) setGot({ asked, reading: null });
+      });
     return () => {
       cancelled = true;
     };
@@ -58,8 +65,12 @@ export function useAiOverview({ kind, measure, history, facts }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asked]);
 
-  if (!history.length) return null;
-  return overviews.get(asked) ?? (got.asked === asked ? got.reading : null);
+  if (!history.length) return { reading: null, loading: false };
+  const answered = overviews.has(asked) || got.asked === asked;
+  return {
+    reading: overviews.get(asked) ?? (got.asked === asked ? got.reading : null),
+    loading: !answered,
+  };
 }
 
 /**

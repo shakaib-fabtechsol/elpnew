@@ -15,6 +15,7 @@ import BonusesProvider from "@/lib/bonuses/BonusesProvider";
 import AdvancesProvider from "@/lib/advances/AdvancesProvider";
 import ViolationsProvider from "@/lib/violations/ViolationsProvider";
 import SessionGate from "@/lib/api/SessionGate";
+import { GlobalLoader } from "@/components/shared/Loader";
 
 // Root Pages
 import Dashboard from "@/pages/Dashboard";
@@ -80,6 +81,8 @@ import Execution from "@/pages/litigation/Execution";
 function App() {
   return (
     <BrowserRouter>
+    {/* The page loader, drawn here for anything that calls pageLoader.show(). */}
+    <GlobalLoader />
     <LanguageProvider>
     <FirmProvider>
     {/* Nobody gets past here without signing in, and the providers below

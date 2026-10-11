@@ -19,7 +19,6 @@ import {
   GraduationCap,
   IdCard,
   Landmark,
-  Loader2,
   Plus,
   RefreshCw,
   SquareUserRound,
@@ -28,6 +27,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { Loader } from "@/components/shared/Loader";
 import { INTAKE_ACCEPT, INTAKE_TYPES, intakeFileProblem, intakeType } from "../documentIntake";
 
 /** Each kind's mark and colour, on its tile and its chip in the table. */
@@ -47,7 +47,7 @@ function DocumentStatus({ status }) {
   if (status === "processing")
     return (
       <span className="flex items-center gap-2 font-medium text-blue-700">
-        <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+        <Loader size={18} label="Processing" />
         Processing
       </span>
     );
@@ -469,7 +469,11 @@ export default function DocumentIntake({
               );
             })}
             <Button type="button" variant="outline" className="ms-auto" onClick={intake.reprocess} disabled={busy}>
-              <RefreshCw className={cn("me-2 h-4 w-4", busy && "animate-spin")} aria-hidden="true" />
+              {busy ? (
+                <Loader size={16} label="Reprocessing" className="me-2" />
+              ) : (
+                <RefreshCw className="me-2 h-4 w-4" aria-hidden="true" />
+              )}
               Reprocess Documents
             </Button>
           </div>

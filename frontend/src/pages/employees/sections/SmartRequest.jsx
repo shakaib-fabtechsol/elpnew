@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, CircleCheck, FileText, Info, Loader2, Plus, Send, Sparkles, X } from "lucide-react";
+import { Check, CircleCheck, FileText, Info, Plus, Send, Sparkles, X } from "lucide-react";
+import { CardLoader, Loader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -276,7 +277,9 @@ export default function SmartRequest({ employee }) {
 
           {/* ------------------------------------------ 1. Smart Request */}
           {stage === "describe" && (
-            <div className="space-y-4">
+            <div className="relative space-y-4">
+              {/* This card's own loader, while the AI reads what was written. */}
+              {busy && <CardLoader label="The AI is reading your request" />}
               {thread.length > 0 && (
                 <ol aria-label="Conversation" className="space-y-3">
                   {thread.map((entry, index) => (
@@ -357,7 +360,7 @@ export default function SmartRequest({ employee }) {
                   )}
                   <Button type="button" onClick={send} disabled={(!text.trim() && !pending) || Boolean(busy)}>
                     {busy === "reading" ? (
-                      <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />
+                      <Loader size={16} label="Reading" className="me-2" />
                     ) : (
                       <Sparkles className="me-2 size-4" aria-hidden="true" />
                     )}
@@ -370,7 +373,9 @@ export default function SmartRequest({ employee }) {
 
           {/* ----------------------------------------- 2. Review Request */}
           {stage === "review" && draft?.type && (
-            <div className="space-y-5">
+            <div className="relative space-y-5">
+              {/* The same loader while a change is applied or the request is sent. */}
+              {busy && <CardLoader label="Working on your request" />}
               {person && (
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-container-border bg-muted/40 px-4 py-3 text-sm">
                   <div>
@@ -460,7 +465,7 @@ export default function SmartRequest({ employee }) {
                     disabled={Boolean(busy)}
                   />
                   <Button type="button" variant="outline" onClick={applyChange} disabled={!change.trim() || Boolean(busy)}>
-                    {busy === "changing" && <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />}
+                    {busy === "changing" && <Loader size={16} label="Applying" className="me-2" />}
                     Apply Change
                   </Button>
                 </div>
@@ -472,7 +477,7 @@ export default function SmartRequest({ employee }) {
                 </Button>
                 <Button type="button" onClick={submit} disabled={!canSubmit}>
                   {busy === "sending" ? (
-                    <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />
+                    <Loader size={16} label="Sending" className="me-2" />
                   ) : (
                     <Send className="me-2 size-4" aria-hidden="true" />
                   )}

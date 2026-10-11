@@ -4,13 +4,13 @@ import {
   Building2,
   CloudUpload,
   FileText,
-  Loader2,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
   TriangleAlert,
   X,
 } from "lucide-react";
+import { Loader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { amountValue } from "@/lib/money";
@@ -205,7 +205,7 @@ export default function InvoiceIntake({ invoice, risk, analyzing, onPick, onClea
   if (analyzing) {
     return (
       <section className="flex flex-col items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/40 px-4 py-12 text-center">
-        <Loader2 className="size-10 animate-spin text-primary" aria-hidden="true" />
+        <Loader size={44} label="Analyzing the invoice" />
         <p className="text-lg font-bold text-primary">AI is analyzing the invoice...</p>
         <p className="text-sm text-primary/75">
           Reading the invoice number, supplier, purpose, amount and VAT, and checking it against earlier claims.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { PageLoader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import SignIn from "@/pages/settings/SignIn";
 import ApiNotice from "@/components/shared/ApiNotice";
@@ -64,9 +64,9 @@ export default function SessionGate({ children }) {
 
   if (state === "loading") {
     return (
-      <div role="status" className="flex min-h-screen items-center justify-center gap-3 bg-background text-primary">
-        <Loader2 className="size-5 animate-spin" aria-hidden="true" />
-        <span className="text-sm font-medium">Loading your records…</span>
+      // The page loader, in the middle of the screen, over an empty page.
+      <div className="min-h-screen bg-background">
+        <PageLoader label="Loading your records" />
       </div>
     );
   }
