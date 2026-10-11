@@ -164,6 +164,13 @@ class PermissionTest extends ApiTestCase
         $this->as('aisha')->getJson($this->api('employees/'.self::AHMED))
             ->assertJsonPath('data.salary', 800)->assertJsonPath('data.restricted', ['bankDetails', 'identity']);
 
+        // Somebody who pays requests sees the bank details the payment goes to, whatever else is held back.
+        $this->grant(self::AISHA, ['grants' => [...PermissionCatalog::template('lawyer')['grants'], 'financingRequests.pay'], 'scope' => 'department', 'departments' => ['Legal Services']]);
+        $this->as('aisha')->getJson($this->api('employees/'.self::AHMED))
+            ->assertJsonPath('data.restricted', ['payroll', 'identity'])
+            ->assertJsonPath('data.bankName', fn ($bank) => filled($bank))
+            ->assertJsonPath('data.accountNumber', fn ($account) => filled($account));
+
         // Her own record is always whole; management sees everything.
         $this->as('aisha')->getJson($this->api('employees/'.self::AISHA))->assertJsonPath('data.restricted', []);
         $this->as('admin')->getJson($this->api('employees/'.self::AHMED))->assertJsonPath('data.restricted', [])->assertJsonPath('data.salary', 800);

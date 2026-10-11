@@ -38,7 +38,12 @@ class EmployeeResource extends ApiResource
 
         if ($user && $user->employee_id !== $this->id) {
             foreach (self::CONFIDENTIAL as $permission => $columns) {
-                if (! Access::allows($user, $permission)) {
+                // Whoever pays requests is shown where the money goes: the
+                // payment step puts the employee's bank and account number at
+                // its head so a transfer needs no looking up.
+                $pays = $permission === 'bankDetails.view' && Access::allowsOnRequests($user, 'pay');
+
+                if (! $pays && ! Access::allows($user, $permission)) {
                     $restricted[] = explode('.', $permission)[0];
                     foreach ($columns as $column) {
                         $data[Str::camel($column)] = null;
