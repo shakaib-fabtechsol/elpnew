@@ -65,7 +65,7 @@ class CircularInsightTest extends ApiTestCase
 
     public function test_a_question_is_answered_from_the_circular_for_the_person_asking(): void
     {
-        $this->gemini('As a lawyer you now upload pleadings in the case file; the circular gives no deadline.');
+        $this->gemini(['answer' => 'As a lawyer you now upload pleadings in the case file; the circular gives no deadline.']);
         $id = $this->issue('All pleadings must be filed through the case file.', 'Lawyers');
 
         $this->as('ahmed')->postJson($this->api("circulars/$id/ask"), ['question' => 'Does this apply to appeals?'])

@@ -7,7 +7,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
 
 /**
- * The reading done without AI: used when no Gemini key is configured, or
+ * The reading done without AI: used when no AI key is configured, or
  * when the AI service cannot be reached. It looks for plain English key
  * words and figures - enough to pick the type and the obvious numbers, and
  * honest about being a fallback (engine "rules"): it does not read documents

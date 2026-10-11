@@ -18,6 +18,7 @@ import { amount, netSalary } from "../employeeData";
 import { statusOf } from "../assistanceData";
 import { longDate } from "./AdvanceSalarySection";
 import { Tile, Ring, TILE_TINT, chanceOf } from "./AdvanceOverview";
+import { useAiOverview, withAi } from "@/lib/api/modules/ai";
 
 /**
  * The most a person may be given in assistance in one calendar year, in
@@ -123,7 +124,20 @@ function readAssistance(rows, employee) {
  * another is closed and says why.
  */
 export default function AssistanceOverview({ rows, employee, onNew, onApply, onOpen, onViewAll }) {
-  const read = readAssistance(rows, employee);
+  const own = readAssistance(rows, employee);
+  // The AI's reading of the same requests, held to what is left this year.
+  const ai = useAiOverview({
+    kind: "Financial Assistance",
+    measure: "money",
+    history: rows.map((row) => ({
+      date: row.requestDate || null,
+      amount: Number(row.amount || 0),
+      status: statusOf(row),
+      type: row.subcategory || null,
+    })),
+    facts: { remaining: own.remaining, outstanding: own.outstanding },
+  });
+  const read = withAi(own, ai);
   const blocked = read.pending.length > 0;
   const chance = chanceOf(read.probability);
 
@@ -207,7 +221,9 @@ export default function AssistanceOverview({ rows, employee, onNew, onApply, onO
                 <p className="mt-1 text-base font-bold leading-tight text-primary">
                   {amount(read.recommended)}
                 </p>
-                <p className="mt-1 text-[11px] leading-snug text-primary/70">Based on your salary and past requests.</p>
+                <p className="mt-1 text-[11px] leading-snug text-primary/70">
+                  {read.recommendedNote || "Based on your salary and past requests."}
+                </p>
               </div>
             </div>
             {/* Across the whole tile, under the figure it applies, and at the
@@ -241,7 +257,7 @@ export default function AssistanceOverview({ rows, employee, onNew, onApply, onO
               <div className="min-w-0">
                 <p className={cn("text-sm font-bold leading-tight", chance.ink)}>{chance.word}</p>
                 <p className="mt-0.5 text-[11px] leading-snug text-primary/70">
-                  Based on how earlier requests were decided.
+                  {read.probabilityNote || "Based on how earlier requests were decided."}
                 </p>
               </div>
             </div>

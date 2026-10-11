@@ -163,7 +163,7 @@ export function ManagementOverview({ employee, onOpen }) {
   const plan = async (recommendation) => {
     setBusy(recommendation.title);
     try {
-      setPage(await managementApi.addAction(employee.id, { ...recommendation, source: insight.engine === "gemini" ? "ai" : "manual" }));
+      setPage(await managementApi.addAction(employee.id, { ...recommendation, source: insight.engine !== "rules" ? "ai" : "manual" }));
       notify("Added to the development plan.", "success");
     } catch (error) {
       notifyError(error);

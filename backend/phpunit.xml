@@ -20,6 +20,7 @@
     <php>
         <env name="APP_ENV" value="testing"/>
         <!-- Tests never call the real AI service, whatever key .env holds. -->
+        <env name="OPENAI_API_KEY" value="" force="true"/>
         <env name="GEMINI_API_KEY" value="" force="true"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>

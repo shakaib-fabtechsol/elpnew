@@ -8,9 +8,11 @@ use App\Models\EntitlementRequest;
 use App\Services\Invoices\DemoInvoiceReader;
 use App\Services\Invoices\InvoiceReader;
 use App\Services\Invoices\InvoiceRiskChecker;
+use App\Services\Invoices\InvoiceUnreadable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Step 1 of an invoice-based request: the employee uploads the invoice, it is
@@ -39,7 +41,12 @@ class InvoiceAnalysisController extends Controller
             ->latest('request_date')
             ->value('invoice');
 
-        $invoice = $reader->read($request->file('file'), $data['kind'], $previous);
+        try {
+            $invoice = $reader->read($request->file('file'), $data['kind'], $previous);
+        } catch (InvoiceUnreadable $unreadable) {
+            // Said against the file, where the employee chose it.
+            throw ValidationException::withMessages(['file' => $unreadable->getMessage()]);
+        }
 
         return response()->json([
             'data' => [

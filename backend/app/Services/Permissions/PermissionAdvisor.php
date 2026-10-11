@@ -3,8 +3,9 @@
 namespace App\Services\Permissions;
 
 use App\Models\Employee;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
+use App\Services\Ai\AiClient;
+use App\Services\Ai\AiUnavailable;
+use App\Services\Ai\Schema;
 
 /**
  * The AI side of System Permissions: an instruction in plain words ("give
@@ -20,7 +21,7 @@ use Illuminate\Support\Facades\Log;
  */
 final class PermissionAdvisor
 {
-    public function __construct(private ?string $apiKey, private string $model) {}
+    public function __construct(private AiClient $ai) {}
 
     /**
      * @param  array{template:string,grants:list<string>,scope:string,departments:list<string>,approvalLimit:?float,paymentLimit:?float}  $state
@@ -31,12 +32,11 @@ final class PermissionAdvisor
         $instruction = trim((string) $instruction);
         $notes = [];
 
-        if (filled($this->apiKey)) {
+        if ($this->ai->available()) {
             try {
-                return $this->checked($this->gemini($employee, $state, $instruction), $state, 'gemini', $notes);
-            } catch (\Throwable $error) {
-                Log::warning('Permission advice from Gemini failed', ['error' => mb_substr($error->getMessage(), 0, 300)]);
-                $notes[] = $error->getCode() === 429
+                return $this->checked($this->ask($employee, $state, $instruction), $state, $this->ai->engine(), $notes);
+            } catch (AiUnavailable $down) {
+                $notes[] = $down->getCode() === 429
                     ? 'The AI usage limit has been reached for now, so the instruction was read with basic rules.'
                     : 'The AI service could not be reached, so the instruction was read with basic rules.';
             }
@@ -84,7 +84,7 @@ final class PermissionAdvisor
         ];
     }
 
-    private function gemini(Employee $employee, array $state, string $instruction): array
+    private function ask(Employee $employee, array $state, string $instruction): array
     {
         $catalogue = '';
         foreach (PermissionCatalog::groups() as $group) {
@@ -124,46 +124,21 @@ final class PermissionAdvisor
             'approvalLimit' => $state['approvalLimit'], 'paymentLimit' => $state['paymentLimit'],
         ], JSON_UNESCAPED_UNICODE);
 
-        $string = ['type' => 'STRING', 'nullable' => true];
-        $list = fn (?array $enum = null) => ['type' => 'ARRAY', 'items' => ['type' => 'STRING', ...($enum ? ['enum' => $enum] : [])]];
-
-        $response = Http::withHeaders(['x-goog-api-key' => $this->apiKey])
-            ->timeout(45)
-            ->retry(2, 600, throw: false)
-            ->post('https://generativelanguage.googleapis.com/v1beta/models/'.$this->model.':generateContent', [
-                'systemInstruction' => ['parts' => [['text' => $system]]],
-                'contents' => [['role' => 'user', 'parts' => [['text' => "The employee's permissions now:\n{$current}\n\nThe administrator's instruction:\n".($instruction !== '' ? $instruction : '(none - recommend the right set for this job)')]]]],
-                'generationConfig' => [
-                    'temperature' => 0,
-                    'responseMimeType' => 'application/json',
-                    'responseSchema' => [
-                        'type' => 'OBJECT',
-                        'required' => ['explanation', 'grant', 'revoke'],
-                        'properties' => [
-                            'explanation' => ['type' => 'STRING'],
-                            'grant' => $list(PermissionCatalog::keys()),
-                            'revoke' => $list(PermissionCatalog::keys()),
-                            'scope' => [...$string, 'enum' => array_keys(PermissionCatalog::SCOPES)],
-                            'departments' => [...$list(PermissionCatalog::departments()), 'nullable' => true],
-                            'approvalLimit' => ['type' => 'NUMBER', 'nullable' => true],
-                            'paymentLimit' => ['type' => 'NUMBER', 'nullable' => true],
-                            'setLimits' => $list(['approvalLimit', 'paymentLimit']),
-                            'temporaryDays' => ['type' => 'INTEGER', 'nullable' => true],
-                        ],
-                    ],
-                ],
-            ]);
-
-        if ($response->failed()) {
-            throw new \RuntimeException('HTTP '.$response->status().' '.mb_substr($response->body(), 0, 200), $response->status());
-        }
-
-        $answer = json_decode((string) $response->json('candidates.0.content.parts.0.text'), true);
-        if (! is_array($answer)) {
-            throw new \RuntimeException('No usable answer.');
-        }
-
-        return $answer;
+        return $this->ai->json(
+            $system,
+            "The employee's permissions now:\n{$current}\n\nThe administrator's instruction:\n".($instruction !== '' ? $instruction : '(none - recommend the right set for this job)'),
+            Schema::object([
+                'explanation' => Schema::string(),
+                'grant' => Schema::list(Schema::string(enum: PermissionCatalog::keys())),
+                'revoke' => Schema::list(Schema::string(enum: PermissionCatalog::keys())),
+                'scope' => Schema::string(nullable: true, enum: array_keys(PermissionCatalog::SCOPES)),
+                'departments' => Schema::list(Schema::string(enum: PermissionCatalog::departments())),
+                'approvalLimit' => Schema::number(nullable: true),
+                'paymentLimit' => Schema::number(nullable: true),
+                'setLimits' => Schema::list(Schema::string(enum: ['approvalLimit', 'paymentLimit'])),
+                'temporaryDays' => Schema::number(nullable: true),
+            ]),
+        );
     }
 
     /** Without AI: a template named outright, or modules and actions named in the instruction. */

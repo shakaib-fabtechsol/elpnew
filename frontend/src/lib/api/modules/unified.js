@@ -4,7 +4,7 @@ import { api } from "../client";
  * The Smart Request (/requests/interpret, /revise, /retype, /submit).
  *
  * The employee writes what they need, or attaches a document; the server
- * (Gemini, or plain rules when AI is not switched on) proposes the request
+ * (OpenAI or Gemini, or plain rules when AI is not switched on) proposes the request
  * type and its fields. The proposal is reviewed on screen and only then
  * submitted - through the module's own endpoint on the server, so every
  * limit and the whole approval workflow apply as they do for the fixed forms.

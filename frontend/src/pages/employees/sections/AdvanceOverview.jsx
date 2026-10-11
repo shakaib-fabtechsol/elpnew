@@ -35,6 +35,7 @@ import {
 import { longDate } from "./AdvanceSalarySection";
 import SalaryLedger from "./SalaryLedger";
 import { shortName } from "@/lib/shortName";
+import { useAiOverview, withAi } from "@/lib/api/modules/ai";
 
 const isoOf = (date) =>
   date.getFullYear() +
@@ -219,7 +220,20 @@ export default function AdvanceOverview({
   onOpen,
 }) {
   const [showAll, setShowAll] = useState(false);
-  const read = readAdvances(advances, employee, net);
+  const own = readAdvances(advances, employee, net);
+  // The AI's reading of the same requests, held to the same limit.
+  const ai = useAiOverview({
+    kind: "Salary Advance",
+    measure: "money",
+    history: advancesFor(advances, employee?.name).map((request) => ({
+      date: request.requestDate || null,
+      amount: Number(request.amount || 0),
+      status: advanceStatusOf(request),
+      type: request.purpose || null,
+    })),
+    facts: { remaining: own.remaining, limit: own.limit, outstanding: own.outstanding, netSalary: Number(net || 0) },
+  });
+  const read = withAi(own, ai);
   const eligible = read.remaining > 0;
   const chance = chanceOf(read.probability);
   const lastStatus = read.last ? advanceStatusOf(read.last) : "";
@@ -314,7 +328,7 @@ export default function AdvanceOverview({
             icon={Lightbulb}
             label="AI Recommendation"
             value={amount(read.recommended)}
-            note="Based on your salary, deductions and past requests."
+            note={read.recommendedNote || "Based on your salary, deductions and past requests."}
           />
           <Tile
             icon={BadgeCheck}
@@ -330,7 +344,9 @@ export default function AdvanceOverview({
               <Ring percent={read.probability} tone={chance.ring} />
               <div className="min-w-0">
                 <p className={cn("text-sm font-bold leading-tight", chance.ink)}>{chance.word}</p>
-                <p className="mt-0.5 text-xs leading-snug text-primary/70">Based on how earlier requests were decided.</p>
+                <p className="mt-0.5 text-xs leading-snug text-primary/70">
+                  {read.probabilityNote || "Based on how earlier requests were decided."}
+                </p>
               </div>
             </div>
           </div>

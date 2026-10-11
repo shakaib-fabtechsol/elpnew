@@ -5,8 +5,9 @@ namespace App\Services\Circulars;
 use App\Http\Requests\Employees\EmployeeRequest;
 use App\Models\Circular;
 use App\Models\Employee;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
+use App\Services\Ai\AiClient;
+use App\Services\Ai\AiUnavailable;
+use App\Services\Ai\Schema;
 
 /**
  * The AI side of circulars: a brief of each one (what it says, in short and
@@ -21,7 +22,7 @@ use Illuminate\Support\Facades\Log;
  */
 final class CircularAnalyst
 {
-    public function __construct(private ?string $apiKey, private string $model) {}
+    public function __construct(private AiClient $ai) {}
 
     /**
      * @return array{engine:string,summary:string,plainLanguage:string,keyPoints:list<string>,actions:list<array{action:string,who:string,deadline:?string}>,deadlines:list<array{date:?string,label:string}>,affectedDepartments:list<string>,affectedRoles:list<string>,notes:list<string>}
@@ -29,12 +30,11 @@ final class CircularAnalyst
     public function brief(Circular $circular): array
     {
         $notes = [];
-        if (filled($this->apiKey)) {
+        if ($this->ai->available()) {
             try {
-                return [...$this->checked($this->geminiBrief($circular)), 'engine' => 'gemini', 'notes' => []];
-            } catch (\Throwable $error) {
-                Log::warning('Circular brief from Gemini failed', ['error' => mb_substr($error->getMessage(), 0, 300)]);
-                $notes[] = $error->getCode() === 429
+                return [...$this->checked($this->writeBrief($circular)), 'engine' => $this->ai->engine(), 'notes' => []];
+            } catch (AiUnavailable $down) {
+                $notes[] = $down->getCode() === 429
                     ? 'The AI usage limit has been reached for now, so this is a plain reading of the text.'
                     : 'The AI service could not be reached, so this is a plain reading of the text.';
             }
@@ -50,11 +50,11 @@ final class CircularAnalyst
     {
         $question = trim((string) $question) ?: 'What does this circular mean for me and my work? What do I have to do, and by when?';
 
-        if (filled($this->apiKey)) {
+        if ($this->ai->available()) {
             try {
-                return ['engine' => 'gemini', 'answer' => $this->geminiAnswer($circular, $employee, $question), 'notes' => []];
-            } catch (\Throwable $error) {
-                Log::warning('Circular answer from Gemini failed', ['error' => mb_substr($error->getMessage(), 0, 300)]);
+                return ['engine' => $this->ai->engine(), 'answer' => $this->writeAnswer($circular, $employee, $question), 'notes' => []];
+            } catch (AiUnavailable) {
+                // Falls through to the circular's own words.
             }
         }
 
@@ -100,35 +100,13 @@ final class CircularAnalyst
 
     /* ----------------------------------------------------------- gemini */
 
-    private function call(string $system, string $user, ?array $schema): string
-    {
-        $response = Http::withHeaders(['x-goog-api-key' => $this->apiKey])
-            ->timeout(45)
-            ->retry(2, 600, throw: false)
-            ->post('https://generativelanguage.googleapis.com/v1beta/models/'.$this->model.':generateContent', [
-                'systemInstruction' => ['parts' => [['text' => $system]]],
-                'contents' => [['role' => 'user', 'parts' => [['text' => $user]]]],
-                'generationConfig' => ['temperature' => 0.1, ...($schema ? ['responseMimeType' => 'application/json', 'responseSchema' => $schema] : [])],
-            ]);
-
-        if ($response->failed()) {
-            throw new \RuntimeException('HTTP '.$response->status().' '.mb_substr($response->body(), 0, 200), $response->status());
-        }
-        $text = trim((string) $response->json('candidates.0.content.parts.0.text'));
-        if ($text === '') {
-            throw new \RuntimeException('No usable answer.');
-        }
-
-        return $text;
-    }
-
     private function about(Circular $circular): string
     {
         return "Circular {$circular->circular_no}, dated {$circular->date->format('Y-m-d')}, issued to: {$circular->target_group}"
             .($circular->branch !== 'general' ? " ({$circular->branch} branch)" : '').".\n\nText of the circular:\n".$circular->content;
     }
 
-    private function geminiBrief(Circular $circular): array
+    private function writeBrief(Circular $circular): array
     {
         $departments = implode(', ', EmployeeRequest::DEPARTMENTS);
         $system = <<<TEXT
@@ -145,31 +123,24 @@ final class CircularAnalyst
         - "affectedRoles": jobs it bears on most (for example "Lawyers", "Accountants"). Empty when it touches everyone alike.
         TEXT;
 
-        $strings = ['type' => 'ARRAY', 'items' => ['type' => 'STRING']];
-        $nullable = ['type' => 'STRING', 'nullable' => true];
+        $answer = $this->ai->json($system, $this->about($circular), Schema::object([
+            'summary' => Schema::string(),
+            'plainLanguage' => Schema::string(),
+            'keyPoints' => Schema::list(Schema::string()),
+            'actions' => Schema::list(Schema::object(['action' => Schema::string(), 'who' => Schema::string(), 'deadline' => Schema::string(nullable: true)])),
+            'deadlines' => Schema::list(Schema::object(['date' => Schema::string(nullable: true), 'label' => Schema::string()])),
+            'affectedDepartments' => Schema::list(Schema::string(enum: EmployeeRequest::DEPARTMENTS)),
+            'affectedRoles' => Schema::list(Schema::string()),
+        ]));
 
-        $answer = json_decode($this->call($system, $this->about($circular), [
-            'type' => 'OBJECT',
-            'required' => ['summary', 'plainLanguage', 'keyPoints', 'actions', 'deadlines', 'affectedDepartments', 'affectedRoles'],
-            'properties' => [
-                'summary' => ['type' => 'STRING'],
-                'plainLanguage' => ['type' => 'STRING'],
-                'keyPoints' => $strings,
-                'actions' => ['type' => 'ARRAY', 'items' => ['type' => 'OBJECT', 'required' => ['action', 'who'], 'properties' => ['action' => ['type' => 'STRING'], 'who' => ['type' => 'STRING'], 'deadline' => $nullable]]],
-                'deadlines' => ['type' => 'ARRAY', 'items' => ['type' => 'OBJECT', 'required' => ['label'], 'properties' => ['date' => $nullable, 'label' => ['type' => 'STRING']]]],
-                'affectedDepartments' => ['type' => 'ARRAY', 'items' => ['type' => 'STRING', 'enum' => EmployeeRequest::DEPARTMENTS]],
-                'affectedRoles' => $strings,
-            ],
-        ]), true);
-
-        if (! is_array($answer) || blank($answer['summary'] ?? null)) {
-            throw new \RuntimeException('No usable brief.');
+        if (blank($answer['summary'] ?? null)) {
+            throw new AiUnavailable('The AI service returned no brief.');
         }
 
         return $answer;
     }
 
-    private function geminiAnswer(Circular $circular, ?Employee $employee, string $question): string
+    private function writeAnswer(Circular $circular, ?Employee $employee, string $question): string
     {
         $who = $employee
             ? 'The person asking is a '.($employee->occupation ?: 'member of staff').($employee->department ? ' in '.$employee->department : '').($employee->branch ? ', '.$employee->branch.' branch' : '').'.'
@@ -181,7 +152,12 @@ final class CircularAnalyst
         If the circular does not answer the question, say plainly that it does not, and suggest asking whoever issued it. Never invent an instruction, a date or a consequence, and do not give legal advice.
         TEXT;
 
-        return mb_substr($this->call($system, $this->about($circular)."\n\n{$who}\nQuestion: {$question}", null), 0, 1200);
+        $answer = $this->ai->json($system, $this->about($circular)."\n\n{$who}\nQuestion: {$question}", Schema::object(['answer' => Schema::string()]));
+        if (blank($answer['answer'] ?? null)) {
+            throw new AiUnavailable('The AI service returned no answer.');
+        }
+
+        return mb_substr(trim((string) $answer['answer']), 0, 1200);
     }
 
     /* ------------------------------------------------------------ rules */

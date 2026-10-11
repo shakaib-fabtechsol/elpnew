@@ -4,8 +4,9 @@ namespace App\Services\Management;
 
 use App\Models\DevelopmentAction;
 use App\Models\Employee;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
+use App\Services\Ai\AiClient;
+use App\Services\Ai\AiUnavailable;
+use App\Services\Ai\Schema;
 
 /**
  * The management insight for one employee: an executive summary, what went
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\Log;
  */
 final class InsightWriter
 {
-    public function __construct(private ?string $apiKey, private string $model) {}
+    public function __construct(private AiClient $ai) {}
 
     /**
      * @param  array{standing:string,facts:array<string,mixed>,signals:list<array<string,string>>}  $signals
@@ -30,12 +31,11 @@ final class InsightWriter
     {
         $notes = [];
 
-        if (filled($this->apiKey)) {
+        if ($this->ai->available()) {
             try {
-                return [...$this->checked($this->gemini($employee, $signals, $context)), 'engine' => 'gemini', 'notes' => []];
-            } catch (\Throwable $error) {
-                Log::warning('Employee insight from Gemini failed', ['error' => mb_substr($error->getMessage(), 0, 300)]);
-                $notes[] = $error->getCode() === 429
+                return [...$this->checked($this->ask($employee, $signals, $context)), 'engine' => $this->ai->engine(), 'notes' => []];
+            } catch (AiUnavailable $down) {
+                $notes[] = $down->getCode() === 429
                     ? 'The AI usage limit has been reached for now, so this was compiled from the records by fixed rules.'
                     : 'The AI service could not be reached, so this was compiled from the records by fixed rules.';
             }
@@ -69,7 +69,7 @@ final class InsightWriter
         ];
     }
 
-    private function gemini(Employee $employee, array $signals, array $context): array
+    private function ask(Employee $employee, array $signals, array $context): array
     {
         $kinds = implode(', ', DevelopmentAction::KINDS);
         $system = <<<TEXT
@@ -98,45 +98,20 @@ final class InsightWriter
             ...$context,
         ], JSON_UNESCAPED_UNICODE);
 
-        $strings = ['type' => 'ARRAY', 'items' => ['type' => 'STRING']];
+        $answer = $this->ai->json($system, "The records, as JSON:\n".$data, Schema::object([
+            'summary' => Schema::string(),
+            'achievements' => Schema::list(Schema::string()),
+            'concerns' => Schema::list(Schema::string()),
+            'patterns' => Schema::list(Schema::string()),
+            'recommendations' => Schema::list(Schema::object([
+                'title' => Schema::string(),
+                'kind' => Schema::string(enum: DevelopmentAction::KINDS),
+                'reason' => Schema::string(),
+            ])),
+        ]));
 
-        $response = Http::withHeaders(['x-goog-api-key' => $this->apiKey])
-            ->timeout(45)
-            ->retry(2, 600, throw: false)
-            ->post('https://generativelanguage.googleapis.com/v1beta/models/'.$this->model.':generateContent', [
-                'systemInstruction' => ['parts' => [['text' => $system]]],
-                'contents' => [['role' => 'user', 'parts' => [['text' => "The records, as JSON:\n".$data]]]],
-                'generationConfig' => [
-                    'temperature' => 0.2,
-                    'responseMimeType' => 'application/json',
-                    'responseSchema' => [
-                        'type' => 'OBJECT',
-                        'required' => ['summary', 'achievements', 'concerns', 'patterns', 'recommendations'],
-                        'properties' => [
-                            'summary' => ['type' => 'STRING'],
-                            'achievements' => $strings,
-                            'concerns' => $strings,
-                            'patterns' => $strings,
-                            'recommendations' => ['type' => 'ARRAY', 'items' => [
-                                'type' => 'OBJECT',
-                                'required' => ['title', 'kind', 'reason'],
-                                'properties' => [
-                                    'title' => ['type' => 'STRING'],
-                                    'kind' => ['type' => 'STRING', 'enum' => DevelopmentAction::KINDS],
-                                    'reason' => ['type' => 'STRING'],
-                                ],
-                            ]],
-                        ],
-                    ],
-                ],
-            ]);
-
-        if ($response->failed()) {
-            throw new \RuntimeException('HTTP '.$response->status().' '.mb_substr($response->body(), 0, 200), $response->status());
-        }
-        $answer = json_decode((string) $response->json('candidates.0.content.parts.0.text'), true);
-        if (! is_array($answer) || blank($answer['summary'] ?? null)) {
-            throw new \RuntimeException('No usable answer.');
+        if (blank($answer['summary'] ?? null)) {
+            throw new AiUnavailable('The AI service returned no summary.');
         }
 
         return $answer;

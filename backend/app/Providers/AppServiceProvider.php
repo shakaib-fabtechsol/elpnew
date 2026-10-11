@@ -5,13 +5,16 @@ namespace App\Providers;
 use App\Enums\Role;
 use App\Models\Employee;
 use App\Models\User;
-use App\Services\Circulars\CircularAnalyst;
+use App\Services\Ai\AiClient;
+use App\Services\Ai\GeminiClient;
+use App\Services\Ai\NullAiClient;
+use App\Services\Ai\OpenAiClient;
+use App\Services\Invoices\AiInvoiceReader;
 use App\Services\Invoices\DemoInvoiceReader;
 use App\Services\Invoices\InvoiceReader;
-use App\Services\Management\InsightWriter;
 use App\Services\Permissions\Access;
-use App\Services\Permissions\PermissionAdvisor;
 use App\Services\Requests\GeminiRequestInterpreter;
+use App\Services\Requests\OpenAiRequestInterpreter;
 use App\Services\Requests\RequestInterpreter;
 use App\Services\Requests\RuleBasedRequestInterpreter;
 use Illuminate\Database\Eloquent\Model;
@@ -27,19 +30,32 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // The invoice reader is the one piece that becomes real AI later:
-        // bind a real implementation here and nothing else changes.
-        $this->app->bind(InvoiceReader::class, DemoInvoiceReader::class);
+        // The AI model everything but the request box asks: OpenAI when it
+        // has a key, Gemini when only that one does, none otherwise.
+        $this->app->bind(AiClient::class, fn () => match (true) {
+            filled(config('services.openai.key')) => new OpenAiClient(config('services.openai.key'), config('services.openai.model')),
+            filled(config('services.gemini.key')) => new GeminiClient(config('services.gemini.key'), config('services.gemini.model')),
+            default => new NullAiClient,
+        });
 
-        // The unified request box: read by Gemini when a key is set, by
-        // plain rules when it is not - the screens say which was used.
-        $this->app->bind(CircularAnalyst::class, fn () => new CircularAnalyst(config('services.gemini.key'), config('services.gemini.model')));
-        $this->app->bind(InsightWriter::class, fn () => new InsightWriter(config('services.gemini.key'), config('services.gemini.model')));
-        $this->app->bind(PermissionAdvisor::class, fn () => new PermissionAdvisor(config('services.gemini.key'), config('services.gemini.model')));
+        // The circular brief, the management insight and the permission
+        // assistant take that same model through their constructors, so they
+        // need no binding of their own.
 
-        $this->app->bind(RequestInterpreter::class, fn () => filled(config('services.gemini.key'))
-            ? new GeminiRequestInterpreter(config('services.gemini.key'), config('services.gemini.model'))
-            : new RuleBasedRequestInterpreter);
+        // Invoices are read by that model. Without one the demo reader
+        // stands in, and the screen says the reading is a sample.
+        $this->app->bind(InvoiceReader::class, fn ($app) => $app->make(AiClient::class)->available()
+            ? new AiInvoiceReader($app->make(AiClient::class))
+            : new DemoInvoiceReader);
+
+        // The unified request box: read by OpenAI when it has a key, by
+        // Gemini when only that one does, by plain rules when neither does -
+        // the screens say which was used.
+        $this->app->bind(RequestInterpreter::class, fn () => match (true) {
+            filled(config('services.openai.key')) => new OpenAiRequestInterpreter(config('services.openai.key'), config('services.openai.model')),
+            filled(config('services.gemini.key')) => new GeminiRequestInterpreter(config('services.gemini.key'), config('services.gemini.model')),
+            default => new RuleBasedRequestInterpreter,
+        });
     }
 
     /**
