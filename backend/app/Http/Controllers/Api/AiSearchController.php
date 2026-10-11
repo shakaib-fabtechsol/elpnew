@@ -91,6 +91,7 @@ class AiSearchController extends Controller
         - Use only the column keys you were given, spelled exactly. When a fixed value is listed, use it exactly as listed.
         - Work out relative dates ("this month", "before March", "last year") against today and write them as comparisons on the right date column.
         - Amounts and counts ("more than 1000", "at least 3") become comparisons on the right number column.
+        - A question about anything running out, lapsing or due for renewal soon is the single term expiring; about anything already run out or lapsed, expired; about anything late or past due, overdue. These three work on every list, whether or not a date column is named - use them rather than the words "document" or "expire".
         - Leave out filler words ("show me", "all", "please", "employees"). If the question is already a few key words, return them as they are.
         - When nothing in the question maps to a column, fall back to the important words themselves.
         - "explanation" is one short English sentence saying what the query looks for.
