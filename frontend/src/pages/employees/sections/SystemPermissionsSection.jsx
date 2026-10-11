@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Clock, History, Plus, ShieldAlert, ShieldCheck, Sparkles, X } from "lucide-react";
-import { Loader } from "@/components/shared/Loader";
+import { CardLoader, Loader, LoadingCard } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -134,10 +134,7 @@ export default function SystemPermissionsSection({ employee }) {
   if (failed) return <EmptyState>{failed}</EmptyState>;
   if (!page || !draft) {
     return (
-      <p role="status" className="flex items-center justify-center gap-2 py-10 text-sm text-primary">
-        <Loader size={16} />
-        Loading permissions…
-      </p>
+      <LoadingCard label="Loading permissions" />
     );
   }
 
@@ -343,6 +340,7 @@ export default function SystemPermissionsSection({ employee }) {
         <Panel
           title="AI Permission Assistant"
           icon={Sparkles}
+          loading={busy === "asking"}
           note="Say what this employee should be able to do. The change is proposed for you to check - nothing is saved until you save it."
         >
           <div className="flex flex-wrap gap-3">
@@ -635,9 +633,11 @@ export default function SystemPermissionsSection({ employee }) {
 }
 
 /** One titled block of the page, its action on the heading row. */
-function Panel({ title, note, icon: Icon, action, children }) {
+function Panel({ title, note, icon: Icon, action, loading, children }) {
   return (
-    <section className="space-y-4 rounded-xl border border-container-border bg-card p-4 sm:p-5">
+    <section className="relative space-y-4 rounded-xl border border-container-border bg-card p-4 sm:p-5">
+      {/* This card's own loader, while it waits on the AI. */}
+      {loading && <CardLoader />}
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-lg font-bold text-primary">

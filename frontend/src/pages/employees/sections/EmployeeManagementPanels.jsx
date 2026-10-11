@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Minus, Plus, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
-import { Loader } from "@/components/shared/Loader";
+import { CardLoader, Loader, LoadingCard } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,10 +76,7 @@ function useManagement(employeeId) {
 
 function Loading() {
   return (
-    <p role="status" className="flex items-center justify-center gap-2 py-10 text-sm text-primary">
-      <Loader size={16} />
-      Loading…
-    </p>
+    <LoadingCard />
   );
 }
 
@@ -211,7 +208,9 @@ export function ManagementOverview({ employee, onOpen }) {
         )}
       </section>
 
-      <section className="space-y-4 rounded-xl border border-container-border p-4 sm:p-5">
+      <section className="relative space-y-4 rounded-xl border border-container-border p-4 sm:p-5">
+        {/* This card's own loader, while the AI writes the insight. */}
+        {busy === "insight" && <CardLoader label="Writing the insight" />}
         <Heading
           title={
             <span className="flex items-center gap-2">

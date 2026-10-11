@@ -11,6 +11,9 @@ import { cn } from "@/lib/utils";
  *   <Loader />        in a line of text or a button, beside the words
  *   <CardLoader />    over one card that is waiting on its own (an AI
  *                     reading, a table), the rest of the page still usable
+ *   <LoadingCard />   in place of a card whose content has not arrived at
+ *                     all yet: the same clock, in the middle of the space
+ *                     the card will take
  *   <PageLoader />    over the whole screen, in its centre, the page behind
  *                     it blurred - for when the page itself is not ready
  *
@@ -43,6 +46,24 @@ export function CardLoader({ size = 40, label = "Loading", className }) {
       )}
     >
       <Loader size={size} label={label} />
+    </div>
+  );
+}
+
+/**
+ * Where a card will be, before any of it has arrived: its outline, with the
+ * clock in the middle. `compact` is for one that sits inside another card.
+ */
+export function LoadingCard({ size = 40, label = "Loading", compact, className }) {
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-center rounded-xl border border-container-border bg-blue-50/40",
+        compact ? "min-h-24" : "min-h-40",
+        className
+      )}
+    >
+      <Loader size={compact ? 28 : size} label={label} />
     </div>
   );
 }

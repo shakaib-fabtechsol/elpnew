@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { CalendarClock, ListChecks, Sparkles, Users } from "lucide-react";
-import { Loader } from "@/components/shared/Loader";
+import { CardLoader, Loader, LoadingCard } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { circularInsightsApi } from "@/lib/api/modules/circularInsights";
@@ -65,17 +65,16 @@ export default function CircularBrief({ circular, own = false, canRefresh = fals
   if (failed) return <p className="text-sm text-destructive">{failed}</p>;
   if (!brief) {
     return (
-      <p role="status" className="flex items-center gap-2 text-sm text-primary">
-        <Loader size={16} />
-        Preparing the brief…
-      </p>
+      <LoadingCard compact label="Preparing the brief" />
     );
   }
 
   const touches = [...brief.affectedDepartments, ...brief.affectedRoles.filter((role) => !brief.affectedDepartments.includes(role))];
 
   return (
-    <div className="space-y-4 text-sm text-primary">
+    <div className="relative space-y-4 rounded-lg text-sm text-primary">
+      {/* This card's own loader, while the AI writes or answers. */}
+      {busy && <CardLoader label="The AI is working on this circular" />}
       <div className="flex flex-wrap items-center gap-2">
         <p className="flex items-center gap-2 font-bold">
           <Sparkles className="size-4" aria-hidden="true" />
