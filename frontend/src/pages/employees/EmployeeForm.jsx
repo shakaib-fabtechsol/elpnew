@@ -677,6 +677,8 @@ function NumberedSteps({
 const FIELD_RULES = {
   arabicName: { allowed: /^[؀-ۿ\s]*$/, message: "Arabic letters only." },
   employeeName: { allowed: /^[A-Za-z\s.'-]*$/, message: "English letters only." },
+  shortName: { allowed: /^[A-Za-z\s.'-]*$/, message: "English letters only." },
+  shortNameAr: { allowed: /^[\u0600-\u06FF\s]*$/, message: "Arabic letters only." },
   emergencyName: { allowed: /^[A-Za-z؀-ۿ\s.'-]*$/, message: "Letters only." },
   phone: { allowed: /^[0-9\s-]*$/, message: "Numbers only." },
   emergencyPhone: { allowed: /^[0-9\s-]*$/, message: "Numbers only." },
@@ -733,6 +735,56 @@ function RuleNote({ name, value, whole = false }) {
     <p role="alert" className="field-error">
       {rule.allowed.test(value) ? rule.shapeMessage : rule.message}
     </p>
+  );
+}
+
+/**
+ * The short name beside its full name: what lists, requests and approvals
+ * show in place of the full one. Filled in from the full name, open to be
+ * changed - and when the two have drifted apart, what it would be now is
+ * offered under the field rather than written over what is there.
+ */
+function ShortNameField({ name, label, value, onChange, offer, sharedWith, onTake, dir }) {
+  const differs = offer && value.trim() && offer.trim().toLowerCase() !== value.trim().toLowerCase();
+  // Said only for the name that was lengthened to tell two people apart.
+  const lengthened = !differs && sharedWith && offer && value.trim() === offer;
+  const broken = ruleBroken(name, value);
+
+  return (
+    <div className="form-field space-y-2">
+      <Label htmlFor={name}>{label}</Label>
+      <Input
+        id={name}
+        name={name}
+        value={value}
+        onChange={onChange}
+        maxLength={120}
+        dir={dir}
+        placeholder={dir === "rtl" ? "الاسم المختصر" : "First and family name"}
+        aria-invalid={broken || undefined}
+        aria-describedby={differs || lengthened ? name + "-note" : undefined}
+      />
+      <RuleNote name={name} value={value} />
+      {!broken && differs && (
+        <p id={name + "-note"} className="absolute start-0 top-full mt-1 flex max-w-full items-center gap-1.5 text-xs text-primary/75">
+          <span className="truncate" dir={dir}>
+            Suggested: {offer}
+          </span>
+          <button
+            type="button"
+            onClick={() => onTake(name)}
+            className="shrink-0 rounded font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Use
+          </button>
+        </p>
+      )}
+      {!broken && lengthened && (
+        <p id={name + "-note"} className="absolute start-0 top-full mt-1 max-w-full truncate text-xs text-primary/75">
+          {sharedWith.shortName} is already used ({sharedWith.empNo})
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -1094,7 +1146,9 @@ const HAS_LEFT = ["Inactive"];
 
 const emptyFormData = {
   arabicName: "",
+  shortNameAr: "",
   employeeName: "",
+  shortName: "",
   nationality: "",
   gender: "",
   dateOfBirth: "",
@@ -1532,6 +1586,63 @@ export default function EmployeeForm({ self }) {
 
   const set = (name, value) => setFormData((prev) => ({ ...prev, [name]: value }));
   const onChange = (e) => set(e.target.name, e.target.value);
+
+  /*
+   * The short name: first and family name, worked out from the full name as
+   * it is typed and shown in the field after it.
+   *
+   * It follows the full name only until somebody has settled it. A short
+   * name typed by hand, or one already saved on the record, is never
+   * replaced: when the full name changes under it, what it would now be is
+   * offered beside the field, to be taken or left.
+   */
+  const [shortSettled, setShortSettled] = useState({ shortName: isEditMode, shortNameAr: isEditMode });
+  const [shortOffer, setShortOffer] = useState({});
+  const fullNames = formData.employeeName.trim() + "|" + formData.arabicName.trim();
+  useEffect(() => {
+    const name = formData.employeeName.trim();
+    const nameAr = formData.arabicName.trim();
+    // A saved record whose names have not been touched has nothing to offer.
+    const unchanged = isEditMode && name === (record?.name || "") && nameAr === (record?.nameAr || "");
+    if (unchanged || (!name && !nameAr)) {
+      setShortOffer({});
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      employeesApi.shortName({ name, nameAr, except: record?.id }).then(
+        (offer) => {
+          if (cancelled) return;
+          setShortOffer(offer);
+          setFormData((prev) => {
+            const next = { ...prev };
+            if (!shortSettled.shortName || !prev.shortName) next.shortName = offer.shortName || "";
+            if (!shortSettled.shortNameAr || !prev.shortNameAr) next.shortNameAr = offer.shortNameAr || "";
+            return next;
+          });
+        },
+        // Unreachable: the record still gets its short name when it is saved.
+        () => {}
+      );
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // Only the full names start this; the rest is read as it stands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullNames]);
+
+  /** Typed by hand: settled, until it is emptied again. */
+  const onShortChange = (e) => {
+    const { name, value } = e.target;
+    set(name, value);
+    setShortSettled((prev) => ({ ...prev, [name]: value.trim() !== "" }));
+  };
+  const takeShortOffer = (name) => {
+    set(name, shortOffer[name] || "");
+    setShortSettled((prev) => ({ ...prev, [name]: false }));
+  };
 
   // A new employee has one side to it: the basic information. Everything
   // else - documents, salary, loans - is filed against an employee, and there
@@ -1978,7 +2089,7 @@ export default function EmployeeForm({ self }) {
           action={
             saved.employeeName && (
               <div className="text-end">
-                <p className="text-lg font-bold text-primary">{saved.employeeName}</p>
+                <p className="text-lg font-bold text-primary">{saved.shortName || saved.employeeName}</p>
                 <p className="text-sm text-primary/75">Employee No. {employeeNo}</p>
               </div>
             )
@@ -2030,7 +2141,7 @@ export default function EmployeeForm({ self }) {
           id={"employee-" + (record?.id || "new")}
           backTo="/employees"
           backLabel="All employees"
-          title={formData.employeeName || "New employee"}
+          title={formData.shortName || formData.employeeName || "New employee"}
           subtitle={isEditMode ? employeeNo + " · " + formData.status : "New record"}
           active={activeSection}
           onSelect={selectSection}
@@ -2072,7 +2183,7 @@ export default function EmployeeForm({ self }) {
                 <span aria-hidden="true" className="px-2 text-primary/40">/</span>
                 <span className="text-primary/60">Employees</span>
                 <span aria-hidden="true" className="px-2 text-primary/40">/</span>
-                <span className="font-semibold text-primary" aria-current="page">{record.name}</span>
+                <span className="font-semibold text-primary" aria-current="page">{record.shortName || record.name}</span>
               </nav>
               <div className="flex items-center gap-4">
                 <span className="flex size-16 shrink-0 items-center justify-center rounded-full bg-menu-selected">
@@ -2080,7 +2191,7 @@ export default function EmployeeForm({ self }) {
                 </span>
                 <span aria-hidden="true" className="h-12 w-px bg-container-border" />
                 {/* The name on record, not one being retyped in a correction. */}
-                <h1 className="text-2xl font-bold text-primary">{record.name}</h1>
+                <h1 className="text-2xl font-bold text-primary">{record.shortName || record.name}</h1>
               </div>
             </div>
           )}
@@ -2107,6 +2218,11 @@ export default function EmployeeForm({ self }) {
               <span aria-hidden="true" className="h-9 w-px bg-container-border" />
               <LayoutGrid strokeWidth={1.5} aria-hidden="true" className="size-8 shrink-0 text-primary" />
               <h1 className="text-2xl font-bold text-primary">Requests</h1>
+              {/* A request made by describing it, whichever kind it turns
+                  out to be - so it sits with the page, not with one list. */}
+              <div className="ms-auto">
+                <SmartRequest employee={record} />
+              </div>
             </div>
             </div>
           )}
@@ -2130,12 +2246,6 @@ export default function EmployeeForm({ self }) {
                 </p>
               )}
             </div>
-          )}
-
-          {/* One box in place of choosing a form: written in the employee's
-              own words, read into a request for them to check and send. */}
-          {isRequests && (
-            <SmartRequest employee={record} onCreated={(result) => createdRequest.reload(record.id, result)} />
           )}
 
           {/* Every kind of request in one row, each its mark in a box and its
@@ -2413,6 +2523,16 @@ export default function EmployeeForm({ self }) {
                       <RuleNote name="arabicName" value={formData.arabicName} />
                     </div>
 
+                    <ShortNameField
+                      name="shortNameAr"
+                      label="Short Name (Arabic)"
+                      value={formData.shortNameAr}
+                      onChange={onShortChange}
+                      offer={shortOffer.shortNameAr}
+                      onTake={takeShortOffer}
+                      dir="rtl"
+                    />
+
                     <div className="form-field space-y-2">
                       <Label htmlFor="employeeName">
                         Full Name (English)
@@ -2429,6 +2549,16 @@ export default function EmployeeForm({ self }) {
                       />
                       <RuleNote name="employeeName" value={formData.employeeName} />
                     </div>
+
+                    <ShortNameField
+                      name="shortName"
+                      label="Short Name (English)"
+                      value={formData.shortName}
+                      onChange={onShortChange}
+                      offer={shortOffer.shortName}
+                      sharedWith={shortOffer.sharedWith}
+                      onTake={takeShortOffer}
+                    />
 
                     <div className="form-field space-y-2">
                       <Label htmlFor="dateOfBirth">

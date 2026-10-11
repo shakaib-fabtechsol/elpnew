@@ -68,6 +68,7 @@ import {
 } from "../bonusData";
 
 import DateField from "@/components/shared/DateField";
+import { shortName } from "@/lib/shortName";
 const COMMENT_LIMIT = 500;
 
 /** "BON-008" asked in 2026, as the head of the request reads it: "BON 08/2026". */
@@ -366,7 +367,7 @@ export default function BonusSection({
         <div className="ms-auto flex flex-wrap items-center gap-3 pt-2 text-sm text-primary">
           <span>{employee?.empNo || ""}</span>
           <span aria-hidden="true" className="h-5 w-px bg-container-border" />
-          <span>{employee?.name || ""}</span>
+          <span>{shortName(employee?.name)}</span>
           <span aria-hidden="true" className="h-5 w-px bg-container-border" />
           {/* On the step that pays, the head says where the money goes -
               the employee's bank and account - in place of the date and
@@ -511,7 +512,7 @@ export default function BonusSection({
               <Settled
                 id="bonus-employee-said"
                 label="Employee Name"
-                value={employee?.name || ""}
+                value={shortName(employee?.name)}
               />
               <Settled
                 id="bonus-amount-said"
@@ -616,7 +617,7 @@ export default function BonusSection({
             </p>
             <div className="form-grid lg:[&>*+*]:border-s">
               <Said label="Employee No." value={employee?.empNo || ""} />
-              <Said label="Employee Name" value={employee?.name || ""} />
+              <Said label="Employee Name" value={shortName(employee?.name)} />
               {/* Where the money lands: the employee's own account, not the
                   firm's account it leaves from. */}
               <Said label="Bank Name" value={employee?.bankName || "-"} />
@@ -798,7 +799,7 @@ export default function BonusSection({
             <Dialog open={showHistory} onOpenChange={setShowHistory}>
               <DialogContent className="max-h-[90vh] w-[92vw] max-w-7xl overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Bonus History · {employee?.name}</DialogTitle>
+                  <DialogTitle>Bonus History · {shortName(employee?.name)}</DialogTitle>
                   <DialogDescription>Every bonus this employee has asked for.</DialogDescription>
                 </DialogHeader>
                 <RequestTable

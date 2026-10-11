@@ -7,6 +7,7 @@ import {
   formatDate,
   daysUntil,
 } from "../dashboardData";
+import { shortName } from "@/lib/shortName";
 
 export function UrgentActions() {
   const sorted = [...urgentActions].sort((a, b) => a.due.localeCompare(b.due));
@@ -76,7 +77,7 @@ export function MissingDocuments() {
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{item.document}</p>
               <p className="truncate text-xs text-muted-foreground">
-                {item.caseNo} &middot; {item.client} &middot; {item.responsible}
+                {item.caseNo} &middot; {item.client} &middot; {shortName(item.responsible)}
               </p>
             </div>
           </Row>

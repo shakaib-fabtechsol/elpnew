@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Casts\Money;
 use App\Support\Numbering;
+use App\Support\ShortName;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -41,6 +42,24 @@ class Employee extends Model
         static::creating(function (Employee $employee): void {
             $employee->emp_no ??= Numbering::code('EMP', 4);
         });
+
+        // A record saved without a short name is given one: first and family
+        // name, lengthened only as far as it takes to be nobody else's. One
+        // that is already there - worked out earlier or typed by hand - is
+        // never replaced here, whatever happens to the full name.
+        static::saving(function (Employee $employee): void {
+            foreach (['short_name' => 'name', 'short_name_ar' => 'name_ar'] as $short => $full) {
+                if (blank($employee->getAttributes()[$short] ?? null) && filled($employee->getAttributes()[$full] ?? null)) {
+                    $employee->{$short} = ShortName::unique($employee->{$full}, $short, $employee->id);
+                }
+            }
+        });
+    }
+
+    /** The name lists, requests and approvals show; the full one where none was set. */
+    public function displayName(): string
+    {
+        return $this->short_name ?: $this->name;
     }
 
     /* ------------------------------------------------------------- pay */

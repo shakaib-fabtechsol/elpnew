@@ -14,6 +14,7 @@ import {
   acknowledgementBy,
   formatDate,
 } from "@/lib/circulars/context";
+import { shortName } from "@/lib/shortName";
 
 /**
  * Who has acknowledged a circular and who has not.
@@ -79,7 +80,7 @@ export default function CircularDetails({ circular, onOpenChange }) {
             <tbody>
               {audience.map(({ employee, acknowledgement }) => (
                 <tr key={employee.id} className="border-b last:border-0">
-                  <td className="p-3">{employee.name}</td>
+                  <td className="p-3">{shortName(employee.name)}</td>
                   <td className="p-3">
                     {acknowledgement ? (
                       <span className="inline-flex items-center gap-1.5 text-green-700">

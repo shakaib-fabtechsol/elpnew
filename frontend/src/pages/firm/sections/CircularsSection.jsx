@@ -45,6 +45,7 @@ import { GENERAL_BRANCH } from "../firmData";
 import { checkRequired } from "@/components/shared/formFields";
 
 import DateField from "@/components/shared/DateField";
+import { shortName } from "@/lib/shortName";
 const CONTENT_LIMIT = 1000;
 
 /** How much of a circular the list shows before it has to be opened. */
@@ -554,7 +555,7 @@ export default function CircularsSection({ canEdit }) {
                           {branchLabelFor(circular, branches)}
                         </span>
                       </td>
-                      <td className="p-3">{circular.issuedBy}</td>
+                      <td className="p-3">{shortName(circular.issuedBy)}</td>
                       {/* Counted, never typed */}
                       <td className="p-3">
                         <span className="block font-semibold text-primary">
@@ -693,7 +694,7 @@ export default function CircularsSection({ canEdit }) {
                       <td className="whitespace-nowrap p-3">
                         {entry.circularNo}
                       </td>
-                      <td className="p-3">{entry.by}</td>
+                      <td className="p-3">{shortName(entry.by)}</td>
                       <td className="p-3 text-muted-foreground">
                         {entry.detail || "-"}
                       </td>

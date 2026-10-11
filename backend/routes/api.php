@@ -42,6 +42,7 @@ Route::prefix('v1')->group(function () {
 
         /* ------------------------------------------------------ employees */
         Route::get('employees/next-number', [EmployeeController::class, 'nextNumber']);
+        Route::get('employees/short-name', [EmployeeController::class, 'shortName']);
         Route::apiResource('employees', EmployeeController::class);
         Route::get('employees/{employee}/requests-overview', [EmployeeController::class, 'requestsOverview']);
         Route::get('employees/{employee}/leave-balance', [LeaveController::class, 'balance']);
@@ -83,6 +84,7 @@ Route::prefix('v1')->group(function () {
 
         /* ------------------------------ the unified request (free text + AI) */
         Route::post('requests/interpret', [UnifiedRequestController::class, 'interpret'])->middleware('throttle:20,1');
+        Route::post('requests/revise', [UnifiedRequestController::class, 'revise'])->middleware('throttle:20,1');
         Route::post('requests/retype', [UnifiedRequestController::class, 'retype']);
         Route::post('requests/submit', [UnifiedRequestController::class, 'submit']);
         Route::get('suppliers', [SupplierController::class, 'index']);

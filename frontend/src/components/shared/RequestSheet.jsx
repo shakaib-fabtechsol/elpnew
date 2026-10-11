@@ -6,6 +6,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { longDate } from "@/pages/employees/sections/AdvanceSalarySection";
+import { shortName } from "@/lib/shortName";
 
 /**
  * The pieces every request sheet is built from, so a request reads the same
@@ -46,7 +47,7 @@ export function SheetHead({ icon, title, intro, employee, date, requestNo, payin
       <div className="ms-auto flex flex-wrap items-center gap-3 pt-2 text-sm text-primary">
         <span>{employee?.empNo || ""}</span>
         <span aria-hidden="true" className="h-5 w-px bg-container-border" />
-        <span>{employee?.name || ""}</span>
+        <span>{shortName(employee?.name)}</span>
         <span aria-hidden="true" className="h-5 w-px bg-container-border" />
         {paying ? (
           <PayeeFacts employee={employee} />

@@ -29,6 +29,7 @@ import {
 import { checkRequired } from "@/components/shared/formFields";
 
 import DateField from "@/components/shared/DateField";
+import { shortName } from "@/lib/shortName";
 /** Today, as the head of a new request is dated. */
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -177,7 +178,7 @@ export default function LeaveForm({
                 for again. */}
             <div className="form-grid">
               <Worked id="leave-review-no" label="Leave No." value={record?.leaveNo || ""} />
-              <Worked id="leave-review-employee" label="Employee Name" value={employee.name} />
+              <Worked id="leave-review-employee" label="Employee Name" value={shortName(employee.name)} />
               <Worked id="leave-review-period" label="Leave Period" value={period} />
               <Worked
                 id="leave-review-days"
@@ -197,12 +198,12 @@ export default function LeaveForm({
                   <Worked
                     id="leave-review-department-reviewer"
                     label="Department Reviewer"
-                    value={record?.reviewedBy || ""}
+                    value={shortName(record?.reviewedBy)}
                   />
                   <Worked
                     id="leave-review-by"
                     label="Approved By"
-                    value={CURRENT_USER.name}
+                    value={shortName(CURRENT_USER.name)}
                   />
                 </>
               ) : (
@@ -215,7 +216,7 @@ export default function LeaveForm({
                   <Worked
                     id="leave-review-by"
                     label="Reviewed By"
-                    value={CURRENT_USER.name}
+                    value={shortName(CURRENT_USER.name)}
                   />
                 </>
               )}
@@ -490,7 +491,7 @@ export default function LeaveForm({
               <SelectContent className="max-h-72">
                 {colleagues.map((name) => (
                   <SelectItem key={name} value={name}>
-                    {name}
+                    {shortName(name)}
                   </SelectItem>
                 ))}
               </SelectContent>

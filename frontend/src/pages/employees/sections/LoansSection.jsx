@@ -86,6 +86,7 @@ import {
 import { loansApi } from "@/lib/api/modules/loans";
 import { attempt } from "@/lib/api/notice";
 import { upsert, upserted } from "@/lib/api/store";
+import { shortName } from "@/lib/shortName";
 
 // Three figures are asked for and everything else is counted from them:
 // how much is wanted, what comes off each month, and when the first one
@@ -487,7 +488,7 @@ export default function LoansSection({
             <div className="ms-auto flex flex-wrap items-center gap-3 pt-2 text-sm text-primary">
               <span>{employee?.empNo || ""}</span>
               <span aria-hidden="true" className="h-5 w-px bg-container-border" />
-              <span>{borrower}</span>
+              <span>{shortName(borrower)}</span>
               <span aria-hidden="true" className="h-5 w-px bg-container-border" />
               {/* On the step that pays, the head says where the money goes -
                   the employee's bank and account - in place of the date and
@@ -751,7 +752,7 @@ export default function LoansSection({
                     Loan Approval &amp; Transfer Summary
                   </p>
                   <div className="form-grid lg:[&>*+*]:border-s">
-                    <Said label="Employee Name" value={borrower} />
+                    <Said label="Employee Name" value={shortName(borrower)} />
                     <Said label="Bank Name" value={employee?.bankName || "-"} />
                     <Said label="Account Number" value={employee?.accountNumber || "-"} />
                     <Said
@@ -921,7 +922,7 @@ export default function LoansSection({
           {form}
           <Dialog open={showHistory} onOpenChange={setShowHistory}>
             <DialogContent className="max-h-[90vh] w-[92vw] max-w-7xl overflow-y-auto">
-              <DialogTitle className="text-xl font-bold text-primary">Loan History · {employee?.name}</DialogTitle>
+              <DialogTitle className="text-xl font-bold text-primary">Loan History · {shortName(employee?.name)}</DialogTitle>
               <DialogDescription>Every loan and loan request on this employee's record.</DialogDescription>
               <LoanLedger records={records} employee={employee} />
             </DialogContent>

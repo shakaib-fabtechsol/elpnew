@@ -16,6 +16,7 @@ use App\Models\Leave;
 use App\Models\Loan;
 use App\Models\SalaryAdvance;
 use App\Services\Eligibility;
+use App\Support\ShortName;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -80,6 +81,34 @@ class EmployeeController extends Controller
         $value = (int) DB::table('sequences')->where('series', 'EMP')->value('value');
 
         return response()->json(['data' => ['empNo' => 'EMP-'.str_pad((string) ($value + 1), 4, '0', STR_PAD_LEFT)]]);
+    }
+
+    /**
+     * GET /employees/short-name?name=&nameAr=&except=
+     *
+     * The short name a full name would be given - first and family name, or
+     * longer where somebody else already goes by that - for the form to
+     * show beside the full name while it is being typed.
+     */
+    public function shortName(Request $request): JsonResponse
+    {
+        Gate::authorize('manage');
+        $data = $request->validate([
+            'name' => ['nullable', 'string', 'max:255'],
+            'nameAr' => ['nullable', 'string', 'max:255'],
+            'except' => ['nullable', 'integer'],
+        ]);
+        $except = $data['except'] ?? null;
+        $plain = ShortName::from($data['name'] ?? null);
+        $shortName = ShortName::unique($data['name'] ?? null, 'short_name', $except);
+        $sharedWith = $plain && $plain !== $shortName ? ShortName::heldBy($plain, 'short_name', $except) : null;
+
+        return response()->json(['data' => [
+            'shortName' => $shortName,
+            'shortNameAr' => ShortName::unique($data['nameAr'] ?? null, 'short_name_ar', $except),
+            // Who holds the plainer form, when a middle name had to be added.
+            'sharedWith' => $sharedWith ? ['id' => $sharedWith->id, 'empNo' => $sharedWith->emp_no, 'name' => $sharedWith->name, 'shortName' => $sharedWith->short_name] : null,
+        ]]);
     }
 
     /**

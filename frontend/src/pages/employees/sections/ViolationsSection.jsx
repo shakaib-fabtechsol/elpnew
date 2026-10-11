@@ -50,6 +50,7 @@ import {
 import { checkRequired } from "@/components/shared/formFields";
 
 import DateField from "@/components/shared/DateField";
+import { shortName } from "@/lib/shortName";
 const DESCRIPTION_LIMIT = 1000;
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -605,7 +606,7 @@ export default function ViolationsSection({ employee, canEdit = true }) {
           <Settled
             id="violation-outcome-approver"
             label="Approved By"
-            value={CURRENT_USER.name}
+            value={shortName(CURRENT_USER.name)}
           />
         </div>
         {footer("Save & Approve Outcome", saveOutcome, canApproveOutcome, "appeal")}
@@ -694,13 +695,13 @@ export default function ViolationsSection({ employee, canEdit = true }) {
                         <Pair first={violation.type} second={violation.date && formatDate(violation.date)} />
                       </Td>
                       <Td>
-                        <Pair first={violation.investigationStatus} second={violation.investigator} />
+                        <Pair first={violation.investigationStatus} second={shortName(violation.investigator)} />
                       </Td>
                       <Td>
                         <Pair first={violation.penaltyType} second={violation.penaltyDate && formatDate(violation.penaltyDate)} />
                       </Td>
                       <Td>
-                        <Pair first={violation.approvedBy} second={violation.approvalDate && formatDate(violation.approvalDate)} />
+                        <Pair first={shortName(violation.approvedBy)} second={violation.approvalDate && formatDate(violation.approvalDate)} />
                       </Td>
                       <Td>
                         <span className="inline-flex items-center gap-2">

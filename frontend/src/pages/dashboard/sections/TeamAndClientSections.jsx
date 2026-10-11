@@ -1,6 +1,7 @@
 import { Users, PhoneCall } from "lucide-react";
 import { SectionCard, Row, PriorityDot, EmptyState } from "@/components/shared/panels";
 import { teamWorkload, clientFollowUp } from "../dashboardData";
+import { shortName } from "@/lib/shortName";
 
 /** Requirement 27 - who is carrying how much. */
 export function TeamWorkload() {
@@ -20,9 +21,9 @@ export function TeamWorkload() {
           </thead>
           <tbody>
             {teamWorkload.map((member) => (
-              <tr key={member.name} className="border-b transition-colors last:border-0 hover:bg-primary/10">
+              <tr key={shortName(member.name)} className="border-b transition-colors last:border-0 hover:bg-primary/10">
                 <td className="p-3">
-                  <p className="font-medium">{member.name}</p>
+                  <p className="font-medium">{shortName(member.name)}</p>
                   <p className="text-xs text-muted-foreground">{member.role}</p>
                 </td>
                 <td className="p-3 text-end font-semibold">

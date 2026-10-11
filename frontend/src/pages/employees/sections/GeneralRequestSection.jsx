@@ -58,6 +58,7 @@ import {
 import { generalRequestsApi } from "@/lib/api/modules/generalRequests";
 import { attempt } from "@/lib/api/notice";
 import { upsert, upserted } from "@/lib/api/store";
+import { shortName } from "@/lib/shortName";
 
 const emptyDraft = { requestType: "", comment: "" };
 const emptyDecision = { answer: "", comment: "" };
@@ -270,7 +271,7 @@ export default function GeneralRequestSection({
       key: "reviewedBy",
       header: "Reviewed By",
       width: "12%",
-      render: (value) => <span className="text-muted-foreground">{value || "-"}</span>,
+      render: (value) => <span className="text-muted-foreground">{shortName(value) || "-"}</span>,
     },
   ];
 
@@ -549,7 +550,7 @@ export default function GeneralRequestSection({
             <DialogContent className="max-h-[90vh] w-[92vw] max-w-7xl overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
-                  {sort.title} History · {employee.name}
+                  {sort.title} History · {shortName(employee.name)}
                 </DialogTitle>
                 <DialogDescription>
                   {"Every " + sort.noun + " this employee has raised."}

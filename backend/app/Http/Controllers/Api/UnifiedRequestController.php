@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use App\Services\Eligibility;
 use App\Services\Invoices\InvoiceRiskChecker;
+use App\Services\LeaveBalance;
 use App\Services\Requests\InterpreterUnavailable;
 use App\Services\Requests\RequestCatalog;
 use App\Services\Requests\RequestInterpreter;
@@ -49,12 +51,12 @@ class UnifiedRequestController extends Controller
         $notes = [];
 
         try {
-            $proposal = $interpreter->interpret($data['text'] ?? null, $file);
-        } catch (InterpreterUnavailable) {
+            $proposal = $interpreter->interpret($data['text'] ?? null, $file, $this->known($employee));
+        } catch (InterpreterUnavailable $down) {
             // The AI is down or not answering: the plain reader still gets
             // the employee to a request, and the screen says which was used.
             $proposal = (new RuleBasedRequestInterpreter)->interpret($data['text'] ?? null, $file);
-            $notes[] = 'The AI service could not be reached, so the request was read with basic rules. Please check every field.';
+            $notes[] = $this->fallbackNote($down, 'the request');
         }
 
         if ($proposal['engine'] === 'rules' && ! $notes) {
@@ -69,6 +71,7 @@ class UnifiedRequestController extends Controller
                 'summary' => $proposal['summary'] ?: 'The request could not be recognised.',
                 'notes' => [...$notes, 'Say what you are asking for - for example "salary advance of 300 OMR from November salary" - or choose a request type yourself.'],
                 'types' => $this->typeOptions(),
+                'employee' => $this->employeeCard($employee),
             ]]);
         }
 
@@ -93,6 +96,53 @@ class UnifiedRequestController extends Controller
         $proposal = ['fields' => $data['fields'] ?? [], 'invoice' => $data['invoice'] ?? null, 'confidence' => 1.0, 'summary' => '', 'engine' => 'manual'];
 
         return response()->json(['data' => $this->draft($data['type'], $proposal, null, $employee, $risk, [], false)]);
+    }
+
+    /**
+     * The draft brought up to date from what the employee says next: an
+     * answer to a question about something missing, another document, or a
+     * correction in their own words ("make it 250", "from Sunday instead").
+     */
+    public function revise(Request $request, RequestInterpreter $interpreter, InvoiceRiskChecker $risk): JsonResponse
+    {
+        $data = $request->validate([
+            'type' => ['required', Rule::in(array_keys(RequestCatalog::TYPES))],
+            'fields' => ['nullable', 'array'],
+            'invoice' => ['nullable', 'array'],
+            'message' => ['nullable', 'string', 'max:2000', 'required_without:file'],
+            'file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'employeeId' => ['nullable', 'integer'],
+        ], ['message.required_without' => 'Write your answer, or attach a document.']);
+
+        $employee = $this->employeeFor($request, $data['employeeId'] ?? null);
+        $type = $data['type'];
+        $file = $request->file('file');
+        $current = RequestCatalog::clean($type, $data['fields'] ?? []);
+        $invoice = RequestCatalog::cleanInvoice($data['invoice'] ?? null);
+        $notes = [];
+
+        try {
+            $proposal = $interpreter->revise($type, $current, $invoice, $data['message'] ?? null, $file, $this->known($employee));
+        } catch (InterpreterUnavailable $down) {
+            $proposal = (new RuleBasedRequestInterpreter)->revise($type, $current, $invoice, $data['message'] ?? null, $file);
+            $notes[] = $this->fallbackNote($down, 'your answer');
+        }
+
+        // What the answer settles goes over the draft; whatever it does not
+        // mention stays as it was. The kind of request does not change on an
+        // answer - the AI has been seen to turn an advance "for school fees"
+        // into an assistance request - only when the employee picks another.
+        $newType = $type;
+        $proposal['fields'] = [
+            ...$current,
+            // An option the employee named outright is taken even when the
+            // AI was too cautious to pick it.
+            ...$this->optionsNamed($newType, $data['message'] ?? null),
+            ...array_filter($proposal['fields'], fn ($value) => $value !== null && $value !== ''),
+        ];
+        $proposal['invoice'] = ($proposal['invoice'] ?? null) ?: $invoice;
+
+        return response()->json(['data' => $this->draft($newType, $proposal, null, $employee, $risk, $notes, (bool) $file)]);
     }
 
     public function submit(Request $request): JsonResponse
@@ -166,6 +216,12 @@ class UnifiedRequestController extends Controller
             $values['reason'] = mb_substr(trim($text), 0, 500);
         }
 
+        // What the advance is for, read from the explanation when the AI
+        // left the list unanswered: "school fees" is plainly education.
+        if ($type === 'salaryAdvance' && ($values['purpose'] ?? null) === null) {
+            $values['purpose'] = RequestCatalog::purposeFrom($text.' '.($values['reason'] ?? ''));
+        }
+
         $needsInvoice = in_array($type, RequestCatalog::INVOICE_TYPES, true);
         $invoice = $needsInvoice ? RequestCatalog::cleanInvoice($proposal['invoice'] ?? null) : null;
 
@@ -175,20 +231,98 @@ class UnifiedRequestController extends Controller
                 : 'This kind of request is made on an invoice. Attach the invoice and it will be read for you.';
         }
 
+        $missing = RequestCatalog::missing($type, $values, $invoice !== null);
+
         return [
             'type' => $type,
             'typeLabel' => RequestCatalog::label($type),
+            // Whether the last stage is a payment or an administrative action.
+            'financial' => RequestCatalog::isFinancial($type),
             'confidence' => $proposal['confidence'],
             'summary' => $proposal['summary'],
             'engine' => $proposal['engine'],
             'fields' => array_map(fn ($field) => [...$field, 'value' => $values[$field['key']]], RequestCatalog::fields($type)),
-            'missing' => RequestCatalog::missing($type, $values, $invoice !== null),
+            'missing' => $missing,
+            // Asked of the employee one by one, instead of a form to fill in.
+            'questions' => RequestCatalog::questions($type, $missing),
+            // Taken from the record, so nobody is asked for it.
+            'employee' => $this->employeeCard($employee, $type),
             'invoice' => $invoice,
             // The same checks management will see: duplicate invoice, repeated
             // medication, VAT that does not add up, an old invoice.
             'risk' => $invoice ? $risk->check($invoice, $type, $employee->id) : null,
             'notes' => $notes,
             'types' => $this->typeOptions(),
+        ];
+    }
+
+    private function fallbackNote(InterpreterUnavailable $down, string $what): string
+    {
+        return ($down->getCode() === 429
+            ? 'The AI usage limit has been reached for now'
+            : 'The AI service could not be reached')
+            .", so {$what} was read with basic rules. Please check every field.";
+    }
+
+    /** The listed options a message names word for word, by field. */
+    private function optionsNamed(string $type, ?string $message): array
+    {
+        $plain = mb_strtolower((string) $message);
+        $named = [];
+        foreach (RequestCatalog::fields($type) as $field) {
+            foreach ($field['options'] ?? [] as $option) {
+                if ($plain !== '' && str_contains($plain, mb_strtolower($option))) {
+                    $named[$field['key']] = $option;
+                    break;
+                }
+            }
+        }
+
+        return $named;
+    }
+
+    /** Who the request is for and what the system already holds that bears on it. */
+    private function employeeCard(Employee $employee, ?string $type = null): array
+    {
+        $omr = fn (float $amount) => number_format($amount, 3).' OMR';
+        $year = (int) now()->format('Y');
+        $facts = [['label' => 'Net Salary', 'value' => $omr($employee->netSalary())]];
+
+        if ($type === 'salaryAdvance') {
+            $facts[] = ['label' => 'Advance Available', 'value' => $omr(Eligibility::advanceLimit($employee))];
+        } elseif ($type === 'loan') {
+            $loan = Eligibility::loanSummary($employee);
+            $facts[] = ['label' => 'Loan Limit Available', 'value' => $omr($loan['limit'])];
+            if ($loan['openRequest']) {
+                $facts[] = ['label' => 'Open Loan Request', 'value' => $loan['openRequest']];
+            }
+        } elseif ($type === 'assistance') {
+            $facts[] = ['label' => 'Assistance Left This Year', 'value' => $omr(Eligibility::assistanceSummary($employee)['remaining'])];
+        } elseif ($type === 'leave' || $type === 'leaveEncashment') {
+            $balance = LeaveBalance::for($employee->id, 'Annual Leave', $year);
+            $facts[] = ['label' => 'Annual Leave Left '.$year, 'value' => ($balance['remaining'] ?? 0).' days'];
+        }
+
+        return [
+            'name' => $employee->displayName(),
+            'employeeNo' => $employee->emp_no,
+            'department' => $employee->department,
+            'occupation' => $employee->occupation,
+            'facts' => $facts,
+        ];
+    }
+
+    /** The same, as plain lines for the AI to read. */
+    private function known(Employee $employee): array
+    {
+        $year = (int) now()->format('Y');
+        $balance = LeaveBalance::for($employee->id, 'Annual Leave', $year);
+
+        return [
+            'Net monthly salary: '.number_format($employee->netSalary(), 3, '.', '').' OMR',
+            'Salary advance still available: '.number_format(Eligibility::advanceLimit($employee), 3, '.', '').' OMR',
+            'Loan limit still available: '.number_format(Eligibility::loanLimit($employee), 3, '.', '').' OMR',
+            'Annual leave days left in '.$year.': '.($balance['remaining'] ?? 0),
         ];
     }
 

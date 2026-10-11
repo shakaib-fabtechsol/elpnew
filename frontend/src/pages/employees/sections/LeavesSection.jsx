@@ -44,6 +44,7 @@ import {
   daysOf,
   ENCASHED_PAID,
 } from "../leaveData";
+import { shortName } from "@/lib/shortName";
 
 /** Today, as the review date starts from. */
 const thisDay = () => new Date().toISOString().slice(0, 10);
@@ -410,7 +411,7 @@ export default function LeavesSection({ employee, canReview = true }) {
           <Dialog open={showHistory} onOpenChange={setShowHistory}>
             <DialogContent className="max-h-[90vh] w-[92vw] max-w-7xl overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Leave History · {employee.name}</DialogTitle>
+                <DialogTitle>Leave History · {shortName(employee.name)}</DialogTitle>
                 <DialogDescription>Every leave request this employee has made.</DialogDescription>
               </DialogHeader>
               <RequestTable

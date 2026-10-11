@@ -9,6 +9,7 @@ import {
   daysUntil,
 } from "../dashboardData";
 import { urgencyOf } from "@/lib/deadlines";
+import { shortName } from "@/lib/shortName";
 
 export function CourtNotifications() {
   return (
@@ -26,7 +27,7 @@ export function CourtNotifications() {
                 {item.court}
               </p>
               <p className="truncate text-xs text-muted-foreground">
-                Action: {item.requiredAction} &middot; {item.assignee}
+                Action: {item.requiredAction} &middot; {shortName(item.assignee)}
               </p>
             </div>
           </Row>
@@ -48,7 +49,7 @@ export function RecentCaseUpdates() {
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{item.update}</p>
               <p className="truncate text-xs text-muted-foreground">
-                {item.caseNo} &middot; {item.client} &middot; {item.by}
+                {item.caseNo} &middot; {item.client} &middot; {shortName(item.by)}
               </p>
             </div>
             <span className="w-24 shrink-0 text-end text-xs text-muted-foreground">
@@ -78,7 +79,7 @@ export function RecentJudgments() {
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {formatDate(item.date)} &middot; {item.result} &middot;{" "}
-                  {item.lawyer}
+                  {shortName(item.lawyer)}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   Next: {item.nextAction}

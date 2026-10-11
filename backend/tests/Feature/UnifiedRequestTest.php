@@ -39,7 +39,8 @@ class UnifiedRequestTest extends ApiTestCase
 
         $this->assertSame(300.0, (float) $this->value($draft, 'amount'));
         $this->assertSame('December', $this->value($draft, 'deductMonth'));
-        $this->assertSame(['purpose'], $draft['missing']); // rules cannot tell the purpose
+        $this->assertSame('Medical Expenses', $this->value($draft, 'purpose')); // "dental work"
+        $this->assertSame([], $draft['missing']);
         $this->assertStringContainsString('basic rules', $draft['notes'][0]);
         Http::assertNothingSent();
     }
@@ -224,6 +225,93 @@ class UnifiedRequestTest extends ApiTestCase
         $this->as('aisha')->postJson($this->api('requests/submit'), [
             'type' => 'general', 'employeeId' => 3, 'fields' => ['requestType' => 'Suggestions', 'reason' => 'Move the review to Sunday.'],
         ])->assertCreated()->assertJsonPath('data.record.employee.name', 'Aisha Al Kindi');
+    }
+
+    public function test_what_is_missing_is_asked_for_and_the_record_is_not_asked_about(): void
+    {
+        Http::fake();
+
+        $draft = $this->as('aisha')->postJson($this->api('requests/interpret'), ['text' => 'I need a salary advance of 300 OMR'])->json('data');
+
+        $this->assertSame(['deductMonth', 'deductYear', 'purpose'], array_column($draft['questions'], 'key'));
+        $this->assertSame('What is the advance for?', $draft['questions'][2]['question']);
+        $this->assertContains('Emergency Case', $draft['questions'][2]['options']);
+        $this->assertTrue($draft['financial']);
+        $this->assertSame('Aisha Al Kindi', $draft['employee']['name']);
+        $this->assertSame(['Net Salary', 'Advance Available'], array_column($draft['employee']['facts'], 'label'));
+    }
+
+    public function test_an_answer_fills_what_was_missing_and_keeps_the_rest(): void
+    {
+        Http::fake();
+
+        // Without AI: the option and the month named in the answer are found.
+        $this->as('aisha')->postJson($this->api('requests/revise'), [
+            'type' => 'salaryAdvance', 'fields' => ['amount' => 300, 'reason' => 'Dental work.'],
+            'message' => 'emergency case, take it from the December salary',
+        ])->assertOk()
+            ->assertJsonPath('data.fields.0.value', 300)
+            ->assertJsonPath('data.fields.1.value', 'December')
+            ->assertJsonPath('data.fields.3.value', 'Emergency Case')
+            ->assertJsonPath('data.fields.4.value', 'Dental work.')
+            ->assertJsonPath('data.missing', []);
+    }
+
+    public function test_an_option_named_outright_is_taken_even_when_the_ai_leaves_it_out(): void
+    {
+        $this->gemini(['type' => 'salaryAdvance', 'confidence' => 1, 'summary' => 'x', 'deductMonth' => 'December', 'deductYear' => '2026']);
+        $this->as('aisha')->postJson($this->api('requests/revise'), [
+            'type' => 'salaryAdvance', 'fields' => ['amount' => 300], 'message' => 'Emergency case, from the December salary',
+        ])->assertOk()->assertJsonPath('data.fields.3.value', 'Emergency Case')->assertJsonPath('data.missing', []);
+    }
+
+    public function test_a_plain_correction_is_applied_without_ai(): void
+    {
+        Http::fake();
+        $loan = ['amount' => 1200, 'monthly' => 200, 'startMonth' => 'November 2026'];
+
+        $this->as('aisha')->postJson($this->api('requests/revise'), [
+            'type' => 'salaryAdvance', 'fields' => ['amount' => 300, 'deductMonth' => 'December', 'deductYear' => '2026', 'purpose' => 'Emergency Case'], 'message' => 'make it 250',
+        ])->assertOk()->assertJsonPath('data.fields.0.value', 250)->assertJsonPath('data.fields.1.value', 'December');
+
+        // The figure the words name, not simply the first one.
+        $this->as('ahmed')->postJson($this->api('requests/revise'), ['type' => 'loan', 'fields' => $loan, 'message' => 'change the monthly installment to 150'])
+            ->assertOk()->assertJsonPath('data.fields.0.value', 1200)->assertJsonPath('data.fields.1.value', 150);
+    }
+
+    public function test_an_answer_does_not_turn_the_request_into_another_kind(): void
+    {
+        // Seen live: an advance "for school fees" came back as assistance.
+        $this->gemini(['type' => 'assistance', 'confidence' => 1, 'summary' => 'x', 'assistanceType' => 'Education Assistance', 'reason' => 'For school fees.']);
+
+        $this->as('aisha')->postJson($this->api('requests/revise'), [
+            'type' => 'salaryAdvance', 'fields' => ['amount' => 300, 'deductMonth' => 'December', 'deductYear' => '2026'], 'message' => 'bachon ki school fees k liye',
+        ])->assertOk()
+            ->assertJsonPath('data.type', 'salaryAdvance')
+            ->assertJsonPath('data.fields.3.value', 'Education Expenses')
+            ->assertJsonPath('data.missing', []);
+    }
+
+    public function test_gemini_applies_a_correction_in_the_employees_words(): void
+    {
+        $this->gemini(['type' => 'leave', 'confidence' => 1, 'summary' => 'Annual leave from 8 to 12 November 2026.', 'fromDate' => '2026-11-08', 'toDate' => '2026-11-12']);
+
+        $this->as('ahmed')->postJson($this->api('requests/revise'), [
+            'type' => 'leave',
+            'fields' => ['leaveType' => 'Annual Leave', 'fromDate' => '2026-11-01', 'toDate' => '2026-11-05', 'reason' => 'Family visit.'],
+            'message' => 'move it one week later',
+        ])->assertOk()
+            ->assertJsonPath('data.engine', 'gemini')
+            ->assertJsonPath('data.financial', false)
+            ->assertJsonPath('data.fields.0.value', 'Annual Leave') // not mentioned: kept
+            ->assertJsonPath('data.fields.1.value', '2026-11-08')
+            ->assertJsonPath('data.fields.2.value', '2026-11-12')
+            ->assertJsonPath('data.fields.3.value', 'Family visit.');
+
+        // The draft and what the system knows went with the question.
+        Http::assertSent(fn ($request) => str_contains($request['contents'][0]['parts'][0]['text'], '"fromDate":"2026-11-01"')
+            && str_contains($request['contents'][0]['parts'][0]['text'], 'move it one week later')
+            && str_contains($request['systemInstruction']['parts'][0]['text'], 'Net monthly salary'));
     }
 
     public function test_choosing_the_type_by_hand_gives_that_types_fields(): void

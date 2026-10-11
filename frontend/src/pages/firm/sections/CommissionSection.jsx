@@ -8,6 +8,7 @@ import {
   monthAndYear,
   INVOICE_LINKED_COMMISSION,
 } from "../commissionData";
+import { shortName } from "@/lib/shortName";
 
 const moneyValue = (amount) =>
   Number(amount || 0).toLocaleString("en-GB", {
@@ -45,7 +46,7 @@ export default function CommissionSection() {
       exportValue: (row) => row.paidTo + " (" + row.classification + ")",
       render: (value, row) => (
         <div>
-          <p>{value}</p>
+          <p>{shortName(value)}</p>
           <p className="text-xs text-muted-foreground">{row.classification}</p>
         </div>
       ),

@@ -44,6 +44,7 @@ import { useLanguage, LANGUAGES } from "@/lib/language/context";
 import { navSections } from "@/lib/navigation";
 import NotificationBell from "./NotificationBell";
 import logo from "@/assets/logonew.jpeg";
+import { shortName } from "@/lib/shortName";
 
 /** The firm's mark. Height is set; the width follows the artwork. */
 function Logo({ name, className }) {
@@ -350,7 +351,7 @@ export default function Header({ onNavClick, activeNav }) {
                 {initials(signedInName() || "?")}
               </span>
               <span className="hidden text-[14px]/[20px] font-semibold text-primary sm:inline-block">
-                {signedInName()}
+                {shortName(signedInName())}
               </span>
               <ChevronDown
                 strokeWidth={1.5}

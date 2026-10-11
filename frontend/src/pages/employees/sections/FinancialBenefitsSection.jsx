@@ -43,6 +43,7 @@ import BonusSection from "./BonusSection";
 import LoansSection from "./LoansSection";
 import AssistanceSection from "./AssistanceSection";
 import { BENEFIT_TABS } from "./benefitTabs";
+import { shortName } from "@/lib/shortName";
 
 /** A commission that has been paid is settled; anything else is a request. */
 const COMMISSION_PAID = "Paid";
@@ -232,7 +233,7 @@ function CommissionTab({ employee, adding, onCloseAdd, onOpenAdd, canDecide = tr
       render: (value) => <span className="whitespace-nowrap text-primary">{value}</span>,
     },
     { key: "clientName", header: "Client Name", width: "15%" },
-    { key: "paidTo", header: "Payee", width: "14%" },
+    { key: "paidTo", header: "Payee", width: "14%", render: (value) => shortName(value) },
     {
       // What it was worked out from, then what it came to.
       key: "rate",
@@ -311,7 +312,7 @@ function CommissionTab({ employee, adding, onCloseAdd, onOpenAdd, canDecide = tr
           <Dialog open={showHistory} onOpenChange={setShowHistory}>
             <DialogContent className="max-h-[90vh] w-[92vw] max-w-7xl overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Commission History · {employee.name}</DialogTitle>
+                <DialogTitle>Commission History · {shortName(employee.name)}</DialogTitle>
                 <DialogDescription>Every commission recorded for this employee.</DialogDescription>
               </DialogHeader>
               <RequestTable

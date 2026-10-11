@@ -1,7 +1,7 @@
 import { api } from "../client";
 
 /**
- * The unified request box (/requests/interpret, /retype, /submit).
+ * The Smart Request (/requests/interpret, /revise, /retype, /submit).
  *
  * The employee writes what they need, or attaches a document; the server
  * (Gemini, or plain rules when AI is not switched on) proposes the request
@@ -68,6 +68,19 @@ export const unifiedApi = {
     const json = await api("requests/interpret", {
       method: "POST",
       body: { text: text || null, file: file || null, employeeId: employeeId || null },
+    });
+    return draftFromApi(json.data);
+  },
+
+  /**
+   * The draft brought up to date from what the employee says next: an answer
+   * to a question, another document, or a correction in their own words.
+   */
+  async revise({ type, values, invoice, message, file, employeeId }) {
+    const fields = Object.fromEntries(Object.entries(values || {}).filter(([, value]) => value !== "" && value != null));
+    const json = await api("requests/revise", {
+      method: "POST",
+      body: { type, fields, invoice: invoice || null, message: message || null, file: file || null, employeeId: employeeId || null },
     });
     return draftFromApi(json.data);
   },

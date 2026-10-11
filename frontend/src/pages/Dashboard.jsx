@@ -53,6 +53,7 @@ import {
   NewClients,
 } from "./dashboard/sections/CaseFlowSections";
 import { TeamWorkload, ClientFollowUp } from "./dashboard/sections/TeamAndClientSections";
+import { shortName } from "@/lib/shortName";
 
 /** Two-column row that collapses to one column, skipping any hidden child. */
 function Pair({ children }) {
@@ -113,7 +114,7 @@ export default function Dashboard() {
           <div>
             <h1 className="text-xl font-bold text-primary sm:text-2xl">Dashboard</h1>
             <p className="text-xs text-primary/75 sm:text-sm">
-              Welcome back, {CURRENT_USER.name}
+              Welcome back, {shortName(CURRENT_USER.name)}
             </p>
           </div>
         </div>

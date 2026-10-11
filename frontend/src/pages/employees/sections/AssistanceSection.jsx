@@ -64,6 +64,7 @@ import DateField from "@/components/shared/DateField";
 import { assistanceApi } from "@/lib/api/modules/assistance";
 import { attempt } from "@/lib/api/notice";
 import { upsert, upserted } from "@/lib/api/store";
+import { shortName } from "@/lib/shortName";
 const NOTES_LIMIT = 300;
 // The employee says why at more length than the decision answers.
 const COMMENT_LIMIT = 500;
@@ -486,7 +487,7 @@ export default function AssistanceSection({
           <div className="ms-auto flex flex-wrap items-center gap-3 pt-2 text-sm text-primary">
             <span>{employee?.empNo || ""}</span>
             <span aria-hidden="true" className="h-5 w-px bg-container-border" />
-            <span>{employee?.name || ""}</span>
+            <span>{shortName(employee?.name)}</span>
             <span aria-hidden="true" className="h-5 w-px bg-container-border" />
             {/* On the step that pays, the head says where the money goes -
                 the employee's bank and account - in place of the date and
@@ -574,7 +575,7 @@ export default function AssistanceSection({
                 <Settled
                   id="decision-employee"
                   label="Employee Name"
-                  value={open?.employee || employee?.name || ""}
+                  value={shortName(open?.employee || employee?.name)}
                 />
                 <Settled
                   id="decision-type"
@@ -769,7 +770,7 @@ export default function AssistanceSection({
                   Assistance Approval &amp; Transfer Summary
                 </p>
                 <div className="form-grid lg:[&>*+*]:border-s">
-                  <Said label="Employee Name" value={employee?.name || ""} />
+                  <Said label="Employee Name" value={shortName(employee?.name)} />
                   <Said label="Bank Name" value={employee?.bankName || ""} />
                   <Said
                     label="Employee Account Number"
@@ -942,7 +943,7 @@ export default function AssistanceSection({
           <Dialog open={showHistory} onOpenChange={setShowHistory}>
             <DialogContent className="max-h-[90vh] w-[92vw] max-w-7xl overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Assistance History · {employee?.name}</DialogTitle>
+                <DialogTitle>Assistance History · {shortName(employee?.name)}</DialogTitle>
                 <DialogDescription>Every assistance request this employee has made.</DialogDescription>
               </DialogHeader>
               <RequestTable
@@ -998,7 +999,7 @@ export default function AssistanceSection({
       <Dialog open={showAll} onOpenChange={setShowAll}>
         <DialogContent className="max-h-[90vh] w-[92vw] max-w-7xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Assistance History · {employee?.name}</DialogTitle>
+            <DialogTitle>Assistance History · {shortName(employee?.name)}</DialogTitle>
             <DialogDescription>Every assistance request this employee has made.</DialogDescription>
           </DialogHeader>
           <RequestTable

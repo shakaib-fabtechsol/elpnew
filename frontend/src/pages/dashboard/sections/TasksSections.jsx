@@ -11,6 +11,7 @@ import { ListChecks, AlarmClock } from "lucide-react";
 import { SectionCard, Row, PriorityDot, EmptyState } from "@/components/shared/panels";
 import { tasks, overdueTasks, teamWorkload, formatDate, daysUntil } from "../dashboardData";
 import { scopedToOwnWork } from "@/lib/permissions";
+import { shortName } from "@/lib/shortName";
 
 const TASK_STATUS_VARIANT = {
   Pending: "secondary",
@@ -53,7 +54,7 @@ export function MyTasks({ role, currentUser }) {
                 .filter((member) => member.name !== currentUser)
                 .map((member) => (
                   <SelectItem key={member.name} value={member.name}>
-                    {member.name}
+                    {shortName(member.name)}
                   </SelectItem>
                 ))}
             </SelectContent>
@@ -71,7 +72,7 @@ export function MyTasks({ role, currentUser }) {
                 <p className="truncate text-sm font-medium">{task.task}</p>
                 <p className="truncate text-xs text-muted-foreground">
                   {task.caseNo} &middot; due {formatDate(task.dueDate)}
-                  {effectiveAssignee === "all" && " · " + task.assignee}
+                  {effectiveAssignee === "all" && " · " + shortName(task.assignee)}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-3">
@@ -110,7 +111,7 @@ export function OverdueTasks() {
                 {task.task}
               </p>
               <p className="truncate text-xs text-muted-foreground">
-                {task.caseNo} &middot; {task.assignee} &middot; was due{" "}
+                {task.caseNo} &middot; {shortName(task.assignee)} &middot; was due{" "}
                 {formatDate(task.dueDate)}
               </p>
             </div>

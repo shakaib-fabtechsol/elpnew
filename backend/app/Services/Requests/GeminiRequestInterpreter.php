@@ -25,9 +25,29 @@ class GeminiRequestInterpreter implements RequestInterpreter
 
     public function __construct(private string $apiKey, private string $model) {}
 
-    public function interpret(?string $text, ?UploadedFile $file): array
+    public function interpret(?string $text, ?UploadedFile $file, array $facts = []): array
     {
-        $parts = [['text' => "Employee's request:\n".(filled($text) ? $text : '(no text - see the attached document)')]];
+        return $this->ask("Employee's request:\n".(filled($text) ? $text : '(no text - see the attached document)'), $file, $facts);
+    }
+
+    public function revise(string $type, array $values, ?array $invoice, ?string $message, ?UploadedFile $file, array $facts = []): array
+    {
+        $draft = json_encode(['type' => $type, ...array_filter($values, fn ($value) => $value !== null), 'invoice' => $invoice], JSON_UNESCAPED_UNICODE);
+        $said = filled($message) ? $message : '(no text - see the attached document)';
+
+        return $this->ask(
+            "The request drafted so far, as JSON:\n{$draft}\n\n"
+            ."The employee now answers a question about it, or asks for a change:\n{$said}\n\n"
+            .'Return the complete updated request. Keep every value the employee did not change, apply exactly what they said, '
+            .'and keep the type unless they clearly ask for a different kind of request. "summary" describes the request as it now stands.',
+            $file,
+            $facts,
+        );
+    }
+
+    private function ask(string $prompt, ?UploadedFile $file, array $facts): array
+    {
+        $parts = [['text' => $prompt]];
 
         if ($file && in_array($file->getMimeType(), self::READABLE, true)) {
             $parts[] = ['inlineData' => ['mimeType' => $file->getMimeType(), 'data' => base64_encode($file->getContent())]];
@@ -37,7 +57,7 @@ class GeminiRequestInterpreter implements RequestInterpreter
             ->timeout(45)
             ->retry(2, 600, throw: false)
             ->post('https://generativelanguage.googleapis.com/v1beta/models/'.$this->model.':generateContent', [
-                'systemInstruction' => ['parts' => [['text' => $this->instructions()]]],
+                'systemInstruction' => ['parts' => [['text' => $this->instructions($facts)]]],
                 'contents' => [['role' => 'user', 'parts' => $parts]],
                 'generationConfig' => [
                     'temperature' => 0,
@@ -49,7 +69,9 @@ class GeminiRequestInterpreter implements RequestInterpreter
         if ($response->failed()) {
             // The reason is for the log, not for the employee.
             Log::warning('Gemini request interpretation failed', ['status' => $response->status(), 'body' => mb_substr($response->body(), 0, 500)]);
-            throw new InterpreterUnavailable('The AI service did not answer (HTTP '.$response->status().').');
+            // The status travels with it: 429 is the usage limit, which the
+            // employee is told apart from the service being down.
+            throw new InterpreterUnavailable('The AI service did not answer (HTTP '.$response->status().').', $response->status());
         }
 
         $answer = json_decode((string) $response->json('candidates.0.content.parts.0.text'), true);
@@ -70,8 +92,12 @@ class GeminiRequestInterpreter implements RequestInterpreter
         ];
     }
 
-    private function instructions(): string
+    private function instructions(array $facts = []): string
     {
+        $known = $facts
+            ? "What the system already holds about this employee - never ask for it, and use it to resolve phrases like \"my full salary\" or \"all my remaining leave\":\n- ".implode("\n- ", $facts)
+            : '';
+
         $types = '';
         foreach (RequestCatalog::TYPES as $key => [$label, , $what]) {
             $types .= "- {$key} ({$label}): {$what}\n";
@@ -88,12 +114,15 @@ class GeminiRequestInterpreter implements RequestInterpreter
         Rules:
         - Extract only what the employee actually stated or the document actually shows. Never invent an amount, a date or a reason; leave a field null when it is not given.
         - An attached pharmacy / clinic / hospital invoice means "medical"; a flight ticket "airTicket"; a hotel or meals bill "travel"; fuel or taxi receipts "transport". For these four, read the document into "invoice" exactly as printed (number, date as YYYY-MM-DD, supplier, VAT number, each line with quantity and unit amount, subtotal, VAT, total). If no such document is attached, leave "invoice" null.
+        - Fields with a fixed list of options (purpose, leaveType, assistanceType, beneficiary, bonusSubcategory, requestType) take the option that best fits what the employee said - "dental work" is "Medical Expenses", "an emergency" is "Emergency Case", "school fees" is "Education Expenses". Leave such a field null only when nothing they said points to any option.
         - Dates are YYYY-MM-DD. Resolve relative dates ("next Sunday", "from the 5th") against today. For leave give fromDate and toDate (inclusive).
         - deductMonth is an English month name; deductYear a four-digit year. If the employee says "next month's salary", work it out from today.
         - startMonth (loan) is "Month YYYY", e.g. "November 2026". period (overtime) is YYYY-MM.
         - "reason" is the employee's own explanation, rewritten as one or two clear English sentences. Do not add facts.
         - "summary" is one English sentence saying what you understood, for the employee to confirm.
         - "confidence" is how sure you are of the type, from 0 to 1.
+
+        {$known}
         TEXT;
     }
 

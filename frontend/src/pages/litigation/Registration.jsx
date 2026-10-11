@@ -19,6 +19,7 @@ import DateField from "@/components/shared/DateField";
 import { useClients } from "@/lib/clients/context";
 import { clientDisplayName } from "@/pages/clients/clientRecords";
 import { employeeRecords } from "@/pages/employees/employeeData";
+import { shortName } from "@/lib/shortName";
 export default function Registration() {
   const { clients } = useClients();
   // The firm's lawyers, from the employee list.
@@ -208,7 +209,7 @@ export default function Registration() {
                   <SelectContent>
                     {lawyers.map((person) => (
                       <SelectItem key={person.id} value={person.name}>
-                        {person.name}
+                        {shortName(person.name)}
                       </SelectItem>
                     ))}
                   </SelectContent>

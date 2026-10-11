@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { urgencyOf } from "@/lib/deadlines";
 import { SectionCard, Row, PriorityDot, EmptyState } from "@/components/shared/panels";
 import { deadlines, appealDeadlines, daysUntil, formatDate } from "../dashboardData";
+import { shortName } from "@/lib/shortName";
 
 const BORDER = {
   High: "border-s-4 border-s-red-500",
@@ -78,7 +79,7 @@ export function AppealDeadlineAlerts() {
                   {days === 1 ? "Day" : "Days"} Remaining
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {deadline.client} &middot; {deadline.lawyer} &middot; due{" "}
+                  {deadline.client} &middot; {shortName(deadline.lawyer)} &middot; due{" "}
                   {formatDate(deadline.dueDate)}
                 </p>
               </div>

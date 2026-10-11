@@ -76,6 +76,7 @@ import {
   nextAdvanceNo,
   outstandingAdvance,
 } from "../advanceSalaryData";
+import { shortName } from "@/lib/shortName";
 
 const REASON_LIMIT = 500;
 const COMMENT_LIMIT = 300;
@@ -508,7 +509,7 @@ export function AdvanceSalaryForm({
               every stage of the request. */}
           <span>{employee?.empNo || ""}</span>
           <span aria-hidden="true" className="h-5 w-px bg-container-border" />
-          <span>{employee?.name || ""}</span>
+          <span>{shortName(employee?.name)}</span>
           <span aria-hidden="true" className="h-5 w-px bg-container-border" />
           {/* On the step that pays, the head says where the money goes -
               the employee's bank and account - in place of the date and
@@ -636,7 +637,7 @@ export function AdvanceSalaryForm({
               <User className="size-6 text-primary" strokeWidth={1.5} aria-hidden="true" />
               <div className="text-sm">
                 <p className="text-primary/75">Returned By</p>
-                <p className="font-bold text-primary">{openRequest?.decidedBy || "-"}</p>
+                <p className="font-bold text-primary">{shortName(openRequest?.decidedBy) || "-"}</p>
                 {openRequest?.decidedByTitle && (
                   <p className="text-xs text-primary/75">{openRequest.decidedByTitle}</p>
                 )}
@@ -1227,7 +1228,7 @@ export function AdvanceSalaryForm({
         <Dialog open={showHistory} onOpenChange={setShowHistory}>
           <DialogContent className="max-h-[90vh] w-[92vw] max-w-7xl overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Salary Advance History · {employee?.name}</DialogTitle>
+              <DialogTitle>Salary Advance History · {shortName(employee?.name)}</DialogTitle>
             </DialogHeader>
             <SalaryLedger employee={employee} history={salaryHistory} />
           </DialogContent>

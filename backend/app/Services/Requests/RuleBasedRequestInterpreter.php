@@ -47,7 +47,68 @@ class RuleBasedRequestInterpreter implements RequestInterpreter
         'Annual Leave' => ['annual', 'vacation', 'holiday'],
     ];
 
-    public function interpret(?string $text, ?UploadedFile $file): array
+    public function revise(string $type, array $values, ?array $invoice, ?string $message, ?UploadedFile $file, array $facts = []): array
+    {
+        $plain = mb_strtolower(trim((string) $message));
+        $found = $this->figures($type, $plain);
+        $fields = RequestCatalog::fields($type);
+
+        // An option named in the answer ("emergency case", "annual leave").
+        foreach ($fields as $field) {
+            foreach ($field['options'] ?? [] as $option) {
+                if ($plain !== '' && str_contains($plain, mb_strtolower($option))) {
+                    $found[$field['key']] = $option;
+                    break;
+                }
+            }
+        }
+
+        // A bare figure answers the first figure still being asked for.
+        if (preg_match('/^[\d,]+(?:\.\d+)?$/', $plain)) {
+            foreach ($fields as $field) {
+                if ($field['kind'] === 'number' && $field['required'] && ($values[$field['key']] ?? null) === null) {
+                    $found[$field['key']] = (float) str_replace(',', '', $plain);
+                    break;
+                }
+            }
+        }
+
+        // "make it 250", "change the monthly to 150": one figure and nothing
+        // else recognised. It goes to the figure the words name, or to the
+        // first one the request has - the amount, on every kind that has one.
+        if (! $found && preg_match_all('/\d[\d,]*(?:\.\d+)?/', $plain, $numbers) === 1) {
+            $figures = array_values(array_filter($fields, fn ($field) => $field['kind'] === 'number'));
+            $target = $figures[0] ?? null;
+            foreach ($figures as $field) {
+                $words = array_filter(preg_split('/[^a-z]+/', mb_strtolower($field['key'].' '.$field['label'])), fn ($word) => strlen($word) > 3 && $word !== 'amount');
+                foreach ($words as $word) {
+                    if (str_contains($plain, $word)) {
+                        $target = $field;
+                        break 2;
+                    }
+                }
+            }
+            if ($target) {
+                $found[$target['key']] = (float) str_replace(',', '', $numbers[0][0]);
+            }
+        }
+
+        // Words that fit nothing else are the explanation, where one is wanted.
+        if (! $found && $plain !== '' && ($values['reason'] ?? null) === null && collect($fields)->contains('key', 'reason')) {
+            $found['reason'] = trim((string) $message);
+        }
+
+        return [
+            'type' => $type,
+            'confidence' => 0.5,
+            'summary' => $found ? 'Updated from your answer. Please check the details.' : 'Nothing in your answer could be matched to a field. Please fill it in on the review.',
+            'fields' => $found,
+            'invoice' => null,
+            'engine' => 'rules',
+        ];
+    }
+
+    public function interpret(?string $text, ?UploadedFile $file, array $facts = []): array
     {
         $plain = mb_strtolower((string) $text);
         $type = null;

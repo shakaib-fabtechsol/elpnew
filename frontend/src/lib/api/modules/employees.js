@@ -33,7 +33,7 @@ export function employeeFromApi(e) {
 
 /** The fields the API keeps on a record, under the names the form uses. */
 const FIELDS = [
-  "employeeName", "arabicName", "nationality", "gender", "dateOfBirth",
+  "employeeName", "arabicName", "shortName", "shortNameAr", "nationality", "gender", "dateOfBirth",
   "civilId", "idExpiry", "passportNumber", "passportExpiry", "visaNo", "visaExpiry",
   "workPermitNo", "workPermitExpiry", "lawyerCardNo", "lawyerCardExpiry",
   "dialCode", "phone", "workDialCode", "workPhone", "workEmail", "personalEmail", "address",
@@ -76,6 +76,16 @@ export const employeesApi = {
   async nextNumber() {
     const json = await api("employees/next-number");
     return json.data.empNo;
+  },
+
+  /**
+   * The short name a full name would be given: first and family name, or
+   * longer where somebody else already goes by that. `sharedWith` names
+   * who holds the plainer form when a middle name had to be added.
+   */
+  async shortName({ name, nameAr, except }) {
+    const json = await api("employees/short-name", { query: { name, nameAr, except } });
+    return json.data;
   },
 
   async create(form) {

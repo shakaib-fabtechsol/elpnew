@@ -221,7 +221,7 @@ export function employeeDocumentAlerts() {
       if (!milestone) continue;
       alerts.push({
         id: "employee:" + paper.id + ":" + milestone,
-        title: employee.name,
+        title: employee.shortName || employee.name,
         detail: paper.type,
         expiryDate: paper.expiry,
         state: days < 0 ? "expired" : "soon",

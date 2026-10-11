@@ -34,6 +34,7 @@ import {
 } from "../advanceSalaryData";
 import { longDate } from "./AdvanceSalarySection";
 import SalaryLedger from "./SalaryLedger";
+import { shortName } from "@/lib/shortName";
 
 const isoOf = (date) =>
   date.getFullYear() +
@@ -413,7 +414,7 @@ export default function AdvanceOverview({
       <Dialog open={showAll} onOpenChange={setShowAll}>
         <DialogContent className="max-h-[90vh] w-[92vw] max-w-7xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Salary &amp; Advance History · {employee?.name}</DialogTitle>
+            <DialogTitle>Salary &amp; Advance History · {shortName(employee?.name)}</DialogTitle>
             <DialogDescription>Every salary and salary advance on record.</DialogDescription>
           </DialogHeader>
           <SalaryLedger employee={employee} history={history} />

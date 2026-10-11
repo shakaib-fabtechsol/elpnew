@@ -4,6 +4,7 @@ namespace App\Http\Requests\Employees;
 
 use App\Http\Requests\ApiRequest;
 use App\Models\Employee;
+use App\Support\ShortName;
 use Illuminate\Validation\Rule;
 
 /**
@@ -61,6 +62,19 @@ class EmployeeRequest extends ApiRequest
         return [
             'employeeName' => [$req, 'string', 'max:255'],
             'arabicName' => $text(),
+            // Left empty, the record works its own out (see Employee). Typed,
+            // it must be one nobody else goes by - that is all it is for.
+            'shortName' => [...$text(120), function (string $attribute, mixed $value, \Closure $fail) use ($id) {
+                $exceptId = $id instanceof Employee ? $id->id : (is_numeric($id) ? (int) $id : null);
+                $other = filled($value) ? ShortName::heldBy((string) $value, 'short_name', $exceptId) : null;
+                if ($other) {
+                    $fullName = $this->input('employeeName') ?: ($id instanceof Employee ? $id->name : null);
+                    $suggestion = ShortName::unique($fullName, 'short_name', $exceptId);
+                    $fail('Another employee ('.$other->name.', '.$other->emp_no.') already uses this short name.'
+                        .($suggestion && mb_strtolower($suggestion) !== mb_strtolower((string) $value) ? ' Suggested: '.$suggestion.'.' : ''));
+                }
+            }],
+            'shortNameAr' => $text(120),
             'nationality' => $text(60),
             'gender' => ['nullable', Rule::in(['Male', 'Female'])],
             'dateOfBirth' => [...$date, 'before:today'],

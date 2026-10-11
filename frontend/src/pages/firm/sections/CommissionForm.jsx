@@ -46,6 +46,7 @@ import {
 } from "../commissionData";
 
 import DateField from "@/components/shared/DateField";
+import { shortName } from "@/lib/shortName";
 const OTHER_STAFF = "Other Staff";
 
 /**
@@ -83,7 +84,7 @@ const classificationOf = (role) =>
  */
 const beneficiaryOptionsOf = (people) => people.map((person) => ({
   value: person.name,
-  label: person.name + " \u2014 " + classificationOf(person.role),
+  label: shortName(person.name) + " \u2014 " + classificationOf(person.role),
 }));
 
 const emptyDraft = {
@@ -195,7 +196,7 @@ function CommissionPayment({
             label="Request Date"
             value={formatDate(requestDate)}
           />
-          <Locked id="payPayee" label="Employee Name" value={payee} />
+          <Locked id="payPayee" label="Employee Name" value={shortName(payee)} />
           <Locked
             id="payType"
             label="Commission Type"

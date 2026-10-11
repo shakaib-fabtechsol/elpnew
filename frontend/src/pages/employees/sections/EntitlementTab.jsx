@@ -102,6 +102,7 @@ import {
 } from "../entitlementData";
 
 import DateField from "@/components/shared/DateField";
+import { shortName } from "@/lib/shortName";
 const NOTES_LIMIT = 500;
 
 /**
@@ -441,7 +442,7 @@ export default function EntitlementTab({
   // Who it is for, as a personnel record names them: the name alone is not an
   // identifier, and two people can share one.
   const whose =
-    (employee?.name || "") + (employee?.empNo ? " \u2014 " + employee.empNo : "");
+    shortName(employee?.name) + (employee?.empNo ? " \u2014 " + employee.empNo : "");
 
   // What is left of the leave being encashed - counted off the leave already
   // taken, never stored.
@@ -1320,7 +1321,7 @@ export default function EntitlementTab({
           <h3 className={HEADING}>Assistance Approval &amp; Transfer Summary</h3>
           <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:[&>*+*]:border-s">
             <Fact icon={User} label="Employee Name">
-              {employee?.name || "-"}
+              {shortName(employee?.name) || "-"}
             </Fact>
             <Fact icon={Landmark} label="Bank Name">
               {employee?.bankName || "-"}
@@ -1460,7 +1461,7 @@ export default function EntitlementTab({
             <div className="ms-auto flex flex-wrap items-center gap-3 pt-2 text-sm text-primary">
               <span>{employee?.empNo || ""}</span>
               <span aria-hidden="true" className="h-5 w-px bg-container-border" />
-              <span>{employee?.name || ""}</span>
+              <span>{shortName(employee?.name)}</span>
               <span aria-hidden="true" className="h-5 w-px bg-container-border" />
               {/* On the step that pays, the head says where the money goes -
                   the employee's bank and account - in place of the date and
@@ -2706,7 +2707,7 @@ export default function EntitlementTab({
           <DialogHeader>
             <DialogTitle>
               {sheet?.shared && !open
-                ? label + " History · " + (employee?.name || "")
+                ? label + " History · " + shortName(employee?.name)
                 : "History - " + (open?.entitlementNo || open?.requestNo || label)}
             </DialogTitle>
           </DialogHeader>
@@ -2736,7 +2737,7 @@ export default function EntitlementTab({
                     <Td className="text-primary">{event.action}</Td>
                     <Td className="text-muted-foreground">{event.from}</Td>
                     <Td className="text-primary">{event.to}</Td>
-                    <Td className="text-primary">{event.by}</Td>
+                    <Td className="text-primary">{shortName(event.by)}</Td>
                     <Td className="whitespace-nowrap text-end font-semibold text-green-700">
                       {amountValue(event.amount)}
                     </Td>

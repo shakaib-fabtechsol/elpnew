@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Gavel, CalendarClock } from "lucide-react";
 import { SectionCard, Row, EmptyState } from "@/components/shared/panels";
 import { todaysHearings, upcomingHearings, formatDate, daysUntil } from "../dashboardData";
+import { shortName } from "@/lib/shortName";
 
 const HEARING_STATUS_VARIANT = {
   Scheduled: "secondary",
@@ -29,7 +30,7 @@ export function TodaysHearings() {
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {hearing.court} &middot; {hearing.caseType} &middot;{" "}
-                  {hearing.lawyer}
+                  {shortName(hearing.lawyer)}
                 </p>
               </div>
             </div>
@@ -75,7 +76,7 @@ export function UpcomingHearings() {
                     {hearing.caseNo} &middot; {hearing.client}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {hearing.court} &middot; {hearing.lawyer}
+                    {hearing.court} &middot; {shortName(hearing.lawyer)}
                   </p>
                 </div>
               </div>

@@ -25,6 +25,7 @@ import {
   formatDate,
 } from "@/lib/circulars/context";
 import { CURRENT_USER } from "@/pages/dashboard/dashboardData";
+import { shortName } from "@/lib/shortName";
 
 /**
  * The circulars this one employee is addressed by.
@@ -218,7 +219,7 @@ export default function EmployeeCircularsSection({ employee, self = false }) {
                         {formatDate(circular.date)}
                       </td>
                       <td className="p-3">{circular.targetGroup}</td>
-                      <td className="p-3">{circular.issuedBy}</td>
+                      <td className="p-3">{shortName(circular.issuedBy)}</td>
                       {/* Their own acknowledgement, and nobody else's */}
                       <td className="p-3">
                         {mineAck ? (

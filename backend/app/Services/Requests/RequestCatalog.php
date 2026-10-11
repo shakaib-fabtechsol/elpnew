@@ -43,6 +43,78 @@ final class RequestCatalog
     /** Kinds that are made on an invoice: they need the document. */
     public const INVOICE_TYPES = ['medical', 'transport', 'travel', 'airTicket'];
 
+    /** Kinds that end with an administrative action rather than a payment. */
+    public const NON_FINANCIAL = ['leave', 'general', 'grievance', 'complaint'];
+
+    /** How a missing field is asked for, where its label alone reads badly as a question. */
+    private const ASK = [
+        'amount' => 'How much are you asking for, in OMR?',
+        'monthly' => 'How much should be deducted each month, in OMR?',
+        'startMonth' => 'From which month should the deductions start?',
+        'deductMonth' => 'Which month\'s salary should the advance be deducted from?',
+        'deductYear' => 'In which year is that month?',
+        'fromDate' => 'What is the first day of the leave?',
+        'toDate' => 'What is the last day of the leave?',
+        'hours' => 'How many overtime hours did you work?',
+        'period' => 'In which month did you work them?',
+        'days' => 'How many leave days do you want paid out?',
+        'year' => 'For which year?',
+        'reason' => 'Please explain the request in a sentence or two.',
+        'purpose' => 'What is the advance for?',
+        'invoice' => 'Please attach the invoice (PDF or photo) so it can be read.',
+    ];
+
+    /** Words in an explanation that settle what a salary advance is for. */
+    private const PURPOSE_WORDS = [
+        'Education Expenses' => ['school', 'tuition', 'university', 'college', 'education', 'course fee', 'exam fee'],
+        'Medical Expenses' => ['medical', 'dental', 'dentist', 'hospital', 'clinic', 'surgery', 'treatment', 'medicine', 'doctor', 'pharmacy'],
+        'Emergency Case' => ['emergency', 'urgent', 'accident', 'broke down'],
+        'Family Expenses' => ['family', 'wedding', 'marriage', 'rent', 'household'],
+    ];
+
+    public static function purposeFrom(string $explanation): ?string
+    {
+        $plain = mb_strtolower($explanation);
+        foreach (self::PURPOSE_WORDS as $purpose => $words) {
+            foreach ($words as $word) {
+                if (str_contains($plain, $word) && in_array($purpose, SalaryAdvance::PURPOSES, true)) {
+                    return $purpose;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public static function isFinancial(string $type): bool
+    {
+        return ! in_array($type, self::NON_FINANCIAL, true);
+    }
+
+    /**
+     * One specific question for each thing still missing - asked of the
+     * employee in place of a form to fill in.
+     *
+     * @param  list<string>  $missing
+     * @return list<array{key:string,label:string,question:string,options?:list<string>}>
+     */
+    public static function questions(string $type, array $missing): array
+    {
+        $fields = collect(self::fields($type))->keyBy('key');
+
+        return array_map(function (string $key) use ($fields) {
+            $field = $fields->get($key);
+            $label = $field['label'] ?? 'Invoice';
+
+            return [
+                'key' => $key,
+                'label' => $label,
+                'question' => self::ASK[$key] ?? 'Which '.mb_strtolower($label).' applies?',
+                ...(($field['options'] ?? null) ? ['options' => $field['options']] : []),
+            ];
+        }, $missing);
+    }
+
     public static function label(string $type): string
     {
         return self::TYPES[$type][0] ?? $type;
