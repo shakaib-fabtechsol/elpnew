@@ -9,10 +9,10 @@ use Illuminate\Validation\Rule;
 /** Management Decision: full / partial / return / reject. */
 class DecisionRequest extends ApiRequest
 {
-    /** Management decides - refused before the body is even read. */
+    /** Whoever holds approval decides - refused before the body is even read. */
     public function authorize(): bool
     {
-        return (bool) $this->user()?->can('manage');
+        return (bool) $this->user()?->can('decide');
     }
 
     public function rules(): array

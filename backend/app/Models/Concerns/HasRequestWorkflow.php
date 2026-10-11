@@ -8,6 +8,7 @@ use App\Enums\RequestStatus;
 use App\Models\Employee;
 use App\Models\RequestEvent;
 use App\Models\User;
+use App\Services\Permissions\Access;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
@@ -78,12 +79,10 @@ trait HasRequestWorkflow
         return $this->morphMany(RequestEvent::class, 'subject')->orderByDesc('id');
     }
 
-    /** Admin and accounting see every request; anyone else only their own. */
+    /** As far as the user's record access reaches: everybody, chosen departments, or their own. */
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        return $user->role->seesEveryone()
-            ? $query
-            : $query->where('employee_id', $user->employee_id);
+        return Access::restrict($query, $user);
     }
 
     /** ?status=Pending,Returned */

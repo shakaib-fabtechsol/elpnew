@@ -82,6 +82,8 @@ import {
   Landmark,
   Users,
   FileWarning,
+  Sparkles,
+  GraduationCap,
 } from "lucide-react";
 import {
   Dialog,
@@ -131,10 +133,12 @@ import EntitlementsSection from "./sections/EntitlementsSection";
 
 import DailyActivitiesSection from "./sections/DailyActivitiesSection";
 import PerformanceSection from "./sections/PerformanceSection";
+import { DevelopmentPlan, EvaluationsPanel, ManagementOverview, TeamInsights } from "./sections/EmployeeManagementPanels";
 import ViolationsSection from "./sections/ViolationsSection";
 import EmployeeCircularsSection from "./sections/CircularsSection";
 import LeavesSection from "./sections/LeavesSection";
 import SmartRequest from "./sections/SmartRequest";
+import SystemPermissionsSection from "./sections/SystemPermissionsSection";
 import { createdRequest } from "@/lib/api/modules/unified";
 import GeneralRequestSection from "./sections/GeneralRequestSection";
 import DocumentIntake, { IntakeReview } from "./sections/DocumentIntake";
@@ -358,6 +362,14 @@ const SECTION_GROUPS = [
 /** What Employee Management opens, each its mark, its name and what it holds. */
 const MANAGEMENT_ITEMS = [
   {
+    // Where the employee stands and what their records show, with the AI's
+    // insight on it: what a manager opens this page to learn.
+    key: "overview",
+    label: "Overview & AI Insights",
+    icon: Sparkles,
+    note: "Standing, what the records show, and an AI summary with recommended actions.",
+  },
+  {
     key: "daily",
     label: "Daily Activities",
     icon: CalendarDays,
@@ -374,6 +386,18 @@ const MANAGEMENT_ITEMS = [
     label: "Violations & Penalties",
     icon: FileWarning,
     note: "View recorded violations, penalties and related documents.",
+  },
+  {
+    key: "development",
+    label: "Development Plan",
+    icon: GraduationCap,
+    note: "Training, coaching, corrective actions and recognition, followed to their outcome.",
+  },
+  {
+    key: "team",
+    label: "Team Insights",
+    icon: Users,
+    note: "Across the firm: high performers and employees requiring attention.",
   },
 ];
 
@@ -1325,7 +1349,7 @@ export default function EmployeeForm({ self }) {
   const [requestCategory, setRequestCategory] = useState(justCreated?.category || REQUEST_CATEGORIES[0].key);
   const [requestsTab, setRequestsTab] = useState(justCreated?.key || REQUEST_CATEGORIES[0].items[0].key);
   // What is open under Employee Management: nothing until a card is chosen.
-  const [managementTab, setManagementTab] = useState(null);
+  const [managementTab, setManagementTab] = useState(MANAGEMENT_ITEMS[0].key);
   // Said once Employee Information has been saved, until the person moves on.
   const [profileSaved, setProfileSaved] = useState(false);
   // Which side of Financial Benefits is open. Held here because the tabs
@@ -1686,7 +1710,8 @@ export default function EmployeeForm({ self }) {
       : activeSection;
   // The side of the file whose Save is at the foot of the page: under
   // Employee Management, the one opened there.
-  const savesFor = SECTIONS.find((s) => s.key === shownSection) || current;
+  // What Employee Management opens keeps its own records: nothing to save here.
+  const savesFor = SECTIONS.find((s) => s.key === shownSection) || (isManagement ? { noSave: true } : current);
   // Where a record has Employee Management, what it opens is left out of
   // the sidebar's other sections.
   const hasManagement = sections.some((s) => s.key === "management");
@@ -2377,7 +2402,7 @@ export default function EmployeeForm({ self }) {
                   return (
                     <div
                       key={item.key}
-                      className={cn("flex", index > 0 && "md:border-s md:border-container-border md:ps-4", index < MANAGEMENT_ITEMS.length - 1 && "md:pe-4")}
+                      className={cn("flex", index % 3 > 0 && "md:border-s md:border-container-border md:ps-4", index % 3 < 2 && "md:pe-4")}
                     >
                       <button
                         type="button"
@@ -4073,7 +4098,16 @@ export default function EmployeeForm({ self }) {
                   <EmployeeCircularsSection employee={formData} self={self} />
                 )}
 
-                {shownSection === "performance" && <PerformanceSection />}
+                {shownSection === "overview" && <ManagementOverview key={record.id} employee={record} onOpen={setManagementTab} />}
+                {/* The evaluations first, then the measures taken from the activity log. */}
+                {shownSection === "performance" && (
+                  <div className="space-y-8">
+                    <EvaluationsPanel key={record.id} employee={record} />
+                    <PerformanceSection />
+                  </div>
+                )}
+                {shownSection === "development" && <DevelopmentPlan key={record.id} employee={record} />}
+                {shownSection === "team" && <TeamInsights employee={record} />}
 
                 {shownSection === "violations" && (
                   <ViolationsSection employee={formData} canEdit={!readOnly} />
@@ -4094,10 +4128,8 @@ export default function EmployeeForm({ self }) {
                   />
                 )}
 
-                {/* Not yet specified, so nothing is invented for it */}
-                {activeSection === "permissions" && (
-                  <EmptyState>{current.label} is not set up yet.</EmptyState>
-                )}
+                {/* What this employee may see and do, set by an administrator. */}
+                {activeSection === "permissions" && <SystemPermissionsSection key={record.id} employee={record} />}
 
                 {/* Save at the end of what it saves, where the last field
                     leaves off. A section that saves its own records has

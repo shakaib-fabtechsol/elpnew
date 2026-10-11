@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import CircularBrief from "@/components/shared/CircularBrief";
 import ExcelIcon from "@/components/shared/ExcelIcon";
 import {
   Dialog,
@@ -59,7 +60,7 @@ export default function CircularDetails({ circular, onOpenChange }) {
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{circular.circularNo}</DialogTitle>
           <DialogDescription>
@@ -67,6 +68,10 @@ export default function CircularDetails({ circular, onOpenChange }) {
             {read.length} of {audience.length} acknowledged
           </DialogDescription>
         </DialogHeader>
+
+        <div className="rounded-lg border border-container-border p-4">
+          <CircularBrief circular={circular} canRefresh />
+        </div>
 
         <div className="max-h-96 overflow-y-auto rounded-lg border">
           <table className="w-full border text-sm">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import ExcelIcon from "@/components/shared/ExcelIcon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/shared/panels";
 import AiSearch from "@/components/shared/AiSearch";
-import { Check } from "lucide-react";
+import { Check, Sparkles } from "lucide-react";
+import CircularBrief from "@/components/shared/CircularBrief";
 import { cn } from "@/lib/utils";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import {
@@ -45,6 +46,8 @@ export default function EmployeeCircularsSection({ employee, self = false }) {
   // An acknowledgement is recorded against whoever is signed in, so it can
   // only be given from their own record.
   const own = employee?.id != null && employee.id === CURRENT_USER.employeeId;
+  // The circular whose AI brief is open under its row, if one is.
+  const [briefOf, setBriefOf] = useState(null);
 
   const group = groupOf(employee);
   const mine = circularsFor(circulars, group);
@@ -207,14 +210,25 @@ export default function EmployeeCircularsSection({ employee, self = false }) {
                 {shown.map((circular) => {
                   const mineAck = acknowledgementBy(circular, employee.name);
                   return (
-                    <tr
-                      key={circular.id}
-                      className="border-b align-top transition-colors last:border-0 hover:bg-primary/10"
-                    >
+                    <Fragment key={circular.id}>
+                    <tr className="border-b align-top transition-colors last:border-0 hover:bg-primary/10">
                       <td className="whitespace-nowrap p-3 font-semibold text-primary">
                         {circular.circularNo}
                       </td>
-                      <td className="p-3">{circular.content}</td>
+                      <td className="p-3">
+                        <p>{circular.content}</p>
+                        {/* What it says in short, what to do and by when -
+                            and any question about it, answered. */}
+                        <button
+                          type="button"
+                          aria-expanded={briefOf === circular.id}
+                          onClick={() => setBriefOf(briefOf === circular.id ? null : circular.id)}
+                          className="mt-2 inline-flex items-center gap-1.5 rounded text-xs font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <Sparkles className="size-3.5" aria-hidden="true" />
+                          {briefOf === circular.id ? "Hide AI Brief" : "AI Brief"}
+                        </button>
+                      </td>
                       <td className="whitespace-nowrap p-3">
                         {formatDate(circular.date)}
                       </td>
@@ -265,6 +279,14 @@ export default function EmployeeCircularsSection({ employee, self = false }) {
                         </td>
                       )}
                     </tr>
+                    {briefOf === circular.id && (
+                      <tr className="border-b last:border-0">
+                        <td colSpan={self ? 6 : 7} className="bg-muted/30 p-4">
+                          <CircularBrief circular={circular} own={own} canRefresh={Boolean(CURRENT_USER.permissions?.manage)} />
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>

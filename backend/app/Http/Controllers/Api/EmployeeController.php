@@ -16,6 +16,7 @@ use App\Models\Leave;
 use App\Models\Loan;
 use App\Models\SalaryAdvance;
 use App\Services\Eligibility;
+use App\Services\Permissions\Access;
 use App\Support\ShortName;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -32,7 +33,7 @@ class EmployeeController extends Controller
         $user = $request->user();
 
         $query = Employee::query()
-            ->unless($user->role->seesEveryone(), fn (Builder $q) => $q->whereKey($user->employee_id))
+            ->tap(fn (Builder $q) => Access::restrict($q, $user, 'id'))
             ->search($request->string('search')->toString() ?: null)
             ->when($request->string('status')->toString(), fn (Builder $q, $v) => $q->where('status', $v))
             ->when($request->string('department')->toString(), fn (Builder $q, $v) => $q->where('department', $v))
