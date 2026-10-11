@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Clock, History, Loader2, Plus, ShieldAlert, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Clock, History, Plus, ShieldAlert, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Loader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -134,7 +135,7 @@ export default function SystemPermissionsSection({ employee }) {
   if (!page || !draft) {
     return (
       <p role="status" className="flex items-center justify-center gap-2 py-10 text-sm text-primary">
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        <Loader size={16} />
         Loading permissions…
       </p>
     );
@@ -363,7 +364,7 @@ export default function SystemPermissionsSection({ employee }) {
             />
             <Button type="button" onClick={() => ask(instruction.trim())} disabled={!instruction.trim() || Boolean(busy)}>
               {busy === "asking" ? (
-                <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />
+                <Loader size={16} className="me-2" />
               ) : (
                 <Sparkles className="me-2 size-4" aria-hidden="true" />
               )}
@@ -517,7 +518,7 @@ export default function SystemPermissionsSection({ employee }) {
             onClick={save}
             disabled={(!dirty && page.settings.custom) || Boolean(busy) || (draft.scope === "department" && !draft.departments.length)}
           >
-            {busy === "saving" && <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />}
+            {busy === "saving" && <Loader size={16} className="me-2" />}
             Save Permissions
           </Button>
         </div>
@@ -780,7 +781,7 @@ function LendForm({ page, value, onChange, onCancel, onSave, busy, labelOf, empl
           Cancel
         </Button>
         <Button type="button" onClick={onSave} disabled={!ready || busy}>
-          {busy && <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />}
+          {busy && <Loader size={16} className="me-2" />}
           Give Access
         </Button>
       </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, Loader2, ShieldCheck } from "lucide-react";
+import { ChevronDown, ShieldCheck } from "lucide-react";
+import { Loader } from "@/components/shared/Loader";
 import { RecordTable, HeadRow, Th, Row, Td } from "@/components/shared/RecordTable";
 import { cn } from "@/lib/utils";
 import { circularInsightsApi } from "@/lib/api/modules/circularInsights";
@@ -58,7 +59,7 @@ export default function CircularCompliance({ version }) {
   if (!data) {
     return (
       <p role="status" className="flex items-center gap-2 text-sm text-primary">
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        <Loader size={16} />
         Counting acknowledgements…
       </p>
     );

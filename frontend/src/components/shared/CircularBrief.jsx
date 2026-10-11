@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { CalendarClock, ListChecks, Loader2, Sparkles, Users } from "lucide-react";
+import { CalendarClock, ListChecks, Sparkles, Users } from "lucide-react";
+import { Loader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { circularInsightsApi } from "@/lib/api/modules/circularInsights";
@@ -65,7 +66,7 @@ export default function CircularBrief({ circular, own = false, canRefresh = fals
   if (!brief) {
     return (
       <p role="status" className="flex items-center gap-2 text-sm text-primary">
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        <Loader size={16} />
         Preparing the brief…
       </p>
     );
@@ -82,7 +83,7 @@ export default function CircularBrief({ circular, own = false, canRefresh = fals
         </p>
         {canRefresh && (
           <Button type="button" variant="outline" size="sm" className="ms-auto" onClick={refresh} disabled={Boolean(busy)}>
-            {busy === "refreshing" && <Loader2 className="me-1.5 size-3.5 animate-spin" aria-hidden="true" />}
+            {busy === "refreshing" && <Loader size={14} className="me-1.5" />}
             Write Again
           </Button>
         )}
@@ -193,7 +194,7 @@ export default function CircularBrief({ circular, own = false, canRefresh = fals
             disabled={Boolean(busy)}
           />
           <Button type="button" onClick={() => ask(question.trim())} disabled={!question.trim() || Boolean(busy)}>
-            {busy === "asking" && <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />}
+            {busy === "asking" && <Loader size={16} className="me-2" />}
             Ask AI
           </Button>
           <Button type="button" variant="outline" onClick={() => ask("")} disabled={Boolean(busy)}>
