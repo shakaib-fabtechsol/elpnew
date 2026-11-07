@@ -88,7 +88,7 @@ const ACCOUNT_LINKS = [
   // The signed-in user's own working record: My Profile, on its Daily
   // Activities section.
   { label: "Activity Review", path: "/my-profile", state: { section: "daily" }, icon: Clock },
-  { label: "Settings", path: "/settings/firm", icon: Settings },
+  { label: "Company Profile", path: "/settings/firm", icon: Settings },
   { label: "System Settings", path: "/settings/system", icon: SlidersHorizontal },
 ];
 
