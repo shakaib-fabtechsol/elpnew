@@ -3768,6 +3768,9 @@ export default function EmployeeForm({ self }) {
                               dropped when the one above it changes, so a
                               record cannot keep a reason for an ending that is
                               no longer there. */}
+                          {/* Not asked while adding: the client's sheet has no
+                              status - a new employee is Active. */}
+                          {!isAdding && (
                           <ChoiceField
                             id="status"
                             label="Employee Status"
@@ -3788,6 +3791,7 @@ export default function EmployeeForm({ self }) {
                             options={["Active", "Inactive"]}
                             required
                           />
+                          )}
                           {formData.status === "Inactive" ? (
                             <>
                             <div className="form-field space-y-2">
@@ -4289,7 +4293,10 @@ export default function EmployeeForm({ self }) {
                         records the firm already holds, so ticking one shows
                         its figure rather than asking for it; one already
                         running cannot be ticked off here. */}
-                    {shows("payroll") && (
+                    {/* Not on Add Employee: the client asked for salary
+                        information only there - no loans or deductions, which
+                        come from the requests later. Shown on a record. */}
+                    {shows("payroll") && !isAdding && (
                     <SectionCard
                       title={
                         <>
