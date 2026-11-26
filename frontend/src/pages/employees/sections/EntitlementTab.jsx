@@ -1,3 +1,4 @@
+import useFocusRecord from "@/lib/useFocusRecord";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -411,6 +412,8 @@ export default function EntitlementTab({
   onOpenAdd,
   // The firm decides; on My Profile the request is asked for and only read.
   canDecide = true,
+  // The request to open straight away (the firm's Requests list), if any.
+  focusId,
 }) {
   const { leaves, recordEncashment } = useLeaves();
   // The entitlements are loaded at sign-in: skeleton rows until they land,
@@ -2787,6 +2790,9 @@ export default function EntitlementTab({
       )}
     </div>
   );
+
+  // Opened from the firm's Requests list on one request: that one, at once.
+  useFocusRecord(focusId, records, track);
 
   return (
     <>

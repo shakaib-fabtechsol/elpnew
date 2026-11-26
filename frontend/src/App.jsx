@@ -67,6 +67,8 @@ import CorporateList from "@/pages/corporate/CorporateList";
 // Employees Module
 import EmployeesList from "@/pages/employees/EmployeesList";
 import EmployeeForm from "@/pages/employees/EmployeeForm";
+import OffboardingList from "@/pages/offboarding/OffboardingList";
+import OffboardingCase from "@/pages/offboarding/OffboardingCase";
 
 // Finance Module
 import InvoicesList from "@/pages/finance/InvoicesList";
@@ -173,11 +175,15 @@ function App() {
 
               {/* Employees Module */}
               <Route path="employees" element={<EmployeesList />} />
-              <Route path="employees/create" element={<EmployeeForm />} />
+              {/* Add Employee is a pop-up over the list, at its own address. */}
+              <Route path="employees/create" element={<EmployeesList adding />} />
               {/* Adding and editing are the same page; only the data differs. */}
               <Route path="employees/:id" element={<EmployeeForm />} />
               {/* The same page again, opened on whoever is signed in. */}
               <Route path="my-profile" element={<EmployeeForm self />} />
+              {/* Employee Offboarding: End of Service cases */}
+              <Route path="offboarding" element={<OffboardingList />} />
+              <Route path="offboarding/:id" element={<OffboardingCase />} />
 
               {/* Finance Module */}
               <Route path="finance" element={<InvoicesList />} />

@@ -53,6 +53,7 @@ final class PermissionCatalog
             'employees' => ['Employee Records', 'Personal, employment and contract information', self::CRUD],
             'employeeDocuments' => ['Employee Documents', 'Passports, IDs, contracts and other filed papers', ['view', 'create', 'delete']],
             'employeeAssets' => ['Assigned Assets', 'Cars, laptops, phones and work IDs issued, returned or disposed of', ['view', 'create', 'edit']],
+            'offboarding' => ['Employee Offboarding', 'End of service: resignations, terminations, clearance and final settlement', ['view', 'create', 'edit', 'approve']],
             'violations' => ['Violations & Penalties', 'Violations recorded, responses and decisions', ['view', 'create', 'edit', 'approve', 'reject']],
         ]],
         'confidential' => ['Confidential Information', 'Sensitive parts of an employee record', [

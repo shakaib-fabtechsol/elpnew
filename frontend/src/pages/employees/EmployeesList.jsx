@@ -37,6 +37,9 @@ import {
 } from "lucide-react";
 import { SalaryView, LeaveView, DocumentsView } from "./EmployeeQuickViews";
 import { mayView } from "./viewAccess";
+import { amountValue } from "@/lib/money";
+import EmployeeForm from "./EmployeeForm";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { managementApi } from "@/lib/api/modules/management";
 import { initialViolations } from "./violationData";
 import { initialAdvances } from "./advanceSalaryData";
@@ -50,14 +53,11 @@ import { IdStatusDot, isEndedStatus } from "@/components/shared/panels";
 import {
   employeeRecords,
   netSalary,
-  amount,
   documentsFor,
   documentStatus,
   employeeDocuments,
-  accessHold,
   documentStanding,
 } from "./employeeData";
-import { readDocumentControl } from "@/lib/settings/documentControl";
 import { can } from "@/lib/access";
 import useDataset from "@/lib/api/useDataset";
 
@@ -86,8 +86,6 @@ function Inline({ label, children, strong }) {
   );
 }
 
-/** An amount as it is written everywhere: the figure, then the currency. */
-const money = (value) => amount(value);
 
 /** A label and its value on one line, for the stacked cells. */
 const Fact = ({ label, children }) => (
@@ -301,6 +299,9 @@ const leftAs = (row) => {
   return "";
 };
 
+/** The contract as the sheet words it. */
+const CONTRACT_WORD = { "Indefinite-term": "Permanent", "Fixed-term": "Temporary" };
+
 /** "Mohammed Al Yahyaei" -> "MY": the mark where a photo would be. */
 const initials = (name) =>
   String(name || "")
@@ -347,7 +348,7 @@ const DocumentMark = ({ status }) =>
     <AlertCircle className="size-4" aria-hidden="true" />
   );
 
-export default function EmployeesList() {
+export default function EmployeesList({ adding = false }) {
   const navigate = useNavigate();
   const { leaves } = useLeaves();
   // Every column here is read off these three: the records, their papers and
@@ -391,8 +392,6 @@ export default function EmployeesList() {
   // manager's to read. The server enforces the same rule; this only keeps the
   // page from printing what it should not.
   const canSeeRestricted = CURRENT_USER.role === "admin";
-  // The grace period and action set on System Settings.
-  const documentControl = readDocumentControl();
   const fields = filterFields(canSeeRestricted);
   const chips = filterChips(fields, filters);
 
@@ -467,7 +466,6 @@ export default function EmployeesList() {
   const atLevel = (level) => lawyers.filter((row) => levelOf(row) === level).length;
   const inactive = employees.filter((row) => isEndedStatus(row.status));
   const leftBy = (how) => inactive.filter((row) => leftAs(row) === how).length;
-  const joinedThisMonth = employees.filter((row) => inThisMonth(row.dateOfJoining)).length;
   // The document breakdown narrows the list only for the general manager,
   // whose filter it is; for anybody else it reports the figures.
   const documentTile = (label, status, tone) => ({
@@ -490,17 +488,6 @@ export default function EmployeesList() {
   });
 
   const summary = [
-    {
-      key: "total",
-      icon: Users,
-      tone: "blue",
-      value: employees.length,
-      label: "Total Employees",
-      note: { icon: "trend", text: "+" + joinedThisMonth + " this month" },
-      // Nothing is marked chosen while the whole list shows: the cards are
-      // alike until one narrows it.
-      onClick: () => narrow({}),
-    },
     {
       key: "active",
       icon: UserCheck,
@@ -582,27 +569,15 @@ export default function EmployeesList() {
   ];
   const columns = [
     {
-      key: "empNo",
-      header: "Employee No.",
-      width: "9%",
-      // A reference: sorted as text, which puts the digits in numeric order
-      // ("EMP-0009" before "EMP-0010"), like every ID in the system.
-      sort: "text",
-      render: (value, row) => (
-        <button
-          type="button"
-          onClick={() => navigate("/employees/" + row.id)}
-          className="numeric-value font-semibold text-record-link transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
-          {value}
-        </button>
-      ),
-    },
-    {
       key: "name",
       header: "Employee",
-      width: "18%",
+      width: "25%",
+      // One column for the person, as the design has it: the number sits
+      // under the name rather than in a column of its own. Sorted by name;
+      // the search still finds a number, and the export keeps it.
       sort: "text",
+      sortValue: (row) => row.name,
+      exportValue: (row) => row.name + " (" + row.empNo + ")",
       skeleton: "avatar",
       // The name opens the full profile: employment, personal, contract and
       // administrative information.
@@ -610,7 +585,7 @@ export default function EmployeesList() {
         <div className="flex items-center gap-3">
           <span
             aria-hidden="true"
-            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-primary"
+            className="flex size-12 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base font-semibold text-primary"
           >
             {initials(value)}
           </span>
@@ -618,12 +593,12 @@ export default function EmployeesList() {
             <button
               type="button"
               onClick={() => navigate("/employees/" + row.id)}
-              className="text-start font-semibold text-primary hover:text-record-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="text-start text-base font-bold text-primary hover:text-record-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {value}
             </button>
-            <p className="text-xs text-muted-foreground">
-              {row.empNo} <span className="px-1">|</span> {row.nationality}
+            <p className="text-sm text-primary/80">
+              {row.empNo} <span className="px-1.5">|</span> {row.nationality}
             </p>
           </div>
         </div>
@@ -638,36 +613,35 @@ export default function EmployeesList() {
       skeleton: "lines",
       render: (value, row) => (
         <div className="space-y-1.5">
-          <span className="inline-flex rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-primary">
-            {value || "\u2013"}
+          {/* The position (Partner / Manager / Employee), as the sheet shows
+              it; the job title where no position has been recorded. */}
+          <span className="inline-flex rounded-md bg-blue-50 px-2.5 py-0.5 text-sm font-bold text-primary">
+            {row.position || value || "\u2013"}
           </span>
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-primary/80">
+          <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-primary/80">
             <span className="inline-flex items-center gap-1">
-              <Network className="size-3.5" aria-hidden="true" />
+              <Network className="size-4" aria-hidden="true" />
               {row.department || "\u2013"}
             </span>
             <span aria-hidden="true">|</span>
             <span className="inline-flex items-center gap-1">
-              <MapPin className="size-3.5" aria-hidden="true" />
+              <MapPin className="size-4" aria-hidden="true" />
               {row.branch || "\u2013"}
             </span>
             <span aria-hidden="true">|</span>
             <span className="inline-flex items-center gap-1">
-              <FileText className="size-3.5" aria-hidden="true" />
-              {row.contractType || "\u2013"}
+              <FileText className="size-4" aria-hidden="true" />
+              {CONTRACT_WORD[row.contractType] || row.contractType || "\u2013"}
             </span>
           </p>
-          {/* Only lawyers hold one, and only the general manager may read it. */}
-          {canSeeRestricted && row.practiceLevel && (
-            <p className="text-xs text-muted-foreground">Practice level: {row.practiceLevel}</p>
-          )}
         </div>
       ),
     },
     {
       key: "salary",
       header: "Net Salary",
-      width: "12%",
+      width: "14%",
+      align: "center",
       sort: "money",
       skeleton: "lines",
       sortValue: (row) => (mayView.salary() ? netSalary(row) : null),
@@ -675,10 +649,13 @@ export default function EmployeesList() {
       // Salary is shown only to somebody allowed to read payroll.
       render: (value, row) =>
         mayView.salary() ? (
-          <div className="flex gap-2">
-            <Coins className="mt-0.5 size-[18px] shrink-0 text-primary/60" strokeWidth={1.5} aria-hidden="true" />
+          <div className="inline-flex items-center gap-2.5">
+            <Coins className="size-5 shrink-0 text-primary/70" strokeWidth={1.5} aria-hidden="true" />
             <div className="space-y-0.5">
-              <p className="numeric-value font-semibold text-emerald-700">{money(netSalary(row))}</p>
+              {/* Written with the Rial sign, as the sheet writes it. */}
+              <p className="numeric-value text-base font-bold text-emerald-700">
+                {amountValue(netSalary(row))} <span dir="rtl">ر.ع</span>
+              </p>
               <More onClick={() => setOpenView({ kind: "salary", id: row.id })} />
             </div>
           </div>
@@ -689,7 +666,8 @@ export default function EmployeesList() {
     {
       key: "leave",
       header: "Leave",
-      width: "11%",
+      width: "13%",
+      align: "center",
       // By the remaining balance; an employee with no balance sorts last.
       sort: "balance",
       skeleton: "lines",
@@ -698,20 +676,13 @@ export default function EmployeesList() {
       render: (value, row) => {
         const left = annualLeaveLeft(leaves, row.name);
         return (
-          <div className="flex gap-2">
-            <CalendarDays className="mt-0.5 size-[18px] shrink-0 text-primary/60" strokeWidth={1.5} aria-hidden="true" />
+          <div className="inline-flex items-center gap-2.5">
+            <CalendarDays className="size-5 shrink-0 text-primary/70" strokeWidth={1.5} aria-hidden="true" />
             <div className="space-y-0.5">
-              <p className="font-semibold text-primary">
+              <p className="text-base font-bold text-primary">
                 {left === null ? "\u2013" : left + " days"}
               </p>
-              <p className="text-xs text-muted-foreground">remaining</p>
-              {/* Approved leave covering today, worked out from the requests
-                  themselves rather than read off a standing on the record. */}
-              {onLeaveToday(leaves, row.name) && (
-                <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                  On leave
-                </span>
-              )}
+              <p className="text-sm text-primary/70">remaining</p>
               {mayView.leave() && <More onClick={() => setOpenView({ kind: "leave", id: row.id })} />}
             </div>
           </div>
@@ -721,7 +692,8 @@ export default function EmployeesList() {
     {
       key: "documents",
       header: "Documents",
-      width: "14%",
+      width: "16%",
+      align: "center",
       // By how urgent the papers are: expired, missing, expiring, in order.
       sort: "status",
       sortOrder: ["Expired", "Incomplete", "Expiring Soon", "Complete"],
@@ -739,10 +711,10 @@ export default function EmployeesList() {
                 ? standing.expiring.length
                 : 0;
         return (
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <span
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
+                "inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-sm font-semibold",
                 DOCUMENT_TONE[standing.status]
               )}
             >
@@ -751,7 +723,7 @@ export default function EmployeesList() {
               {count > 0 && " (" + count + ")"}
             </span>
             {mayView.documents() && (
-              <div>
+              <div className="flex justify-center">
                 <More onClick={() => setOpenView({ kind: "documents", id: row.id })}>View Documents</More>
               </div>
             )}
@@ -759,58 +731,7 @@ export default function EmployeesList() {
         );
       },
     },
-    {
-      key: "status",
-      header: "Status",
-      width: "9%",
-      sort: "status",
-      sortOrder: ["Active", "Inactive"],
-      // Its own column rather than a line under the name: standing is the one
-      // thing on this row that changes, and a column can be scanned down and
-      // sorted where a line buried in a cell cannot.
-      render: (value, row) => {
-        // A lapsed critical paper holds access after its grace period, and
-        // that is said here, under the standing it qualifies.
-        const hold = accessHold(documentsFor(row.id), documentControl);
-        return (
-          <div className="space-y-1">
-            <span className="inline-flex items-center gap-2 text-primary">
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "size-2 shrink-0 rounded-full",
-                  STATUS_TONE[value] || "bg-muted-foreground"
-                )}
-              />
-              {value}
-            </span>
-            {hold && (
-              <p
-                className={cn(
-                  "text-xs font-medium",
-                  hold.state === "held" ? "text-red-700" : "text-amber-700"
-                )}
-              >
-                {hold.state === "held"
-                  ? hold.action === "Restrict access"
-                    ? "Access restricted"
-                    : "Access suspended"
-                  : "Grace period: " + hold.daysLeft + " day" + (hold.daysLeft === 1 ? "" : "s") + " left"}
-              </p>
-            )}
-          </div>
-        );
-      },
-    },
-    /* Additional columns - hidden by default, turned on from Columns. */
-    {
-      key: "access",
-      header: "Access Level",
-      width: "9%",
-      hidden: true,
-      sort: false,
-      render: () => <span className="text-doc-absent">&ndash;</span>,
-    },
+    /* Additional columns - hidden by default, under the table. */
     {
       key: "evaluation",
       optional: true,
@@ -883,6 +804,8 @@ export default function EmployeesList() {
         // Offered only to somebody who may add an employee.
         onAdd={can("employees.create") ? () => navigate("/employees/create") : undefined}
         addLabel="Add Employee"
+        // Filled navy, as the sheet draws it.
+        addVariant="default"
       />
 
       <Card>
@@ -898,6 +821,7 @@ export default function EmployeesList() {
           <DataTable
             columns={columns}
             itemLabel="employees"
+            look="sheet"
             dataset={dataset}
             data={shown}
             keepOrder
@@ -923,6 +847,23 @@ export default function EmployeesList() {
           />
         </CardContent>
       </Card>
+
+      {/* Add Employee, as a pop-up over the list: the list stays behind it,
+          where it was. Closing it (Cancel, or the employee created) leaves
+          the address it opened at. A click outside does not close it - a
+          half-filled form is not dismissed by a stray click; the draft is
+          kept in any case. */}
+      <Dialog open={adding} onOpenChange={(open) => !open && navigate("/employees")}>
+        <DialogContent
+          id="add-employee-dialog"
+          aria-describedby={undefined}
+          onInteractOutside={(event) => event.preventDefault()}
+          className="max-h-[94vh] w-[min(1500px,96vw)] max-w-none overflow-y-auto bg-background p-4 sm:p-6 [&>button:last-child]:hidden"
+        >
+          <DialogTitle className="sr-only">Add Employee</DialogTitle>
+          {adding && <EmployeeForm />}
+        </DialogContent>
+      </Dialog>
 
       <SalaryView employee={viewing} open={openView?.kind === "salary"} onOpenChange={closeView} />
       <LeaveView employee={viewing} open={openView?.kind === "leave"} onOpenChange={closeView} />

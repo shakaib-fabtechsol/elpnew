@@ -1,4 +1,5 @@
 import { useState } from "react";
+import RecordSidebar from "@/components/shared/RecordSidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
@@ -16,7 +17,6 @@ import {
   Receipt,
   Wallet,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { canView, ROLES, SECTION_KEYS as K } from "@/lib/permissions";
 
 import { StatCard } from "@/components/shared/panels";
@@ -137,35 +137,20 @@ export default function Dashboard() {
       </div>
 
       <div className="flex flex-col items-start gap-4 sm:gap-6 lg:flex-row">
-        {/* Which part of the dashboard is being looked at */}
-        <Card className="w-full lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:w-64 lg:shrink-0 lg:overflow-y-auto">
-          <CardContent className="p-3">
-            <p className="mb-2 border-b px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Dashboard Options
-            </p>
-            <nav className="flex flex-row gap-1 overflow-x-auto lg:flex-col">
-              {views.map((option) => {
-                const Icon = option.icon;
-                return (
-                  <button
-                    key={option.key}
-                    type="button"
-                    onClick={() => setView(option.key)}
-                    className={cn(
-                      "flex items-center gap-2.5 text-nowrap rounded-md px-3 py-2 text-start text-sm font-medium transition-colors lg:text-wrap",
-                      current.key === option.key
-                        ? "bg-primary text-primary-foreground"
-                        : "text-primary hover:bg-secondary"
-                    )}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    {option.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </CardContent>
-        </Card>
+        {/* The shared record rail, so it narrows to the navy icon-and-name
+            rail the same way as every other page. */}
+        <RecordSidebar
+          id="dashboard"
+          title="Dashboard Options"
+          active={current.key}
+          onSelect={setView}
+          groups={views.map((option) => ({
+            key: option.key,
+            link: true,
+            label: option.label,
+            icon: option.icon,
+          }))}
+        />
 
         {/* min-w-0 or the column will not shrink: a flex child sizes itself to
             its widest content by default, so one wide chart in here would

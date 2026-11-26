@@ -11,6 +11,7 @@ import {
   Scale,
   Truck,
   UserCircle,
+  UserMinus,
   Users,
   Wallet,
 } from "lucide-react";
@@ -35,6 +36,13 @@ export const navSections = [
         key: "employees",
         icon: Users,
         description: "Staff records, branches and roles",
+      },
+      {
+        name: "Offboarding",
+        path: "/offboarding",
+        key: "offboarding",
+        icon: UserMinus,
+        description: "End of service: resignations, terminations and clearance",
       },
       {
         name: "Clients",

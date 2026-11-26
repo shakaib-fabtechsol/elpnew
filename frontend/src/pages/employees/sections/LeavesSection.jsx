@@ -1,3 +1,4 @@
+import useFocusRecord from "@/lib/useFocusRecord";
 import { useState } from "react";
 import RequestTable from "@/components/shared/RequestTable";
 import RequestOverview from "@/components/shared/RequestOverview";
@@ -75,7 +76,7 @@ const emptyDraft = () => ({
  * The decision is management's, and stays blank until one is made, so nothing
  * on the row can suggest an answer that has not been given.
  */
-export default function LeavesSection({ employee, canReview = true }) {
+export default function LeavesSection({ employee, canReview = true, focusId }) {
   // Shared with every other page that reads leave, so a request asked for here
   // is still there after the page moves away and back.
   const { leaves, addLeave, departmentDecision, managementDecision } = useLeaves();
@@ -361,6 +362,9 @@ export default function LeavesSection({ employee, canReview = true }) {
       },
     },
   ];
+
+  // Opened from the firm's Requests list on one request: that one, at once.
+  useFocusRecord(focusId, leaves, openReview);
 
   return (
     <div className="space-y-6">

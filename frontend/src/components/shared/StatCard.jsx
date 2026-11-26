@@ -102,7 +102,8 @@ export function StatCard({
             {mark || <Icon className="size-6" strokeWidth={1.75} aria-hidden="true" />}
           </span>
         )}
-        <span className="min-w-0 truncate text-[15px] font-semibold text-primary">
+        {/* The whole title, on two lines where the card is narrow - never cut off. */}
+        <span className="line-clamp-2 min-w-0 text-[15px] font-semibold leading-tight text-primary">
           {label}
         </span>
         {loading ? (

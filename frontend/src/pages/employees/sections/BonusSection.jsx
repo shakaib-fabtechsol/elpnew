@@ -1,3 +1,4 @@
+import useFocusRecord from "@/lib/useFocusRecord";
 import { useState } from "react";
 import { PayeeFacts } from "@/components/shared/RequestSheet";
 import { Button } from "@/components/ui/button";
@@ -120,6 +121,8 @@ export default function BonusSection({
   // The firm pays a bonus out; on the employee's own page the payment is
   // read and never recorded.
   canDecide = true,
+  // The request to open straight away (the firm's Requests list), if any.
+  focusId,
 }) {
   const { bonuses, addBonus, updateBonus, decideBonus, payBonus } = useBonuses();
   // The bonuses are loaded at sign-in: skeleton rows until they land, and
@@ -807,6 +810,9 @@ export default function BonusSection({
       </div>
     </div>
   );
+
+  // Opened from the firm's Requests list on one request: that one, at once.
+  useFocusRecord(focusId, bonuses, track);
 
   return (
     <Card>

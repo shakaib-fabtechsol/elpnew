@@ -1,3 +1,4 @@
+import useFocusRecord from "@/lib/useFocusRecord";
 import {
   Fragment,
   useState } from "react";
@@ -184,6 +185,8 @@ export default function LoansSection({
   addLabel = "Add Loan",
   // Management decides a request; on My Profile the decision is only read.
   canDecide = true,
+  // The request to open straight away (the firm's Requests list), if any.
+  focusId,
 }) {
   // A loan belongs to somebody, so a page shows only that person's.
   const [records, setRecords] = useState(() =>
@@ -917,6 +920,9 @@ export default function LoansSection({
           </div>
         </div>
   );
+
+  // Opened from the firm's Requests list on one request: that one, at once.
+  useFocusRecord(focusId, records, track);
 
   return (
     <div className="space-y-6">

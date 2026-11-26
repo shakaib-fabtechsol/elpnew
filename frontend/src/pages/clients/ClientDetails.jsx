@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import BackButton from "@/components/shared/BackButton";
+import RecordSidebar from "@/components/shared/RecordSidebar";
 import {
   UserPlus,
   Save,
@@ -17,7 +18,6 @@ import {
   Receipt,
   GitMerge,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { DEFAULT_DIAL_CODE } from "@/lib/constants";
 import { deriveClientStatus } from "@/lib/clientStatus";
 import { clientDisplayName } from "./clientRecords";
@@ -368,35 +368,23 @@ export default function ClientDetails() {
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-start">
-        {/* Section navigation */}
-        <Card className="w-full lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:w-60 lg:shrink-0 lg:overflow-y-auto">
-          <CardContent className="p-3">
-            <p className="mb-2 border-b px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Client Details
-            </p>
-            <nav className="flex flex-row lg:flex-col gap-1 overflow-x-auto">
-              {sections.map((section) => {
-                const Icon = section.icon;
-                return (
-                  <button
-                    key={section.key}
-                    type="button"
-                    onClick={() => setActiveSection(section.key)}
-                    className={cn(
-                      "flex items-center gap-2.5 text-nowrap rounded-md px-3 py-2 text-start text-sm font-medium transition-colors",
-                      activeSection === section.key
-                        ? "bg-primary text-primary-foreground"
-                        : "text-primary hover:bg-secondary"
-                    )}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    {section.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </CardContent>
-        </Card>
+        {/* Section navigation: the shared record rail, so it narrows to the
+            navy icon-and-name rail the same way as every other record. */}
+        <RecordSidebar
+          id="client"
+          backTo="/clients"
+          backLabel="All clients"
+          title={title}
+          subtitle="Client Details"
+          active={activeSection}
+          onSelect={setActiveSection}
+          groups={sections.map((section) => ({
+            key: section.key,
+            link: true,
+            label: section.label,
+            icon: section.icon,
+          }))}
+        />
 
         <div className="w-full min-w-0 flex-1 space-y-4 sm:space-y-6">
           {current.form ? (

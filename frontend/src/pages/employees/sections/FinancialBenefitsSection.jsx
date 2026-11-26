@@ -1,3 +1,4 @@
+import useFocusRecord from "@/lib/useFocusRecord";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -79,7 +80,7 @@ const money = (amount) =>
  * with one difference: the person it is paid to is this employee, so the two
  * questions about who it is for are answered before it opens.
  */
-function CommissionTab({ employee, adding, onCloseAdd, onOpenAdd, canDecide = true }) {
+function CommissionTab({ employee, adding, onCloseAdd, onOpenAdd, canDecide = true, focusId }) {
   const { clients } = useClients();
   const [records, setRecords] = useState(() => commissionsFor(employee.name));
   // The firm's commissions are loaded at sign-in: the lists below show
@@ -211,6 +212,8 @@ function CommissionTab({ employee, adding, onCloseAdd, onOpenAdd, canDecide = tr
     setOpenId(record.id);
     onOpenAdd?.();
   };
+  // Opened from the firm's Requests list on one commission: that one, at once.
+  useFocusRecord(focusId, records, track);
 
   // The list's columns, on the page and in the History window alike.
   const columns = [
@@ -428,6 +431,8 @@ export default function FinancialBenefitsSection({
   // Opened from Requests: the request's own list and nothing else - no tabs,
   // since the cards above choose, and no salary breakdown.
   listOnly = false,
+  // The request to open straight away (the firm's Requests list), if any.
+  focusId,
 }) {
   // Which tab's form is open, if any.
   const [adding, setAdding] = useState(null);
@@ -502,6 +507,7 @@ export default function FinancialBenefitsSection({
 
       {open === "salaries" && (
         <SalariesSection
+          focusId={focusId}
           employee={employee}
           adding={adding === "salaries"}
           onCloseAdd={() => setAdding(null)}
@@ -516,6 +522,7 @@ export default function FinancialBenefitsSection({
 
       {open === "bonus" && (
         <BonusSection
+          focusId={focusId}
           employee={employee}
           adding={adding === "bonus"}
           onCloseAdd={() => setAdding(null)}
@@ -527,6 +534,7 @@ export default function FinancialBenefitsSection({
 
       {open === "loans" && (
         <LoansSection
+          focusId={focusId}
           employee={employee}
           adding={adding === "loans"}
           onCloseAdd={() => setAdding(null)}
@@ -538,6 +546,7 @@ export default function FinancialBenefitsSection({
 
       {open === "assistance" && (
         <AssistanceSection
+          focusId={focusId}
           employee={employee}
           adding={adding === "assistance"}
           onCloseAdd={() => setAdding(null)}
@@ -549,6 +558,7 @@ export default function FinancialBenefitsSection({
 
       {open === "commission" && (
         <CommissionTab
+          focusId={focusId}
           employee={employee}
           adding={adding === "commission"}
           onCloseAdd={() => setAdding(null)}

@@ -1,3 +1,4 @@
+import useFocusRecord from "@/lib/useFocusRecord";
 import {
   useState } from "react";
 import SalaryLedger from "./SalaryLedger";
@@ -381,6 +382,8 @@ export default function SalariesSection({
   advance = false,
   // Opened from Requests: the salary advances alone.
   advanceOnly = false,
+  // The advance to open straight away (the firm's Requests list), if any.
+  focusId,
 }) {
   // Opened on what the employee is already paid, so the page shows the salary
   // in force rather than a blank form somebody has to fill in from memory.
@@ -436,6 +439,11 @@ export default function SalariesSection({
   const [openAdvanceId, setOpenAdvanceId] = useState(null);
   // A new advance asked for from the employee's record rather than My Profile.
   const [newAdvance, setNewAdvance] = useState(false);
+  // Opened from the firm's Requests list on one advance: that one, at once.
+  useFocusRecord(focusId, advances, (request) => {
+    setOpenAdvanceId(request.id);
+    onOpenAdd?.();
+  });
 
   const openRequest = history.find((row) => row.id === openId) || null;
   const settled = Boolean(openRequest?.salaryNo);

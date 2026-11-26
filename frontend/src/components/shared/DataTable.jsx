@@ -101,6 +101,13 @@ export default function DataTable({
   showExport = true,
   // The Columns menu, for choosing which columns show.
   showColumns = true,
+  /**
+   * "sheet": the table as the client's Employees sheet draws it - centred
+   * bold headings, a thin rule between columns, plain white rows, content in
+   * the middle of each cell, and the Additional Columns strip as a box of its
+   * own under the table. A column says `align: "center"` to centre its cells.
+   */
+  look,
   itemLabel,
   exportFileName = "export.csv",
   onAdd,
@@ -635,7 +642,9 @@ export default function DataTable({
                         className={cn(
                           // Top, not middle: where one heading wraps, the
                           // short ones beside it still start on its first line.
-                          "px-4 py-3 text-start align-top text-[13px] font-semibold text-table-head-ink",
+                          look === "sheet"
+                            ? "border-e border-container-border px-4 py-3 text-center align-middle text-[15px] font-bold text-primary last:border-e-0"
+                            : "px-4 py-3 text-start align-top text-[13px] font-semibold text-table-head-ink",
                           column.className
                         )}
                         style={{ width: column.width }}
@@ -739,7 +748,7 @@ export default function DataTable({
                           // headings than the rows below start from each
                           // other, so it does not read as part of them.
                           "[&:first-child>td]:pt-5",
-                          "even:bg-table-zebra hover:bg-table-row-hover",
+                          look === "sheet" ? "hover:bg-table-row-hover" : "even:bg-table-zebra hover:bg-table-row-hover",
                           onRowClick && "cursor-pointer"
                         )}
                         onClick={() => onRowClick && onRowClick(row)}
@@ -748,7 +757,12 @@ export default function DataTable({
                           <TableCell
                             key={column.key}
                             className={cn(
-                              "px-4 py-4 align-top text-start text-sm",
+                              look === "sheet"
+                                ? cn(
+                                    "border-e border-container-border px-4 py-3 align-middle text-sm last:border-e-0",
+                                    column.align === "center" ? "text-center" : "text-start"
+                                  )
+                                : "px-4 py-4 align-top text-start text-sm",
                               column.cellClassName
                             )}
                           >
@@ -772,7 +786,14 @@ export default function DataTable({
           where they are offered. The same choice as in Columns - turning one
           on here ticks it there. */}
       {optionalColumns.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 border-t border-container-border bg-slate-50/70 px-4 py-3">
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-3",
+            look === "sheet"
+              ? "m-4 rounded-xl border border-container-border bg-slate-50 px-4 py-3"
+              : "border-t border-container-border bg-slate-50/70 px-4 py-3"
+          )}
+        >
           <p className="flex items-center gap-2 text-sm font-semibold text-primary">
             <EyeOff className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
             Additional Columns

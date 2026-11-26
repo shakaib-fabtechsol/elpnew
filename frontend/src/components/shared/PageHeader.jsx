@@ -23,6 +23,8 @@ export default function PageHeader({
   title,
   note,
   onAdd,
+  // "add" (outline, the default) or "default" (filled navy) where a design asks for it.
+  addVariant = "add",
   addLabel = "Add",
   action,
   className,
@@ -109,7 +111,7 @@ export default function PageHeader({
           <div className="flex shrink-0 items-center gap-2">
             {action}
             {onAdd && (
-              <Button type="button" variant="add" onClick={onAdd}>
+              <Button type="button" variant={addVariant} onClick={onAdd}>
                 <Plus className="me-2 h-4 w-4" />
                 {addLabel}
               </Button>

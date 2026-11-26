@@ -1,3 +1,4 @@
+import useFocusRecord from "@/lib/useFocusRecord";
 import {
   useState } from "react";
 import { PayeeFacts } from "@/components/shared/RequestSheet";
@@ -120,6 +121,8 @@ export default function AssistanceSection({
   addLabel = "Add Assistance",
   // Management decides a request; on My Profile the decision is only read.
   canDecide = true,
+  // The request to open straight away (the firm's Requests list), if any.
+  focusId,
 }) {
   const [records, setRecords] = useState(assistanceRecords);
   // The requests are loaded at sign-in: the lists show skeleton rows until
@@ -956,6 +959,9 @@ export default function AssistanceSection({
         </div>
       </div>
   );
+
+  // Opened from the firm's Requests list on one request: that one, at once.
+  useFocusRecord(focusId, records, track);
 
   return (
     <Card>

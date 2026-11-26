@@ -145,8 +145,11 @@ import PerformanceSection from "./sections/PerformanceSection";
 import { DevelopmentPlan, EvaluationsPanel, ManagementOverview, TeamInsights } from "./sections/EmployeeManagementPanels";
 import ViolationsSection from "./sections/ViolationsSection";
 import EmployeeCircularsSection from "./sections/CircularsSection";
+import EmployeeOffboardingSection from "@/pages/offboarding/EmployeeOffboardingSection";
+import { UserMinus as OffboardingIcon } from "lucide-react";
 import LeavesSection from "./sections/LeavesSection";
 import SmartRequest from "./sections/SmartRequest";
+import MyRequests from "./sections/MyRequests";
 import { can } from "@/lib/access";
 import SystemPermissionsSection from "./sections/SystemPermissionsSection";
 import { createdRequest } from "@/lib/api/modules/unified";
@@ -289,7 +292,7 @@ const SECTIONS = [
     key: "circulars",
     label: "Circulars",
     icon: Megaphone,
-    note: "Notices addressed to this employee",
+    note: "Stay informed with the latest announcements, updates and internal circulars.",
   },
   {
     // The firm's own running record of the employee - the day's work, how it
@@ -334,6 +337,15 @@ const SECTIONS = [
     note: "What this employee may see and change",
     notOnOwnProfile: true,
   },
+  {
+    // Employees 4 #3: End of Service - the offboarding cases on this file,
+    // and the way to start one (or, on My Profile, to resign).
+    noSave: true,
+    key: "offboarding",
+    label: "End of Service",
+    icon: OffboardingIcon,
+    note: "Resignation, termination, clearance and final settlement",
+  },
 ];
 
 /**
@@ -369,6 +381,7 @@ const SECTION_GROUPS = [
   { key: "circulars", link: true },
   { key: "management", link: true },
   { key: "permissions", link: true },
+  { key: "offboarding", link: true },
   {
     key: "dossier",
     label: "Employee Dossier",
@@ -1493,6 +1506,15 @@ const toFormData = (record) =>
  * page rather than a second one built beside it: the same sections, the
  * same sidebar, the same code - only the record differs.
  */
+/**
+ * Back to the top of the form: of the Add Employee pop-up while adding (the
+ * pop-up is what scrolls then), of the page otherwise.
+ */
+const scrollToTop = () => {
+  const box = document.getElementById("add-employee-dialog");
+  (box || window).scrollTo({ top: 0, behavior: "smooth" });
+};
+
 export default function EmployeeForm({ self }) {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -2036,8 +2058,12 @@ export default function EmployeeForm({ self }) {
   // own, or the one that request is kept on.
   const requestItem = REQUEST_ITEMS.find((item) => item.key === requestsTab) || null;
   const isManagement = isEditMode && !self && activeSection === "management";
+  // On My Profile, Requests is the one list of every request (MyRequests);
+  // the per-kind screens below are for management on someone's record.
   const shownSection = isRequests
-    ? requestItem?.section
+    ? self
+      ? null
+      : requestItem?.section
     : isManagement
       ? managementTab
       : activeSection;
@@ -2125,7 +2151,7 @@ export default function EmployeeForm({ self }) {
           )
         );
         setStep(stepOfPart(fieldStep(fields[0])));
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        scrollToTop();
       }
       return;
     }
@@ -2210,7 +2236,7 @@ export default function EmployeeForm({ self }) {
       if (intake.missingKeys.length) {
         setFinalTried(true);
         setStep(stepOfPart(fieldStep(intake.missingKeys[0])));
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        scrollToTop();
         return;
       }
       // Complete: the record is made, with its papers, and opened.
@@ -2220,7 +2246,7 @@ export default function EmployeeForm({ self }) {
       return;
     }
     setStep(next.key);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToTop();
   };
 
   /**
@@ -2234,7 +2260,7 @@ export default function EmployeeForm({ self }) {
     if (intake.missingKeys.length) {
       setFinalTried(true);
       setStep(stepOfPart(fieldStep(intake.missingKeys[0])));
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      scrollToTop();
       return;
     }
     setSaving(true);
@@ -2252,7 +2278,7 @@ export default function EmployeeForm({ self }) {
   const continueFromIntake = () => {
     setSavedSteps((prev) => (prev.includes("setup") ? prev : [...prev, "setup"]));
     setStep("personal");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToTop();
   };
 
   // The steps on the bar: every one that applies to what has been saved.
@@ -2657,9 +2683,26 @@ export default function EmployeeForm({ self }) {
             </div>
           )}
 
+          {/* My Profile: the employee's own requests, all kinds in one list,
+              and Add Request (Smart Request or a type chosen by hand). */}
+          {isRequests && self && (
+            <div className="space-y-3">
+              <nav aria-label="Breadcrumb" className="text-sm">
+                <span className="text-primary/60">My Profile</span>
+                <span aria-hidden="true" className="px-2 text-primary/40">/</span>
+                <span className="font-semibold text-primary" aria-current="page">Requests</span>
+              </nav>
+              <MyRequests
+                employee={record}
+                onBack={() => selectSection(requestsBack.key)}
+                backLabel={requestsBack.label}
+              />
+            </div>
+          )}
+
           {/* Requests heads its own page: the way back to the employee's
               information, then its mark and its name. */}
-          {isRequests && (
+          {isRequests && !self && (
             <div className="space-y-3">
             <nav aria-label="Breadcrumb" className="text-sm">
               <span className="text-primary/60">{self ? "My Profile" : "Administration"}</span>
@@ -2710,7 +2753,7 @@ export default function EmployeeForm({ self }) {
           {/* Every kind of request in one row, each its mark in a box and its
               name under it, joined like steps. The chosen kind's box is lit
               and the line either side of it is drawn in navy. */}
-          {isRequests && (() => {
+          {isRequests && !self && (() => {
             const chosenIndex = REQUEST_CATEGORIES.findIndex((c) => c.key === requestCategory);
             return (
             <nav
@@ -2769,7 +2812,7 @@ export default function EmployeeForm({ self }) {
           {/* The chosen category's kinds, as tabs. Each kind opens on an
               overview of its own - its counts and the AI's reading are in
               it - so nothing here says them a second time. */}
-          {isRequests && (() => {
+          {isRequests && !self && (() => {
             const category = REQUEST_CATEGORIES.find((c) => c.key === requestCategory);
             if (!category) return null;
             return (
@@ -2887,7 +2930,7 @@ export default function EmployeeForm({ self }) {
                   photoUrl={photoUrl}
                   onEditSetup={() => {
                     setStep("setup");
-                    window.scrollTo({ top: 0, behavior: "smooth" });
+                    scrollToTop();
                   }}
                 />
               )}
@@ -2917,7 +2960,7 @@ export default function EmployeeForm({ self }) {
           <Card
             className={cn(
               (isInfo || isDocuments || isRequests) && "border-0 bg-transparent shadow-none",
-              isRequests && !requestItem && "hidden",
+              isRequests && (self || !requestItem) && "hidden",
               isManagement && !managementTab && "hidden"
             )}
           >
@@ -4802,7 +4845,7 @@ export default function EmployeeForm({ self }) {
 
                 {/* A request with no page of its own yet says so, rather
                     than having one made up for it. */}
-                {isRequests && requestItem && !requestItem.section && (
+                {isRequests && !self && requestItem && !requestItem.section && (
                   <EmptyState>{requestItem.label} requests are not set up yet.</EmptyState>
                 )}
 
@@ -4846,6 +4889,7 @@ export default function EmployeeForm({ self }) {
 
                 {/* What this employee may see and do, set by an administrator. */}
                 {activeSection === "permissions" && <SystemPermissionsSection key={record.id} employee={record} />}
+                {activeSection === "offboarding" && <EmployeeOffboardingSection key={record.id} employee={record} self={self} />}
 
                 {/* Save at the end of what it saves, where the last field
                     leaves off. A section that saves its own records has

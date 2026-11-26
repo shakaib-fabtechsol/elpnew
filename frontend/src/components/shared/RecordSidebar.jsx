@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Menu } from "lucide-react";
@@ -27,22 +27,56 @@ import { cn } from "@/lib/utils";
  */
 
 /** What is open, remembered for as long as the tab is. */
-function remembered(id, fallback) {
+function remembered(id, fallback, local = false) {
   try {
-    const held = sessionStorage.getItem("sadeed.sidebar." + id);
+    const held = (local ? localStorage : sessionStorage).getItem("sadeed.sidebar." + id);
     return held ? JSON.parse(held) : fallback;
   } catch {
     return fallback;
   }
 }
 
-function remember(id, value) {
+function remember(id, value, local = false) {
   try {
-    sessionStorage.setItem("sadeed.sidebar." + id, JSON.stringify(value));
+    (local ? localStorage : sessionStorage).setItem("sadeed.sidebar." + id, JSON.stringify(value));
   } catch {
     /* A tab that will not store this still has to navigate. */
   }
 }
+
+/** Whether the page is wide enough for the rail to stand beside it. */
+const WIDE = "(min-width: 1024px)";
+function useWide() {
+  const [wide, setWide] = useState(
+    () => typeof window !== "undefined" && window.matchMedia?.(WIDE).matches
+  );
+  useEffect(() => {
+    const query = window.matchMedia?.(WIDE);
+    if (!query) return undefined;
+    const change = () => setWide(query.matches);
+    change();
+    query.addEventListener("change", change);
+    return () => query.removeEventListener("change", change);
+  }, []);
+  return wide;
+}
+
+/** A focus ring that still shows against the navy of the narrowed rail. */
+const NAVY_FOCUS =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b2447]";
+
+/**
+ * One entry of the narrowed rail: the icon, and the section's name centred
+ * under it - small, but whole, wrapping to a second line rather than cut.
+ */
+const railItem = (current) =>
+  cn(
+    "relative flex w-full flex-col items-center gap-1.5 rounded-md px-1.5 py-2.5 text-center text-[11px] font-medium leading-tight transition-colors",
+    NAVY_FOCUS,
+    current
+      ? "bg-[#19376d] font-semibold text-white before:absolute before:inset-y-2 before:start-0 before:w-[3px] before:rounded-full before:bg-white"
+      : "text-white/80 hover:bg-white/10 hover:text-white"
+  );
 
 /** One link under a group: the name, and a count where the model gives one. */
 function Child({ item, active, reachable, onSelect }) {
@@ -101,7 +135,18 @@ export default function RecordSidebar({
     groups.find((group) => !group.link && group.items.some((item) => item.key === key));
 
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  // One setting for every record rail in the app: narrowed on one page, the
+  // next page opens narrowed too. It only takes effect where the rail stands
+  // beside the page (1024px and up); below that the rail is a full list or a
+  // panel, and there is nothing to narrow.
+  const [collapsed, setCollapsed] = useState(() => remembered("collapsed", false, true));
+  const wide = useWide();
+  const narrowed = collapsed && wide;
+  const toggleCollapsed = () =>
+    setCollapsed((was) => {
+      remember("collapsed", !was, true);
+      return !was;
+    });
   // Opens on whatever was already showing, so the first thing anybody sees is
   // where they are - and falls back to the first group for a fresh record.
   const [open, setOpen] = useState(() =>
@@ -231,18 +276,53 @@ export default function RecordSidebar({
 
     <nav
       aria-label={title ? title + " sections" : "Record sections"}
+      data-collapsed={narrowed ? "true" : undefined}
       className={cn(
-        "hidden w-full shrink-0 self-start rounded-container border border-container-border bg-card md:block",
+        "hidden w-full shrink-0 self-start rounded-container border md:block",
         // Full height rather than only as tall as its links: a rail that stops
-        // short reads as a box that failed to load, and the narrowed rail -
-        // three icons and nothing else - stops shortest of all.
+        // short reads as a box that failed to load.
         "lg:sticky lg:top-[88px] lg:h-[calc(100vh-104px)] lg:overflow-y-auto",
-        collapsed ? "lg:w-16" : "lg:w-[312px]",
+        // Employees 4 #1: narrowed, the rail turns navy at once and keeps
+        // every section's name under its icon - wide enough that two short
+        // lines of label sit there whole rather than cut off.
+        narrowed
+          ? "border-[#0b2447] bg-[#0b2447] text-white lg:w-[108px]"
+          : "border-container-border bg-card lg:w-[312px]",
         className
       )}
     >
-      <div className={cn("p-4", collapsed && "lg:px-2")}>
-        {backTo && !collapsed && (
+      {narrowed ? (
+        <div className="flex flex-col items-center gap-2 p-2">
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-expanded={false}
+            title="Expand navigation"
+            className={cn(
+              "flex size-8 items-center justify-center rounded-md border border-white/30 text-white transition-colors hover:bg-white/10",
+              NAVY_FOCUS
+            )}
+          >
+            <ChevronRight className="size-4 rtl:rotate-180" />
+            <span className="sr-only">Expand navigation</span>
+          </button>
+          {backTo && (
+            <Link
+              to={backTo}
+              title={backLabel}
+              className={cn(
+                "flex w-full flex-col items-center gap-1 rounded-md px-1 py-1.5 text-center text-[11px] leading-tight text-white/70 transition-colors hover:bg-white/10 hover:text-white",
+                NAVY_FOCUS
+              )}
+            >
+              <ArrowLeft className="size-4 rtl:rotate-180" aria-hidden="true" />
+              <span className="break-words">Back</span>
+            </Link>
+          )}
+        </div>
+      ) : (
+      <div className="p-4">
+        {backTo && (
           <Link
             to={backTo}
             className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-primary"
@@ -253,62 +333,48 @@ export default function RecordSidebar({
         )}
 
         <div className="flex items-start justify-between gap-2">
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="truncate text-lg font-bold text-primary">{title}</p>
-              {subtitle && (
-                <p className="truncate text-sm text-muted-foreground">{subtitle}</p>
-              )}
-            </div>
-          )}
+          <div className="min-w-0">
+            <p className="truncate text-lg font-bold text-primary">{title}</p>
+            {subtitle && (
+              <p className="truncate text-sm text-muted-foreground">{subtitle}</p>
+            )}
+          </div>
           <button
             type="button"
-            onClick={() => setCollapsed((was) => !was)}
-            aria-expanded={!collapsed}
-            title={collapsed ? "Expand navigation" : "Collapse navigation"}
+            onClick={toggleCollapsed}
+            aria-expanded
+            title="Collapse navigation"
             className="hidden size-8 shrink-0 items-center justify-center rounded-md border border-container-border text-primary transition-colors hover:bg-menu-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:flex"
           >
-            {collapsed ? (
-              <ChevronRight className="size-4 rtl:rotate-180" />
-            ) : (
-              <ChevronLeft className="size-4 rtl:rotate-180" />
-            )}
-            <span className="sr-only">
-              {collapsed ? "Expand navigation" : "Collapse navigation"}
-            </span>
+            <ChevronLeft className="size-4 rtl:rotate-180" />
+            <span className="sr-only">Collapse navigation</span>
           </button>
         </div>
       </div>
+      )}
 
       <div
         className={cn(
-          "space-y-1 border-t border-container-border p-2",
-          collapsed && "lg:px-1"
+          "space-y-1 border-t p-2",
+          narrowed ? "border-white/15 px-1.5" : "border-container-border"
         )}
       >
         {groups.map((group) => {
           const Icon = group.icon;
 
           if (group.link) {
-            // Narrowed to icons, a section of its own is just its icon.
-            if (collapsed) {
+            // Narrowed, a section of its own is its icon with its name under it.
+            if (narrowed) {
               return (
                 <button
                   key={group.key}
                   type="button"
-                  title={group.label}
                   onClick={() => select(group.key)}
                   aria-current={active === group.key ? "page" : undefined}
-                  className={cn(
-                    "hidden size-12 items-center justify-center rounded-md border-s-[3px] transition-colors lg:flex",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                    active === group.key
-                      ? "border-s-primary bg-menu-selected text-primary"
-                      : "border-s-transparent text-primary hover:bg-menu-hover"
-                  )}
+                  className={railItem(active === group.key)}
                 >
-                  {Icon && <Icon strokeWidth={1.5} className="size-5" />}
-                  <span className="sr-only">{group.label}</span>
+                  {Icon && <Icon strokeWidth={1.5} className="size-5 shrink-0" aria-hidden="true" />}
+                  <span className="w-full break-words">{group.label}</span>
                 </button>
               );
             }
@@ -318,29 +384,17 @@ export default function RecordSidebar({
           const expanded = isOpen(group.key);
           const holds = group.items.some((item) => item.key === active);
 
-          // Narrowed to icons, a group's children are read in a popover rather
-          // than lost: an icon alone says nothing about what sits under it.
-          if (collapsed) {
+          // Narrowed, a group still shows its icon and name; what sits under
+          // it is read in a popover rather than lost.
+          if (narrowed) {
             return (
               // Not modal: this is navigation, so the Tab key carries on past
               // it into the page rather than being held inside the panel.
               <PopoverPrimitive.Root key={group.key} modal={false}>
                 <PopoverPrimitive.Trigger asChild>
-                  <button
-                    type="button"
-                    title={group.label}
-                    className={cn(
-                      "hidden size-12 items-center justify-center rounded-md border-s-[3px] transition-colors lg:flex",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                      // The navy edge marks where the reader actually is,
-                      // the same mark the expanded list uses.
-                      holds
-                        ? "border-s-primary bg-menu-selected text-primary"
-                        : "border-s-transparent text-primary hover:bg-menu-hover"
-                    )}
-                  >
-                    {Icon && <Icon strokeWidth={1.5} className="size-5" />}
-                    <span className="sr-only">{group.label}</span>
+                  <button type="button" className={railItem(holds)}>
+                    {Icon && <Icon strokeWidth={1.5} className="size-5 shrink-0" aria-hidden="true" />}
+                    <span className="w-full break-words">{group.label}</span>
                   </button>
                 </PopoverPrimitive.Trigger>
                 <PopoverPrimitive.Portal>
@@ -364,7 +418,7 @@ export default function RecordSidebar({
                         onSelect={select}
                       />
                     ))}
-                    {/* Points back at the icon it belongs to, so a panel
+                    {/* Points back at the item it belongs to, so a panel
                         shifted to stay on screen still says where it came
                         from. */}
                     <PopoverPrimitive.Arrow

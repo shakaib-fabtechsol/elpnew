@@ -1,3 +1,4 @@
+import useFocusRecord from "@/lib/useFocusRecord";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -90,6 +91,8 @@ export default function GeneralRequestSection({
   employee,
   kind = "general",
   canDecide = true,
+  // The request to open straight away (the firm's Requests list), if any.
+  focusId,
 }) {
   const sort = REQUEST_KINDS[kind] || REQUEST_KINDS.general;
   const [requests, setRequests] = useState(initialGeneralRequests);
@@ -303,6 +306,9 @@ export default function GeneralRequestSection({
       { key: "requestType", label: sort.typeLabel },
     ],
   };
+
+  // Opened from the firm's Requests list on one request: that one, at once.
+  useFocusRecord(focusId, requests, track);
 
   return (
     <div className="space-y-6">

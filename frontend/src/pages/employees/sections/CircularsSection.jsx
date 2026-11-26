@@ -9,73 +9,274 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
   RecordTable,
   HeadRow,
   Th,
   EmptyRow,
   SkeletonRows,
   ErrorRow,
+  RecordLink,
 } from "@/components/shared/RecordTable";
+import { StatCard, StatCards } from "@/components/shared/StatCard";
+import FilterPanel from "@/components/shared/FilterPanel";
+import { filterChips, withoutChip } from "@/lib/filterChips";
 import useDataset from "@/lib/api/useDataset";
 import AiSearch from "@/components/shared/AiSearch";
-import { Check, Sparkles } from "lucide-react";
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Columns3,
+  Eye,
+  FileText,
+  Info,
+  Megaphone,
+  Target,
+  Users,
+  X,
+} from "lucide-react";
 import CircularBrief from "@/components/shared/CircularBrief";
 import { cn } from "@/lib/utils";
 import { toCsv, downloadCsv } from "@/lib/csv";
+import { useTableSort } from "@/lib/sorting";
 import {
   useCirculars,
   circularsFor,
   acknowledgementBy,
   groupOf,
   ACTIVE,
-  STATUS_LABEL,
-  STATUS_TONE,
+  CANCELLED,
+  TARGET_GROUPS,
+  ALL_EMPLOYEES,
   formatDate,
+  today,
 } from "@/lib/circulars/context";
 import { CURRENT_USER } from "@/pages/dashboard/dashboardData";
 import { shortName } from "@/lib/shortName";
 
 /**
- * The circulars this one employee is addressed by.
+ * Employees 4 #2 - the circulars one employee is addressed by.
  *
  * Only their own acknowledgement is shown. How many other people have read a
- * circular, and which of them have not, is the firm's business and not a
- * colleague's - so the count and the details that appear on the Company
- * Profile page are deliberately absent here.
+ * circular is the firm's business and not a colleague's, so the counts and
+ * the read list on the Company Profile page are deliberately absent here.
+ *
+ * Every circular wears this employee's standing on it:
+ *   Unread        in force, and not yet acknowledged by them
+ *   Acknowledged  acknowledged by them (whatever happened to it since)
+ *   Completed     superseded by a later version before they acknowledged it
+ *   Cancelled     withdrawn before they acknowledged it
+ *
+ * The list opens with the unread ones on top - from every department, since
+ * an unread circular is the one that asks something of the reader - and the
+ * rest under them, newest first - always, as the design's note says. Sorting
+ * a column sorts the rows inside each of the two groups.
  */
-export default function EmployeeCircularsSection({ employee, self = false }) {
+
+const UNREAD = "Unread";
+const ACKNOWLEDGED = "Acknowledged";
+const COMPLETED_MINE = "Completed";
+const CANCELLED_MINE = "Cancelled";
+
+const STANDINGS = [UNREAD, ACKNOWLEDGED, COMPLETED_MINE, CANCELLED_MINE];
+
+/** How each standing is drawn: a soft pill with a dot or a tick. */
+const STANDING_PILL = {
+  [UNREAD]: { pill: "bg-blue-50 text-blue-700", mark: "dot", dot: "bg-blue-600" },
+  [ACKNOWLEDGED]: { pill: "bg-emerald-50 text-emerald-700", mark: "tick" },
+  [COMPLETED_MINE]: { pill: "bg-slate-100 text-slate-600", mark: "tick" },
+  [CANCELLED_MINE]: { pill: "bg-red-50 text-red-700", mark: "dot", dot: "bg-red-600" },
+};
+
+function StandingPill({ standing }) {
+  const look = STANDING_PILL[standing];
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-semibold",
+        look.pill
+      )}
+    >
+      {look.mark === "dot" ? (
+        <span aria-hidden="true" className={cn("size-2 rounded-full", look.dot)} />
+      ) : (
+        <CheckCircle2 className="size-3.5" aria-hidden="true" />
+      )}
+      {standing}
+    </span>
+  );
+}
+
+/**
+ * A circular's subject and the rest of it.
+ *
+ * Circulars are issued as one body of text, so the subject is its first
+ * sentence and the excerpt what follows - or, for a one-sentence circular,
+ * the sentence itself.
+ */
+function splitContent(content) {
+  const text = String(content || "").trim();
+  const match = text.match(/^(.+?[.!?])\s+(.+)$/s);
+  if (!match) return { subject: text, excerpt: "" };
+  return { subject: match[1].replace(/[.]$/, ""), excerpt: match[2] };
+}
+
+/** "2026-11" for a "2026-11-27". */
+const monthOf = (date) => String(date || "").slice(0, 7);
+
+/** Whole percentages of a total, never a division by nothing. */
+const percent = (part, whole) => (whole ? Math.round((part / whole) * 100) : 0);
+
+/** The date filter's windows, counted back from today. */
+const DATE_WINDOWS = {
+  month: (date) => monthOf(date) === monthOf(today()),
+  quarter: (date) => {
+    const from = new Date();
+    from.setMonth(from.getMonth() - 3);
+    return date >= from.toISOString().slice(0, 10);
+  },
+  year: (date) => String(date).slice(0, 4) === today().slice(0, 4),
+};
+
+const FILTER_FIELDS = [
+  {
+    key: "targetGroup",
+    label: "Target Group",
+    icon: Target,
+    type: "checkbox",
+    options: TARGET_GROUPS.map((group) => ({ value: group, label: group })),
+  },
+  {
+    key: "standing",
+    label: "Status",
+    icon: CheckCircle2,
+    type: "checkbox",
+    options: STANDINGS.map((one) => ({ value: one, label: one })),
+  },
+  {
+    key: "date",
+    label: "Date",
+    icon: CalendarDays,
+    options: [
+      { value: "all", label: "Any date" },
+      { value: "month", label: "This month" },
+      { value: "quarter", label: "Last 3 months" },
+      { value: "year", label: "This year" },
+    ],
+  },
+];
+
+/** The columns, as the table, the Columns menu, sorting and Excel read them. */
+const COLUMNS = [
+  { key: "circularNo", header: "Circular No.", hideable: false, sort: "text" },
+  {
+    key: "subject",
+    header: "Subject / Content",
+    hideable: false,
+    sort: "text",
+    exportValue: (row) => row.content,
+  },
+  { key: "date", header: "Date", sort: "date", exportValue: (row) => formatDate(row.date) },
+  { key: "targetGroup", header: "Target Group", sort: "text" },
+  {
+    key: "standing",
+    header: "Status",
+    sort: "status",
+    sortOrder: STANDINGS.map((one) => one.toLowerCase()),
+  },
+];
+
+const SORTING = Object.fromEntries(COLUMNS.map((column) => [column.key, column]));
+
+export default function EmployeeCircularsSection({ employee }) {
   const { circulars, acknowledge } = useCirculars();
   // The circulars are loaded at sign-in; read here, where the rows are drawn,
   // so the table shows them coming, or that they could not be fetched.
   const dataset = useDataset(["circulars"]);
 
   const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [hidden, setHidden] = useState(
+    () => new Set(COLUMNS.filter((column) => column.hidden).map((column) => column.key))
+  );
+  // The circular open in front of the list, if one is.
+  const [openId, setOpenId] = useState(null);
+  const [busy, setBusy] = useState(false);
 
   // An acknowledgement is recorded against whoever is signed in, so it can
   // only be given from their own record.
   const own = employee?.id != null && employee.id === CURRENT_USER.employeeId;
-  // The circular whose AI brief is open under its row, if one is.
-  const [briefOf, setBriefOf] = useState(null);
 
   const group = groupOf(employee);
-  const mine = circularsFor(circulars, group);
+
+  /** Every circular addressed to this employee, with their standing on it. */
+  const mine = circularsFor(circulars, group).map((circular) => {
+    const ack = acknowledgementBy(circular, employee.name);
+    const standing = ack
+      ? ACKNOWLEDGED
+      : circular.status === ACTIVE
+        ? UNREAD
+        : circular.status === CANCELLED
+          ? CANCELLED_MINE
+          : COMPLETED_MINE;
+    return { ...circular, ...splitContent(circular.content), ack, standing };
+  });
+
+  // The figures across the top, counted off the same rows the table shows.
+  const total = mine.length;
+  const thisMonth = mine.filter((c) => monthOf(c.date) === monthOf(today())).length;
+  const unread = mine.filter((c) => c.standing === UNREAD).length;
+  const department = mine.filter((c) => c.targetGroup !== ALL_EMPLOYEES).length;
+  const acknowledged = mine.filter((c) => c.standing === ACKNOWLEDGED).length;
 
   const search = query.trim().toLowerCase();
-  const found = mine.filter((c) =>
-    !search
-      ? true
-      : [c.circularNo, c.content, c.targetGroup, c.issuedBy]
-          .join(" ")
-          .toLowerCase()
-          .includes(search)
-  );
+  const found = mine.filter((c) => {
+    if (
+      search &&
+      ![c.circularNo, c.content, c.targetGroup, c.issuedBy]
+        .join(" ")
+        .toLowerCase()
+        .includes(search)
+    )
+      return false;
+    if (filters.targetGroup?.length && !filters.targetGroup.includes(c.targetGroup)) return false;
+    if (filters.standing?.length && !filters.standing.includes(c.standing)) return false;
+    if (filters.date && filters.date !== "all" && !DATE_WINDOWS[filters.date](c.date)) return false;
+    return true;
+  });
 
-  // The ones still in force first; superseded and cancelled ones under them.
+  const { rows: sorted, sort, sortProps } = useTableSort(found, SORTING);
+
+  // Unread from every department first, then the rest - always. Within each
+  // group the rows are newest first, or in the order of the column sorted.
+  const grouped = true;
+  const byDateDesc = (a, b) => b.date.localeCompare(a.date) || b.id - a.id;
+  const ordered = sort ? sorted : [...found].sort(byDateDesc);
   const listed = [
-    ...found.filter((c) => c.status === ACTIVE),
-    ...found.filter((c) => c.status !== ACTIVE),
+    ...ordered.filter((c) => c.standing === UNREAD),
+    ...ordered.filter((c) => c.standing !== UNREAD),
   ];
 
   const totalPages = Math.max(1, Math.ceil(listed.length / pageSize));
@@ -83,255 +284,433 @@ export default function EmployeeCircularsSection({ employee, self = false }) {
   const start = (currentPage - 1) * pageSize;
   const shown = listed.slice(start, start + pageSize);
 
-  // Only this employee's own acknowledgement goes into the file, for the same
-  // reason only theirs is on screen.
-  const ownAcknowledgement = (circular) => {
-    const ack = acknowledgementBy(circular, employee.name);
-    return ack ? "Acknowledged " + ack.at : "Not acknowledged";
+  const shownColumns = COLUMNS.filter((column) => !hidden.has(column.key));
+  const colSpan = shownColumns.length + 1;
+  const showing = (key) => !hidden.has(key);
+
+  const chips = filterChips(FILTER_FIELDS, filters);
+  const narrow = (next) => {
+    setFilters(next);
+    setPage(1);
   };
 
-  const exportCirculars = () =>
+  const exportRows = (rows) =>
     downloadCsv(
       toCsv(
         [
-          { key: "circularNo", header: "Circular No." },
-          { key: "content", header: "Subject / Content" },
-          { key: "date", header: "Date", exportValue: (r) => formatDate(r.date) },
-          { key: "targetGroup", header: "Target Group" },
-          { key: "issuedBy", header: "Issued By" },
+          ...shownColumns,
+          // Only this employee's own acknowledgement goes into the file, for
+          // the same reason only theirs is on screen.
           {
-            key: "acknowledgement",
-            header: "Acknowledgement",
-            exportValue: ownAcknowledgement,
+            key: "acknowledgedAt",
+            header: "Acknowledged At",
+            exportValue: (row) => row.ack?.at || "",
           },
-          // The file that leaves with the employee carries what they can
-          // see on the page, and nothing they cannot.
-          ...(self
-            ? []
-            : [
-                {
-                  key: "status",
-                  header: "Status",
-                  exportValue: (r) => STATUS_LABEL[r.status],
-                },
-              ]),
         ],
-        listed
+        rows
       ),
       "my-circulars.csv"
     );
 
+  const opened = mine.find((c) => c.id === openId) || null;
+  const confirm = async () => {
+    if (!opened || busy) return;
+    setBusy(true);
+    try {
+      await acknowledge(opened.id);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const status = dataset.status;
+  const pct = (n) => (status === "ready" ? percent(n, total) + "% of total" : "");
+
+  /** A group's heading row, where the grouped order starts a group on this page. */
+  const groupHeading = (row, index) => {
+    if (!grouped) return null;
+    const previous = index === 0 ? null : shown[index - 1];
+    const isUnread = row.standing === UNREAD;
+    if (previous && (previous.standing === UNREAD) === isUnread) return null;
+    const Icon = isUnread ? Eye : Clock3;
+    return (
+      <tr className="border-b border-container-border bg-blue-50/70">
+        <td colSpan={colSpan} className="px-4 py-2">
+          <span className="flex items-center gap-2 text-[13px] font-semibold text-blue-700">
+            <Icon className="size-4" aria-hidden="true" />
+            {isUnread ? "Unread Circulars (All Departments)" : "Other Circulars (Latest First)"}
+          </span>
+        </td>
+      </tr>
+    );
+  };
+
   return (
     <div className="space-y-4">
-      {/* No heading of its own: the page above is already called Circulars,
-          and a second one would be the same word twice. */}
-
-      {/* The same toolbar every table in the system has: search on the left,
-          page size and export on the right - kept inside the page's own width
-          so neither is pushed past its edge. */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <AiSearch
-          value={query}
-          onChange={(value) => {
-            setQuery(value);
-            setPage(1);
-          }}
-          placeholder="Ask about circulars..."
+      <StatCards count={5}>
+        <StatCard
+          icon={FileText}
+          tone="blue"
+          label="Total Circulars"
+          value={total}
+          status={status}
+          note={{ text: "+" + thisMonth + " this month", icon: "trend" }}
         />
+        <StatCard
+          icon={Eye}
+          tone="green"
+          label="Unread Circulars"
+          value={unread}
+          status={status}
+          note={{ text: pct(unread), icon: "dot", tone: "orange" }}
+          onClick={() =>
+            narrow(
+              filters.standing?.length === 1 && filters.standing[0] === UNREAD
+                ? withoutChip(filters, { field: "standing", option: UNREAD })
+                : { ...filters, standing: [UNREAD] }
+            )
+          }
+          active={filters.standing?.length === 1 && filters.standing[0] === UNREAD}
+        />
+        <StatCard
+          icon={Users}
+          tone="purple"
+          label="For My Department"
+          value={department}
+          status={status}
+          note={{ text: pct(department), icon: "dot" }}
+        />
+        <StatCard
+          icon={CalendarDays}
+          tone="orange"
+          label="This Month"
+          value={thisMonth}
+          status={status}
+          note={{ text: pct(thisMonth), icon: "dot" }}
+        />
+        <StatCard
+          icon={CheckCircle2}
+          tone="green"
+          label="Acknowledged"
+          value={acknowledged}
+          status={status}
+          note={{ text: pct(acknowledged), icon: "dot" }}
+        />
+      </StatCards>
 
-        <div className="hidden flex-1 sm:block" />
+      <p className="flex items-start gap-2.5 rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3 text-sm text-blue-800">
+        <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        <span>
+          <span className="font-semibold">Note:</span> Unread circulars from all
+          departments are always displayed at the top of the list. The list is
+          then sorted by the latest date, with the most recent circulars
+          appearing first.
+        </span>
+      </p>
 
-        <div className="flex shrink-0 items-center justify-between gap-2 sm:justify-end">
-          <Select
-            value={String(pageSize)}
-            onValueChange={(value) => {
-              setPageSize(Number(value));
+      <div className="overflow-hidden rounded-[8px] border border-container-border bg-card">
+        {/* The approved toolbar: search, Filters, Columns, rows per page, Excel. */}
+        <div className="flex flex-col flex-wrap items-stretch gap-3 border-b border-container-border p-3 sm:flex-row sm:items-center">
+          <AiSearch
+            value={query}
+            onChange={(value) => {
+              setQuery(value);
               setPage(1);
             }}
-          >
-            <SelectTrigger className="w-20" aria-label="Rows per page">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10</SelectItem>
-              <SelectItem value="25">25</SelectItem>
-              <SelectItem value="50">50</SelectItem>
-              <SelectItem value="100">100</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-[42px] w-[42px] shrink-0 [&_svg]:size-6"
-            title="Export to CSV"
-            onClick={exportCirculars}
-          >
-            <ExcelIcon className="size-6" />
-            <span className="sr-only">Export to CSV</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* On the shared table, so its heading stays in sight while a long
-          list scrolls under it. */}
-      <RecordTable minWidth={880}>
-        <HeadRow>
-          <Th width="12%">Circular No.</Th>
-          <Th width="20%">Subject / Content</Th>
-          <Th width="11%">Date</Th>
-          <Th width="13%">Target Group</Th>
-          <Th width="14%">Issued By</Th>
-          <Th width="18%">Acknowledgement</Th>
-          {/* Where a circular stands in the register is the firm's
-              own tracking, so it is kept off the employee's own
-              page along with everything else about how the circular
-              is being managed. */}
-          {!self && <Th width="12%">Status</Th>}
-        </HeadRow>
-        <tbody>
-          {dataset.status === "loading" && (
-            <SkeletonRows columns={self ? 6 : 7} rows={5} shapes={[null, "lines"]} />
-          )}
-          {dataset.status === "failed" && (
-            <ErrorRow colSpan={self ? 6 : 7} label="circulars" onRetry={dataset.retry} />
-          )}
-          {dataset.status === "ready" && listed.length === 0 && (
-            <EmptyRow
-              colSpan={self ? 6 : 7}
-              label="circulars"
-              searching={search !== ""}
-              onClearSearch={() => {
-                setQuery("");
+            placeholder="Search by circular no., subject or content..."
+          />
+          <div className="flex flex-1 flex-wrap items-center gap-3">
+            <FilterPanel fields={FILTER_FIELDS} value={filters} onChange={narrow} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn(
+                    "group h-[42px] gap-2 border-primary/30 bg-blue-50/60 font-semibold text-primary hover:bg-blue-50",
+                    hidden.size > 0 && "border-primary"
+                  )}
+                >
+                  <Columns3 className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
+                  Columns
+                  <ChevronDown
+                    className="size-3.5 transition-transform group-data-[state=open]:rotate-180"
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                  />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-60">
+                <DropdownMenuLabel>Show columns</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {COLUMNS.filter((column) => column.hideable !== false).map((column) => (
+                  <DropdownMenuCheckboxItem
+                    key={column.key}
+                    checked={!hidden.has(column.key)}
+                    onSelect={(event) => event.preventDefault()}
+                    onCheckedChange={() =>
+                      setHidden((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(column.key)) next.delete(column.key);
+                        else next.add(column.key);
+                        return next;
+                      })
+                    }
+                  >
+                    {column.header}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(value) => {
+                setPageSize(Number(value));
                 setPage(1);
               }}
-            />
-          )}
-          {dataset.status === "ready" && shown.map((circular) => {
-            const mineAck = acknowledgementBy(circular, employee.name);
-            return (
-              <Fragment key={circular.id}>
-              <tr className="border-b align-top transition-colors last:border-0 hover:bg-primary/10">
-                <td className="whitespace-nowrap p-3 font-semibold text-primary">
-                  {circular.circularNo}
-                </td>
-                <td className="p-3">
-                  <p>{circular.content}</p>
-                  {/* What it says in short, what to do and by when -
-                      and any question about it, answered. */}
-                  <button
-                    type="button"
-                    aria-expanded={briefOf === circular.id}
-                    onClick={() => setBriefOf(briefOf === circular.id ? null : circular.id)}
-                    className="mt-2 inline-flex items-center gap-1.5 rounded text-xs font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <Sparkles className="size-3.5" aria-hidden="true" />
-                    {briefOf === circular.id ? "Hide AI Brief" : "AI Brief"}
-                  </button>
-                </td>
-                <td className="whitespace-nowrap p-3">
-                  {formatDate(circular.date)}
-                </td>
-                <td className="p-3">{circular.targetGroup}</td>
-                <td className="p-3">{shortName(circular.issuedBy)}</td>
-                {/* Their own acknowledgement, and nobody else's */}
-                <td className="p-3">
-                  {mineAck ? (
-                    <span className="flex items-start gap-1.5 text-green-700">
-                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      <span>
-                        <span className="block font-medium">
-                          Acknowledged
-                        </span>
-                        <span className="block text-xs text-muted-foreground">
-                          {mineAck.at}
-                        </span>
-                      </span>
-                    </span>
-                  ) : circular.status === ACTIVE && own ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => acknowledge(circular.id)}
-                    >
-                      I Acknowledge
-                    </Button>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      Not acknowledged
-                    </span>
-                  )}
-                </td>
-                {/* A circular still in force says nothing: only one
-                    that has been superseded or cancelled does. */}
-                {!self && (
-                  <td className="p-3">
-                    {circular.status !== ACTIVE && (
-                      <span
-                        className={cn(
-                          "inline-block whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold",
-                          STATUS_TONE[circular.status]
-                        )}
-                      >
-                        {STATUS_LABEL[circular.status]}
-                      </span>
-                    )}
-                  </td>
-                )}
-              </tr>
-              {briefOf === circular.id && (
-                <tr className="border-b last:border-0">
-                  <td colSpan={self ? 6 : 7} className="bg-muted/30 p-4">
-                    <CircularBrief circular={circular} own={own} canRefresh={Boolean(CURRENT_USER.permissions?.manage)} />
-                  </td>
-                </tr>
-              )}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </RecordTable>
-
-      {dataset.status === "ready" && listed.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-          <span>
-            Showing {start + 1} to {Math.min(start + pageSize, listed.length)}{" "}
-            of {listed.length} entries
-          </span>
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={currentPage <= 1}
-              onClick={() => setPage(currentPage - 1)}
             >
-              Previous
-            </Button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-              <Button
-                key={n}
-                type="button"
-                variant={n === currentPage ? "default" : "ghost"}
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setPage(n)}
-              >
-                {n}
-              </Button>
-            ))}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={currentPage >= totalPages}
-              onClick={() => setPage(currentPage + 1)}
-            >
-              Next
-            </Button>
+              <SelectTrigger className="h-[42px] w-24" aria-label="Rows per page">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 25, 50, 100].map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" className="group h-[42px] gap-2 font-semibold text-primary">
+                  <ExcelIcon className="size-6" />
+                  Excel
+                  <ChevronDown
+                    className="size-3.5 transition-transform group-data-[state=open]:rotate-180"
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                  />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuItem onSelect={() => exportRows(listed)}>
+                  Export current view ({listed.length})
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => exportRows(mine)}>
+                  Export all circulars ({mine.length})
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
-      )}
+
+        {chips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-container-border px-3 py-2.5">
+            {chips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                onClick={() => narrow(withoutChip(filters, chip))}
+                className="inline-flex items-center gap-1.5 rounded-[6px] border border-primary bg-card px-2.5 py-1 text-xs font-semibold text-primary transition-colors hover:bg-menu-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                {chip.label}: {chip.value}
+                <X className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="sr-only">Remove this filter</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => narrow({})}
+              className="rounded-[6px] px-1.5 py-1 text-xs font-semibold text-primary transition-colors hover:bg-menu-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              Clear all
+            </button>
+          </div>
+        )}
+
+        <div className="p-0 [&>div]:rounded-none [&>div]:border-0">
+          <RecordTable minWidth={900}>
+            <HeadRow>
+              <Th width="48px">#</Th>
+              <Th width="14%" {...sortProps("circularNo")}>Circular No.</Th>
+              <Th {...sortProps("subject")}>Subject / Content</Th>
+              {showing("date") && <Th width="12%" {...sortProps("date")}>Date</Th>}
+              {showing("targetGroup") && (
+                <Th width="15%" {...sortProps("targetGroup")}>Target Group</Th>
+              )}
+              {showing("standing") && <Th width="14%" {...sortProps("standing")}>Status</Th>}
+            </HeadRow>
+            <tbody>
+              {status === "loading" && (
+                <SkeletonRows columns={colSpan} rows={5} shapes={[null, null, "lines"]} />
+              )}
+              {status === "failed" && (
+                <ErrorRow colSpan={colSpan} label="circulars" onRetry={dataset.retry} />
+              )}
+              {status === "ready" && listed.length === 0 && (
+                <EmptyRow
+                  colSpan={colSpan}
+                  label="circulars"
+                  searching={search !== ""}
+                  filtering={chips.length > 0}
+                  onClearSearch={() => {
+                    setQuery("");
+                    setPage(1);
+                  }}
+                  onClearFilters={() => narrow({})}
+                />
+              )}
+              {status === "ready" &&
+                shown.map((circular, index) => (
+                  <Fragment key={circular.id}>
+                    {groupHeading(circular, index)}
+                    <tr
+                      onClick={() => setOpenId(circular.id)}
+                      className={cn(
+                        "cursor-pointer border-b border-container-border align-top last:border-0",
+                        circular.standing === UNREAD && "bg-blue-50/30"
+                      )}
+                    >
+                      <td className="px-4 py-3 text-muted-foreground numeric-value">
+                        {start + index + 1}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <RecordLink
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenId(circular.id);
+                          }}
+                        >
+                          {circular.circularNo}
+                        </RecordLink>
+                      </td>
+                      <td className="max-w-0 px-4 py-3">
+                        <p
+                          className={cn(
+                            "truncate text-primary",
+                            circular.standing === UNREAD ? "font-bold" : "font-semibold"
+                          )}
+                        >
+                          {circular.subject}
+                        </p>
+                        {circular.excerpt && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {circular.excerpt}
+                          </p>
+                        )}
+                      </td>
+                      {showing("date") && (
+                        <td className="whitespace-nowrap px-4 py-3 numeric-value">
+                          {formatDate(circular.date)}
+                        </td>
+                      )}
+                      {showing("targetGroup") && (
+                        <td className="px-4 py-3">{circular.targetGroup}</td>
+                      )}
+                      {showing("standing") && (
+                        <td className="px-4 py-3">
+                          <StandingPill standing={circular.standing} />
+                        </td>
+                      )}
+                    </tr>
+                  </Fragment>
+                ))}
+            </tbody>
+          </RecordTable>
+        </div>
+
+        {status === "ready" && listed.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-container-border px-4 py-3 text-sm text-muted-foreground">
+            <span>
+              Showing {start + 1} to {Math.min(start + pageSize, listed.length)} of{" "}
+              {listed.length} circulars
+            </span>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                disabled={currentPage <= 1}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                <ChevronLeft className="size-4 rtl:rotate-180" />
+                <span className="sr-only">Previous page</span>
+              </Button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+                <Button
+                  key={n}
+                  type="button"
+                  variant={n === currentPage ? "default" : "ghost"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setPage(n)}
+                >
+                  {n}
+                </Button>
+              ))}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                <ChevronRight className="size-4 rtl:rotate-180" />
+                <span className="sr-only">Next page</span>
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* The circular itself: all of it, its AI brief, and - on the
+          employee's own record - the acknowledgement. */}
+      <Dialog open={Boolean(opened)} onOpenChange={(open) => !open && setOpenId(null)}>
+        {opened && (
+          <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <span className="rounded-lg bg-primary p-2 text-primary-foreground">
+                  <Megaphone className="h-4 w-4" />
+                </span>
+                Circular {opened.circularNo}
+              </DialogTitle>
+              <DialogDescription>
+                {formatDate(opened.date)} &middot; {opened.targetGroup}
+                {opened.issuedBy && <> &middot; Issued by {shortName(opened.issuedBy)}</>}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex items-center gap-2">
+              <StandingPill standing={opened.standing} />
+              {opened.ack && (
+                <span className="text-xs text-muted-foreground">
+                  Acknowledged {opened.ack.at}
+                </span>
+              )}
+            </div>
+            <p className="whitespace-pre-line rounded-lg border bg-secondary p-4 text-sm text-primary">
+              {opened.content}
+            </p>
+            <CircularBrief
+              circular={opened}
+              own={own}
+              canRefresh={Boolean(CURRENT_USER.permissions?.manage)}
+            />
+            <DialogFooter>
+              <Button type="button" variant="cancel" onClick={() => setOpenId(null)}>
+                Close
+              </Button>
+              {own && opened.standing === UNREAD && (
+                <Button type="button" onClick={confirm} disabled={busy}>
+                  I acknowledge this circular
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
     </div>
   );
 }

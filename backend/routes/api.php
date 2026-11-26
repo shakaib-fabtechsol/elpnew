@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\InvoiceAnalysisController;
 use App\Http\Controllers\Api\LeaveController;
 use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\LookupController;
+use App\Http\Controllers\Api\OffboardingController;
 use App\Http\Controllers\Api\SalaryAdvanceController;
 use App\Http\Controllers\Api\SalaryPaymentController;
 use App\Http\Controllers\Api\SupplierController;
@@ -66,6 +67,17 @@ Route::prefix('v1')->group(function () {
         Route::get('employees/{employee}/assets', [EmployeeAssetController::class, 'index']);
         Route::post('employees/{employee}/assets', [EmployeeAssetController::class, 'store']);
         Route::patch('employees/{employee}/assets/{asset}', [EmployeeAssetController::class, 'update']);
+
+        /* ------------------------------------ employee offboarding (end of service) */
+        Route::get('offboardings', [OffboardingController::class, 'index']);
+        Route::post('offboardings', [OffboardingController::class, 'store']);
+        Route::get('offboardings/{offboarding}', [OffboardingController::class, 'show']);
+        Route::patch('offboardings/{offboarding}', [OffboardingController::class, 'update']);
+        Route::post('offboardings/{offboarding}/decision', [OffboardingController::class, 'decide']);
+        Route::patch('offboardings/{offboarding}/tasks/{task}', [OffboardingController::class, 'updateTask']);
+        Route::put('offboardings/{offboarding}/interview', [OffboardingController::class, 'interview']);
+        Route::post('offboardings/{offboarding}/complete', [OffboardingController::class, 'complete']);
+        Route::post('offboardings/{offboarding}/cancel', [OffboardingController::class, 'cancel']);
 
         /* --------------------------------------------- employee management */
         Route::get('employees-standing', [EmployeeManagementController::class, 'standing']);

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import RecordSidebar from "@/components/shared/RecordSidebar";
 import { useNavigate, useParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -495,38 +496,23 @@ export default function AssetDetails() {
       </div>
 
       <div className="flex flex-col items-start gap-4 sm:gap-6 lg:flex-row">
-        {/* Section navigation */}
-        <Card className="w-full lg:sticky lg:top-20 lg:w-64 lg:shrink-0">
-          <CardContent className="p-3">
-            <p className="mb-2 border-b px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Asset Management
-            </p>
-            <nav className="flex flex-row gap-1 overflow-x-auto lg:flex-col">
-              {SECTIONS.map((option) => {
-                const Icon = option.icon;
-                return (
-                  <button
-                    key={option.key}
-                    type="button"
-                    onClick={() => {
-                      setSection(option.key);
-                      setAddingExpense(false);
-                    }}
-                    className={cn(
-                      "flex items-center gap-2.5 text-nowrap rounded-md px-3 py-2 text-start text-sm font-medium transition-colors",
-                      section === option.key
-                        ? "bg-primary text-primary-foreground"
-                        : "text-primary hover:bg-secondary"
-                    )}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    {option.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </CardContent>
-        </Card>
+        {/* The shared record rail, so it narrows to the navy icon-and-name
+            rail the same way as every other page. */}
+        <RecordSidebar
+          id="asset"
+          title="Asset Management"
+          active={section}
+          onSelect={(key) => {
+            setSection(key);
+            setAddingExpense(false);
+          }}
+          groups={SECTIONS.map((option) => ({
+            key: option.key,
+            link: true,
+            label: option.label,
+            icon: option.icon,
+          }))}
+        />
 
         {/* min-w-0 or a wide table in here would stretch the whole page */}
         <div className="w-full min-w-0 flex-1">

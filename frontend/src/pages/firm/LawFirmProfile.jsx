@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import BackButton from "@/components/shared/BackButton";
+import RecordSidebar from "@/components/shared/RecordSidebar";
 
 import {
   Select,
@@ -22,7 +23,6 @@ import {
   Megaphone,
   Percent,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
   ROLES,
   canRecordFinance,
@@ -40,6 +40,8 @@ import BranchesSection from "./sections/BranchesSection";
 import BankAccountsSection from "./sections/BankAccountsSection";
 import TransactionsSection from "./sections/TransactionsSection";
 import CommissionSection from "./sections/CommissionSection";
+import RequestsSection from "./sections/RequestsSection";
+import { ClipboardList } from "lucide-react";
 import { can } from "@/lib/access";
 
 /**
@@ -103,7 +105,27 @@ const SECTIONS = [
     icon: Percent,
     note: "What referred work has earned, on paid fees",
   },
+  {
+    // Every employee's requests, opened in each kind's own detailed screen.
+    // Management's: whoever may decide or pay requests (the server limits
+    // the list to the employees they reach).
+    ownsHeader: true,
+    key: "requests",
+    label: "Requests",
+    icon: ClipboardList,
+    note: "Every employee's requests, to review, decide and pay",
+    when: () => mayManageRequests(),
+  },
 ];
+
+/** Whether the signed-in person decides or pays employees' requests. */
+const mayManageRequests = () =>
+  CURRENT_USER.role === "admin" ||
+  can(
+    ...["financingRequests", "entitlementRequests", "allowanceRequests", "endOfServiceRequests", "leaveRequests", "generalRequests"].flatMap(
+      (module) => [module + ".approve", module + ".pay"]
+    )
+  );
 
 
 export default function LawFirmProfile() {
@@ -166,35 +188,20 @@ export default function LawFirmProfile() {
 
 
       <div className="flex flex-col items-start gap-4 sm:gap-6 lg:flex-row">
-        {/* Section navigation */}
-        <Card className="w-full lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:w-60 lg:shrink-0 lg:overflow-y-auto">
-          <CardContent className="p-3">
-            <p className="mb-2 border-b px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Office Management
-            </p>
-            <nav className="flex flex-row gap-1 overflow-x-auto lg:flex-col">
-              {SECTIONS.filter((section) => !section.hidden).map((section) => {
-                const Icon = section.icon;
-                return (
-                  <button
-                    key={section.key}
-                    type="button"
-                    onClick={() => goToSection(section.key)}
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-md px-3 py-2 text-start text-sm font-medium text-nowrap transition-colors",
-                      activeSection === section.key
-                        ? "bg-primary text-primary-foreground"
-                        : "text-primary hover:bg-secondary"
-                    )}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    {section.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </CardContent>
-        </Card>
+        {/* Section navigation: the shared record rail, so it narrows to the
+            navy icon-and-name rail the same way as every other record. */}
+        <RecordSidebar
+          id="firm"
+          title="Office Management"
+          active={activeSection}
+          onSelect={goToSection}
+          groups={SECTIONS.filter((section) => !section.hidden && (!section.when || section.when())).map((section) => ({
+            key: section.key,
+            link: true,
+            label: section.label,
+            icon: section.icon,
+          }))}
+        />
 
         {/* min-w-0 or the column will not shrink: a flex child sizes itself to
             its widest content by default, so one wide table in here would
@@ -238,6 +245,7 @@ export default function LawFirmProfile() {
                 />
               )}
               {activeSection === "commission" && <CommissionSection />}
+              {activeSection === "requests" && mayManageRequests() && <RequestsSection />}
             </CardContent>
           </Card>
 

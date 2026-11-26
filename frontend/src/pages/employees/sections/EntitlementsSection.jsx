@@ -27,6 +27,8 @@ export default function EntitlementsSection({
   // Opened from Requests: the chosen entitlement's list alone - the cards
   // above already choose which.
   listOnly = false,
+  // The request to open straight away (the firm's Requests list), if any.
+  focusId,
 }) {
   const [tab, setTab] = useState(initialTab || ENTITLEMENT_TABS[0].key);
   const [records, setRecords] = useState(initialEntitlements);
@@ -83,6 +85,7 @@ export default function EntitlementsSection({
             onCloseAdd={() => setAdding(null)}
             onOpenAdd={() => setAdding(tab)}
             canDecide={canEdit}
+            focusId={focusId}
           />
         </CardContent>
       </Card>
