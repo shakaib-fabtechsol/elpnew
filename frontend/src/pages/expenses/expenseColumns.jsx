@@ -39,6 +39,9 @@ export function expenseColumns({ accountFor, includeSupplier = true }) {
       key: "expenseNo",
       header: "Expense ID",
       width: "6%",
+      // An ID in natural order: each run of digits compares as a number, so
+      // A010 follows A009 and INV-2024-011 follows INV-2024-002.
+      sort: "text",
       render: (value) => (
         <span className="font-medium text-primary">{value}</span>
       ),
@@ -48,6 +51,8 @@ export function expenseColumns({ accountFor, includeSupplier = true }) {
       header: "Supplier Details",
       subHeader: "(Supplier Information)",
       width: "16%",
+      // Combined information: the supplier's name, bank and registrations.
+      sort: false,
       exportValue: (row) =>
         row.supplier || linkLabel(row.linkKind, row.linkId) || "Recorded directly",
       render: (value, row) => {
@@ -84,6 +89,8 @@ export function expenseColumns({ accountFor, includeSupplier = true }) {
       header: "Expense Details",
       subHeader: "(Expense Information)",
       width: "16%",
+      // Combined information: every line of the expense, each with its type.
+      sort: false,
       exportValue: (row) =>
         row.lines
           .map(
@@ -114,6 +121,8 @@ export function expenseColumns({ accountFor, includeSupplier = true }) {
       header: "Invoice Details",
       subHeader: "(Invoice Date · Number · View Invoice)",
       width: "13%",
+      // Combined information: date, number and the copy in one cell.
+      sort: false,
       exportValue: (row) =>
         formatDate(row.date) + (row.invoiceNumber ? " · " + row.invoiceNumber : ""),
       render: (value, row) => (
@@ -146,6 +155,9 @@ export function expenseColumns({ accountFor, includeSupplier = true }) {
       header: "Invoice Amount",
       subHeader: "(Invoice Information)",
       width: "14%",
+      // By the total, the figure that leads the cell; the rest breaks it down.
+      sort: "money",
+      sortValue: (row) => row.total,
       render: (value, row) => {
         const state = settlement(row.paid, row.total);
         const rate = row.net ? Math.round((row.tax / row.net) * 100) : 0;
@@ -165,6 +177,8 @@ export function expenseColumns({ accountFor, includeSupplier = true }) {
       header: "Payment Details",
       subHeader: "(Payment Information)",
       width: "17%",
+      // Combined information: every payment made against the invoice.
+      sort: false,
       exportValue: (row) =>
         row.payments.map((p) => formatDate(p.date) + " " + p.amount).join(" | "),
       render: (value, row) =>
@@ -207,6 +221,8 @@ export function expenseColumns({ accountFor, includeSupplier = true }) {
       header: "Request Tracking",
       subHeader: "(Request · Approval · Authorization · Payment)",
       width: "18%",
+      // Combined information: the trail of who did what, and when.
+      sort: false,
       exportValue: (row) =>
         row.tracking
           ? [

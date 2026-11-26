@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AiCvController;
 use App\Http\Controllers\Api\AiOverviewController;
 use App\Http\Controllers\Api\AiSearchController;
 use App\Http\Controllers\Api\AssistanceRequestController;
@@ -9,6 +10,7 @@ use App\Http\Controllers\Api\CircularController;
 use App\Http\Controllers\Api\CircularInsightController;
 use App\Http\Controllers\Api\CommissionController;
 use App\Http\Controllers\Api\CorrectionRequestController;
+use App\Http\Controllers\Api\EmployeeAssetController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\EmployeeDocumentController;
 use App\Http\Controllers\Api\EmployeeManagementController;
@@ -60,6 +62,11 @@ Route::prefix('v1')->group(function () {
         Route::get('employees/{employee}/documents/{document}/download', [EmployeeDocumentController::class, 'download']);
         Route::delete('employees/{employee}/documents/{document}', [EmployeeDocumentController::class, 'destroy']);
 
+        // Assigned assets: issued, then returned or disposed of - never deleted.
+        Route::get('employees/{employee}/assets', [EmployeeAssetController::class, 'index']);
+        Route::post('employees/{employee}/assets', [EmployeeAssetController::class, 'store']);
+        Route::patch('employees/{employee}/assets/{asset}', [EmployeeAssetController::class, 'update']);
+
         /* --------------------------------------------- employee management */
         Route::get('employees-standing', [EmployeeManagementController::class, 'standing']);
         Route::get('employees/{employee}/management', [EmployeeManagementController::class, 'show']);
@@ -70,6 +77,8 @@ Route::prefix('v1')->group(function () {
         Route::patch('employees/{employee}/development/{action}', [EmployeeManagementController::class, 'updateAction']);
 
         /* ---------------------------------------------- system permissions */
+        // The catalogue alone, for Add Employee's System Permissions step.
+        Route::get('permissions/catalog', [EmployeePermissionController::class, 'catalog']);
         Route::get('employees/{employee}/permissions', [EmployeePermissionController::class, 'show']);
         Route::put('employees/{employee}/permissions', [EmployeePermissionController::class, 'update']);
         Route::post('employees/{employee}/permissions/review', [EmployeePermissionController::class, 'review']);
@@ -114,6 +123,7 @@ Route::prefix('v1')->group(function () {
         /* ------------------------------------ AI readings (no record is saved) */
         Route::post('ai/overview', AiOverviewController::class)->middleware('throttle:40,1');
         Route::post('ai/search', AiSearchController::class)->middleware('throttle:30,1');
+        Route::post('ai/cv', AiCvController::class)->middleware('throttle:30,1');
 
         /* ------------------------------ the unified request (free text + AI) */
         Route::post('requests/interpret', [UnifiedRequestController::class, 'interpret'])->middleware('throttle:20,1');

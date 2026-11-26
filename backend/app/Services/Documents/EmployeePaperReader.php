@@ -67,6 +67,7 @@ final class EmployeePaperReader
         - employeeName is the full name in Latin letters exactly as printed, arabicName the full name in Arabic letters.
         - Dates are YYYY-MM-DD. gender is "Male" or "Female". Amounts (salary, housing, transport) are numbers in Omani rials without a currency.
         - civilId, passportNumber, lawyerCardNo, accountNumber, iban and swiftCode are copied character for character.
+        - department is the firm's circle the job belongs to: "Judicial" (lawyers, legal work, partners), "Administrative" or "Financial / Accounting". Leave it out unless the paper makes the circle plain.
         - contractType is "Fixed-term" or "Indefinite-term"; employmentType is "Full-Time" or "Part-Time"; noticePeriod as written (for example "1 Month").
         - "confidence" is how sure you are of that one value, from 0 to 100; lower it for anything blurred, cut off or ambiguous.
         "qualification" is filled only for an educational certificate: the degree, the specialization, the institution and the year as printed; otherwise null.

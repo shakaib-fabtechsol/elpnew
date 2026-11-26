@@ -17,6 +17,11 @@ const stateOf = (draft) => ({
 });
 
 export const permissionsApi = {
+  /** The catalogue, profiles and scopes, for a new employee not saved yet. */
+  async catalog() {
+    return (await api("permissions/catalog")).data;
+  },
+
   async load(employeeId) {
     return (await api(`employees/${employeeId}/permissions`)).data;
   },

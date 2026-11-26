@@ -241,6 +241,7 @@ export default function IncomeTaxPage() {
       key: "year",
       header: "Tax Year",
       width: "9%",
+      sort: "number",
       sortValue: (row) => row.year,
       render: (value) => <span className="text-base font-semibold text-primary">{value}</span>,
     },
@@ -249,6 +250,8 @@ export default function IncomeTaxPage() {
       header: "Revenue & Deductible Expenses",
       width: "14%",
       exportValue: (row) => omr(row.revenue) + " - " + omr(row.expenses),
+      // By the revenue, the figure that leads; the expenses are read under it.
+      sort: "money",
       sortValue: (row) => row.revenue,
       render: (value, row) => (
         <div className="whitespace-nowrap">
@@ -262,6 +265,7 @@ export default function IncomeTaxPage() {
       header: "Taxable Income",
       width: "12%",
       exportValue: (row) => omr(row.taxable),
+      sort: "money",
       sortValue: (row) => row.taxable,
       render: (value) => <span className="whitespace-nowrap">{omr(value)}</span>,
     },
@@ -270,6 +274,7 @@ export default function IncomeTaxPage() {
       header: "Income Tax at " + RATE_LABEL,
       width: "12%",
       exportValue: (row) => omr(row.tax),
+      sort: "money",
       sortValue: (row) => row.tax,
       render: (value) => <span className="whitespace-nowrap font-semibold text-primary">{omr(value)}</span>,
     },
@@ -278,7 +283,8 @@ export default function IncomeTaxPage() {
       header: "Due Date",
       width: "9%",
       exportValue: (row) => shortDate(incomeTaxDueDate(row.year)),
-      sortValue: (row) => row.year,
+      sort: "date",
+      sortValue: (row) => incomeTaxDueDate(row.year),
       render: (_, row) => <span className="whitespace-nowrap">{shortDate(incomeTaxDueDate(row.year))}</span>,
     },
     {
@@ -287,6 +293,9 @@ export default function IncomeTaxPage() {
       subHeader: "Filed On / Reference",
       width: "13%",
       exportValue: (row) => (row.filedOn ? shortDate(row.filedOn) + " - " + row.returnNo : "-"),
+      // By the day it was filed; a return not yet filed sorts last.
+      sort: "date",
+      sortValue: (row) => row.filedOn || null,
       render: (value, row) =>
         value ? (
           <div>
@@ -308,6 +317,8 @@ export default function IncomeTaxPage() {
       header: "Paid & Balance",
       width: "12%",
       exportValue: (row) => omr(row.paidAmount) + " - balance " + omr(row.balance),
+      // By what is still owed, the figure this column is read for.
+      sort: "balance",
       sortValue: (row) => row.balance,
       render: (value, row) => (
         <div className="whitespace-nowrap">
@@ -324,6 +335,11 @@ export default function IncomeTaxPage() {
       header: "Status",
       width: "12%",
       exportValue: (row) => INCOME_TAX_STATUS[row.status].label,
+      // Late first, then filed but unpaid, then coming due, then a year still
+      // running; settled years last.
+      sort: "status",
+      sortOrder: ["overdue", "balance", "due", "open", "settled"],
+      sortValue: (row) => row.status,
       render: (value) => (
         <span className={cn("inline-flex items-center gap-2 whitespace-nowrap font-medium", INCOME_TAX_STATUS[value].text)}>
           <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", INCOME_TAX_STATUS[value].dot)} />
@@ -335,7 +351,7 @@ export default function IncomeTaxPage() {
       key: "action",
       header: "",
       width: "7%",
-      disableSort: true,
+      sort: false,
       exportValue: () => "",
       render: (_, row) => (
         <Button
@@ -407,7 +423,6 @@ export default function IncomeTaxPage() {
             searchPlaceholder="Ask about income tax..."
             exportFileName="income-tax-returns.csv"
             enableColumnSearch={false}
-            enableSorting
             currentPage={currentPage}
             totalPages={Math.ceil(rows.length / pageSize)}
             pageSize={pageSize}

@@ -35,6 +35,49 @@ class AiFeaturesTest extends ApiTestCase
         ];
     }
 
+    /* ------------------------------------------------------------ CV */
+
+    public function test_without_ai_the_cv_is_worded_from_the_facts_alone(): void
+    {
+        $this->as('admin')->postJson($this->api('ai/cv'), [
+            'practiceLevel' => 'Appeal Lawyer',
+            'yearsOfExperience' => 8,
+            'specialisations' => ['commercial law', 'corporate law'],
+            'qualification' => 'Bachelor of Law',
+            'institution' => 'Sultan Qaboos University',
+            'graduationYear' => '2016',
+            'languages' => ['Arabic', 'English'],
+        ])->assertOk()
+            ->assertJsonPath('data.available', false)
+            ->assertJsonPath('data.summary', 'An Appeal Lawyer with over 8 years of experience, specialising in commercial law and corporate law. '
+                .'Holds a Bachelor of Law from Sultan Qaboos University (2016). Speaks Arabic and English.');
+    }
+
+    public function test_with_a_key_the_cv_is_written_by_ai(): void
+    {
+        $this->openai(['summary' => 'An experienced lawyer in litigation.']);
+
+        $this->as('admin')->postJson($this->api('ai/cv'), ['occupation' => 'Lawyer'])
+            ->assertOk()
+            ->assertJsonPath('data.available', true)
+            ->assertJsonPath('data.summary', 'An experienced lawyer in litigation.');
+    }
+
+    public function test_education_languages_and_cv_are_kept_on_the_record(): void
+    {
+        $this->as('admin')->patchJson($this->api('employees/3'), [
+            'highestEducation' => "Master's Degree",
+            'languages' => ['Arabic', 'English'],
+            'cvSummary' => 'A lawyer.',
+        ])->assertOk()
+            ->assertJsonPath('data.highestEducation', "Master's Degree")
+            ->assertJsonPath('data.languages', ['Arabic', 'English'])
+            ->assertJsonPath('data.cvSummary', 'A lawyer.');
+
+        $this->as('admin')->patchJson($this->api('employees/3'), ['highestEducation' => 'Kindergarten'])
+            ->assertUnprocessable()->assertJsonValidationErrors(['highestEducation']);
+    }
+
     /* ------------------------------------------------------- invoices */
 
     public function test_with_a_key_the_invoice_is_read_by_ai_and_not_by_the_demo(): void
@@ -175,19 +218,19 @@ class AiFeaturesTest extends ApiTestCase
 
     public function test_a_question_becomes_a_query_and_no_record_is_sent(): void
     {
-        $this->openai(['query' => 'department:"Legal Services" salary>1000 secret:x -status:Inactive', 'explanation' => 'Active legal staff earning over 1,000 OMR.']);
+        $this->openai(['query' => 'department:"Judicial" salary>1000 secret:x -status:Inactive', 'explanation' => 'Active legal staff earning over 1,000 OMR.']);
 
         $this->as('admin')->postJson($this->api('ai/search'), [
             'question' => 'active people in legal earning more than 1000',
             'fields' => [
-                ['key' => 'department', 'kind' => 'text', 'values' => ['Legal Services', 'Administration']],
+                ['key' => 'department', 'kind' => 'text', 'values' => ['Judicial', 'Administrative']],
                 ['key' => 'salary', 'kind' => 'number'],
                 ['key' => 'status', 'kind' => 'text', 'values' => ['Active', 'Inactive']],
             ],
         ])->assertOk()
             ->assertJsonPath('data.available', true)
             // "secret" is not a column of this list: it is searched as a word, not as a field.
-            ->assertJsonPath('data.query', 'department:"Legal Services" salary>1000 x -status:Inactive')
+            ->assertJsonPath('data.query', 'department:"Judicial" salary>1000 x -status:Inactive')
             ->assertJsonPath('data.explanation', 'Active legal staff earning over 1,000 OMR.');
 
         Http::assertSent(fn ($request) => str_contains($request['messages'][1]['content'][0]['text'], 'active people in legal')

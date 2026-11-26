@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useReseed } from "@/lib/api/useDataset";
 import { ViolationsContext } from "./context";
 import { initialViolations } from "@/pages/employees/violationData";
 import { violationsApi } from "@/lib/api/modules/violations";
@@ -18,6 +19,8 @@ import { upserted } from "@/lib/api/store";
  */
 export default function ViolationsProvider({ children }) {
   const [violations, setViolations] = useState(initialViolations);
+  // A Retry on a table reloads "violations"; take the fresh records in.
+  useReseed("violations", () => setViolations([...initialViolations]));
 
   const value = useMemo(() => {
     const keep = (record) => {

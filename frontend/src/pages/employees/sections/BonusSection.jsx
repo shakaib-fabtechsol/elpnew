@@ -49,6 +49,7 @@ import {
 import { REQUEST_REJECTED, REQUEST_STATUS_CHIP } from "../requestFlow";
 import { DecisionChoice } from "@/components/shared/RequestSteps";
 import { useBonuses } from "@/lib/bonuses/context";
+import useDataset from "@/lib/api/useDataset";
 import { formatDate } from "../loanData";
 import { PAYMENT_METHODS } from "@/pages/expenses/expenseData";
 import { PAYING_ACCOUNTS } from "@/pages/firm/firmData";
@@ -121,6 +122,9 @@ export default function BonusSection({
   canDecide = true,
 }) {
   const { bonuses, addBonus, updateBonus, decideBonus, payBonus } = useBonuses();
+  // The bonuses are loaded at sign-in: skeleton rows until they land, and
+  // "Unable to load bonuses" with Retry if they could not be read.
+  const dataset = useDataset(["bonuses"]);
   // While a call to the server is out, its button waits rather than sending twice.
   const [busy, setBusy] = useState(false);
   const send = async (call) => {
@@ -294,18 +298,24 @@ export default function BonusSection({
       key: "requestNo",
       header: "Request No.",
       width: "12%",
+      // A number in natural order: each run of digits compares as a number.
+      sort: "text",
       render: (value, bonus) => <RecordLink onClick={() => track(bonus)}>{value}</RecordLink>,
     },
     {
       key: "bonusOn",
       header: "Bonus Date",
       width: "13%",
+      sort: "date",
       render: (value) => <span className="whitespace-nowrap text-primary">{formatDate(value)}</span>,
     },
     {
       key: "reasonText",
       header: "Bonus Details",
       width: "24%",
+      skeleton: "lines",
+      // Combined information: the reason and how it is booked.
+      sort: false,
       render: (value, bonus) => (
         <>
           <span className="block font-semibold text-primary">{value}</span>
@@ -319,18 +329,26 @@ export default function BonusSection({
       key: "amount",
       header: "Bonus Amount (OMR)",
       width: "15%",
+      sort: "money",
+      sortValue: (bonus) => bonus.amount,
       render: (value) => <span className="whitespace-nowrap font-bold text-green-700">{amountValue(value)}</span>,
     },
     {
       key: "notes",
       header: "Employee Comment",
       width: "22%",
+      // Descriptive information.
+      sort: false,
       render: (value) => <span className="text-muted-foreground">{value || "-"}</span>,
     },
     {
       key: "status",
       header: "Status",
       width: "14%",
+      // Waiting on a decision, then approved and still to pay, then paid;
+      // refused last.
+      sort: "status",
+      sortOrder: ["Pending", "Approved", "Disbursed", "Rejected"],
       render: (value) => (
         <span
           className={cn(
@@ -806,6 +824,7 @@ export default function BonusSection({
                 <RequestTable
                   rows={mine}
                   columns={columns}
+                  dataset={dataset}
                   searchPlaceholder="Search by request no., reason or comment..."
                   itemLabel="bonuses"
                   exportFileName="bonuses.csv"
@@ -849,6 +868,7 @@ export default function BonusSection({
             <RequestTable
               rows={mine}
               columns={columns}
+              dataset={dataset}
               searchPlaceholder="Search by request no., reason or comment..."
               itemLabel="bonuses"
               exportFileName="bonuses.csv"
@@ -859,6 +879,7 @@ export default function BonusSection({
         <RequestTable
           rows={mine}
           columns={columns}
+          dataset={dataset}
           searchPlaceholder="Search by request no., reason or comment..."
           itemLabel="bonuses"
           exportFileName="bonuses.csv"

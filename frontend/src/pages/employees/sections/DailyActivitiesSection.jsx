@@ -1,13 +1,17 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { EmptyState } from "@/components/shared/panels";
 import {
   RecordTable,
   HeadRow,
   Th,
   Row,
   Td,
+  EmptyRow,
+  SkeletonRows,
+  ErrorRow,
 } from "@/components/shared/RecordTable";
+import useDataset from "@/lib/api/useDataset";
+import { useTableSort } from "@/lib/sorting";
 import {
   CalendarDays,
   Clock,
@@ -91,6 +95,16 @@ export default function DailyActivitiesSection({ employee }) {
   const { leaves } = useLeaves();
   const { violations } = useViolations();
   const { circulars } = useCirculars();
+  // The log is read off the records loaded at sign-in, so the table waits on
+  // all of them, and says so if any could not be fetched.
+  const dataset = useDataset([
+    "salary advances",
+    "bonuses",
+    "leaves",
+    "violations",
+    "circulars",
+    "entitlements",
+  ]);
 
   const date = today();
 
@@ -108,6 +122,12 @@ export default function DailyActivitiesSection({ employee }) {
 
   const day = workingDay(log);
   const counts = actionCounts(log);
+  // The details are a description, so they are the one column not sorted.
+  const { rows: events, sortProps } = useTableSort(log, {
+    at: { sort: "date" },
+    action: { sort: "text" },
+    reference: { sort: "text" },
+  });
 
   return (
     <div className="space-y-6">
@@ -171,41 +191,42 @@ export default function DailyActivitiesSection({ employee }) {
           Logged System Actions
         </p>
 
-        {log.length === 0 ? (
-          <EmptyState>
-            Nothing has been recorded in the system for this employee today.
-          </EmptyState>
-        ) : (
-          <RecordTable minWidth={820}>
-            <HeadRow>
-              <Th width="12%">Time</Th>
-              <Th width="22%">Action</Th>
-              <Th width="42%">Details</Th>
-              <Th width="24%">Reference</Th>
-            </HeadRow>
-            <tbody>
-              {log.map((event, index) => (
-                <Row key={index}>
-                  <Td className="whitespace-nowrap text-primary">
-                    {clockTime(event.at)}
-                  </Td>
-                  <Td
-                    className={cn(
-                      "whitespace-nowrap font-medium",
-                      event.kind === "decision" ? "text-green-700" : "text-primary"
-                    )}
-                  >
-                    {event.action}
-                  </Td>
-                  <Td className="text-start text-muted-foreground">
-                    {event.about || "-"}
-                  </Td>
-                  <Td className="text-primary">{event.reference || "-"}</Td>
-                </Row>
-              ))}
-            </tbody>
-          </RecordTable>
-        )}
+        <RecordTable minWidth={820}>
+          <HeadRow>
+            <Th width="12%" {...sortProps("at")}>Time</Th>
+            <Th width="22%" {...sortProps("action")}>Action</Th>
+            <Th width="42%">Details</Th>
+            <Th width="24%" {...sortProps("reference")}>Reference</Th>
+          </HeadRow>
+          <tbody>
+            {dataset.status === "loading" && <SkeletonRows columns={4} rows={5} />}
+            {dataset.status === "failed" && (
+              <ErrorRow colSpan={4} label="system actions" onRetry={dataset.retry} />
+            )}
+            {dataset.status === "ready" && events.length === 0 && (
+              <EmptyRow colSpan={4} label="system actions" />
+            )}
+            {dataset.status === "ready" && events.map((event, index) => (
+              <Row key={index}>
+                <Td className="whitespace-nowrap text-primary">
+                  {clockTime(event.at)}
+                </Td>
+                <Td
+                  className={cn(
+                    "whitespace-nowrap font-medium",
+                    event.kind === "decision" ? "text-green-700" : "text-primary"
+                  )}
+                >
+                  {event.action}
+                </Td>
+                <Td className="text-start text-muted-foreground">
+                  {event.about || "-"}
+                </Td>
+                <Td className="text-primary">{event.reference || "-"}</Td>
+              </Row>
+            ))}
+          </tbody>
+        </RecordTable>
       </div>
     </div>
   );

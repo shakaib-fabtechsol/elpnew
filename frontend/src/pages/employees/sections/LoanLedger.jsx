@@ -49,6 +49,8 @@ import { longDate } from "./AdvanceSalarySection";
 import { Tile, Ring, TILE_TINT, chanceOf } from "./AdvanceOverview";
 import { useAiOverview } from "@/lib/api/modules/ai";
 import { CardLoader } from "@/components/shared/Loader";
+import { SkeletonRows, ErrorRow } from "@/components/shared/TableStates";
+import useDataset from "@/lib/api/useDataset";
 
 /** How each standing of a loan is marked. */
 const LOAN_CHIP = {
@@ -168,6 +170,9 @@ export default function LoanLedger({
   // whole schedule rather than its first rows.
   const [open, setOpen] = useState({});
   const [whole, setWhole] = useState({});
+  // The loans are loaded at sign-in; read here, where the rows are drawn, so
+  // the table shows them coming, or that they could not be fetched.
+  const dataset = useDataset(["loans"]);
 
   const today = todayIso();
   const loans = describeLoans(records).map((loan) => ({ ...loan, ...standing(loan, today) }));
@@ -530,9 +535,11 @@ export default function LoanLedger({
           </div>
         )}
 
-        <div className="overflow-x-auto">
+        {/* Capped in height and scrolled inside, so the heading row stays in
+            sight over a long list, as on every table in the system. */}
+        <div className="max-h-[min(70vh,720px)] overflow-auto">
           <table className="w-full min-w-[1100px] text-sm">
-            <thead className="bg-table-head text-xs font-semibold text-primary">
+            <thead className="sticky top-0 z-10 bg-table-head text-xs font-semibold text-primary">
               <tr>
                 <th className="px-4 py-3 text-start">Loan No.</th>
                 <th className="px-4 py-3 text-end">Loan Amount (OMR)</th>
@@ -549,14 +556,20 @@ export default function LoanLedger({
               </tr>
             </thead>
             <tbody>
-              {shown.length === 0 && (
+              {dataset.status === "loading" && (
+                <SkeletonRows columns={10} rows={5} shapes={["lines"]} />
+              )}
+              {dataset.status === "failed" && (
+                <ErrorRow colSpan={10} label="loans" onRetry={dataset.retry} />
+              )}
+              {dataset.status === "ready" && shown.length === 0 && (
                 <tr>
                   <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
                     No loans to show.
                   </td>
                 </tr>
               )}
-              {shown.map((loan, index) => {
+              {dataset.status === "ready" && shown.map((loan, index) => {
                 const unfolded = isOpen(loan, index);
                 const rows = whole[loan.id] ? loan.installments : loan.installments.slice(0, SCHEDULE_PREVIEW);
                 const more = loan.installments.length - SCHEDULE_PREVIEW;
@@ -723,6 +736,9 @@ export default function LoanLedger({
  */
 export function ExistingLoans({ records }) {
   const [open, setOpen] = useState({});
+  // Read off the loans loaded at sign-in, so the list shows them coming, or
+  // that they could not be fetched, rather than saying there are none.
+  const dataset = useDataset(["loans"]);
   const loans = describeLoans(records).filter((loan) => loan.granted);
   const active = loans.filter((loan) => loan.status === "Active");
   const outstanding = loans.reduce((total, loan) => total + loan.remaining, 0);
@@ -750,7 +766,7 @@ export function ExistingLoans({ records }) {
         </div>
       </div>
 
-      {loans.length === 0 ? (
+      {dataset.status === "ready" && loans.length === 0 ? (
         <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
           No loans have been granted yet.
         </p>
@@ -770,7 +786,11 @@ export function ExistingLoans({ records }) {
               </tr>
             </thead>
             <tbody>
-              {loans.map((loan) => (
+              {dataset.status === "loading" && <SkeletonRows columns={8} rows={5} />}
+              {dataset.status === "failed" && (
+                <ErrorRow colSpan={8} label="loans" onRetry={dataset.retry} />
+              )}
+              {dataset.status === "ready" && loans.map((loan) => (
                 <Fragment key={loan.id}>
                   <tr className="border-t">
                     <td className="px-3 py-2.5">

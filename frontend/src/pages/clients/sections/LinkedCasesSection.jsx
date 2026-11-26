@@ -98,6 +98,11 @@ export default function LinkedCasesSection() {
       header: "File No.",
       width: "8%",
       exportValue: (row) => row.fileNo + " (" + row.caseStatus + ")",
+      // By the number itself, not the export's "number (status)".
+      // An ID in natural order: each run of digits compares as a number, so
+      // A010 follows A009 and INV-2024-011 follows INV-2024-002.
+      sort: "text",
+      sortValue: (row) => row.fileNo,
       render: (value, row) => (
         <span className="flex items-center gap-2">
           <button
@@ -112,13 +117,15 @@ export default function LinkedCasesSection() {
         </span>
       ),
     },
-    { key: "opponent", header: "Opponent", width: "14%" },
+    { key: "opponent", header: "Opponent", width: "14%", sort: "text" },
     {
       // Every number the same file has been given as it moved up. One file
       // is registered afresh at each level, so the numbers belong together.
       key: "caseNumbers",
       header: "Case Numbers",
       width: "16%",
+      // Combined information: one number per level the file has been at.
+      sort: false,
       exportValue: (row) =>
         numbersOf(row)
           .map(([level, no]) => level + ": " + no)
@@ -144,6 +151,10 @@ export default function LinkedCasesSection() {
         isClosed(row)
           ? "Closed - ended at " + row.litigationLevel + " - " + row.caseStage
           : [row.litigationLevel, row.caseStage].join(" - "),
+      // In the order a case moves through the levels, Closed last.
+      sort: "status",
+      sortOrder: [...LEVELS, "Closed"],
+      sortValue: (row) => levelOf(row),
       // A file still running says only where it is and what is happening
       // there; saying "Active" as well adds nothing to a row that is plainly
       // running. A closed one says where it ended.
@@ -161,6 +172,8 @@ export default function LinkedCasesSection() {
       key: "court",
       header: "Court Details",
       width: "22%",
+      // Combined information: court, governorate and location.
+      sort: false,
       exportValue: (row) =>
         [row.court, row.governorate, row.location].join(" - "),
       render: (_, row) => (
@@ -177,6 +190,8 @@ export default function LinkedCasesSection() {
       key: "update",
       header: "Latest Update",
       width: "28%",
+      // Descriptive information: the note says what happened.
+      sort: false,
       exportValue: (row) => row.updateDate + " - " + (row.update || "-"),
       render: (value, row) => (
         <div className="space-y-1">
@@ -217,6 +232,7 @@ export default function LinkedCasesSection() {
 
       <DataTable
         columns={columns}
+        itemLabel="cases"
         data={shown}
         // A closed file is kept, under the ones still running.
         endedRow={isClosed}

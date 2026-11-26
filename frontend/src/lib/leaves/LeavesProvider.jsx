@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useReseed } from "@/lib/api/useDataset";
 import { LeavesContext } from "./context";
 import { initialLeaves } from "@/pages/employees/leaveData";
 import { leavesApi } from "@/lib/api/modules/leaves";
@@ -21,6 +22,8 @@ import { replaceAll, upserted } from "@/lib/api/store";
  */
 export default function LeavesProvider({ children }) {
   const [leaves, setLeaves] = useState(initialLeaves);
+  // A Retry on a table reloads "leaves"; take the fresh records in.
+  useReseed("leaves", () => setLeaves([...initialLeaves]));
 
   const value = useMemo(() => {
     const keep = (record) => {

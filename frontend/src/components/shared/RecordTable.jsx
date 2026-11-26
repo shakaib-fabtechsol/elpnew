@@ -1,4 +1,10 @@
 import { cn } from "@/lib/utils";
+import { SortButton } from "./SortMark";
+import EmptyState from "./EmptyState";
+
+// Loading and failure rows for hand-drawn tables, from the one place every
+// table takes them: see TableStates.jsx.
+export { SkeletonRows, ErrorRow } from "./TableStates";
 
 /**
  * The one table every list of records is drawn with.
@@ -20,8 +26,11 @@ import { cn } from "@/lib/utils";
  * Arabic instead of staying put.
  */
 export function RecordTable({ minWidth = 1040, children, className }) {
+  // A box of its own, capped in height, so a long list scrolls inside it and
+  // its heading row stays in sight at the top (HeadRow is sticky) - a table
+  // that scrolls sideways cannot hold its heading against the page instead.
   return (
-    <div className="overflow-x-auto rounded-container border border-container-border bg-card">
+    <div className="max-h-[min(70vh,720px)] overflow-auto rounded-container border border-container-border bg-card">
       <table
         style={{ minWidth }}
         className={cn("table-hover-lines w-full text-start text-sm", className)}
@@ -35,8 +44,8 @@ export function RecordTable({ minWidth = 1040, children, className }) {
 /** The header, which is always one row: no column is split over two lines. */
 export function HeadRow({ children }) {
   return (
-    <thead>
-      <tr className="border-b border-container-border bg-table-head">
+    <thead className="sticky top-0 z-10">
+      <tr className="border-b border-container-border bg-table-head shadow-[0_1px_0_0_var(--container-border)]">
         {children}
       </tr>
     </thead>
@@ -51,17 +60,42 @@ export function HeadRow({ children }) {
  * one matters. What a column is made of is plain from the cells under it, so
  * no bracketed explanation follows the title.
  */
-export function Th({ width, className, children }) {
+export function Th({ width, className, children, sortable, direction, onSort }) {
   return (
     <th
       style={width ? { width } : undefined}
+      aria-sort={
+        direction === "asc" ? "ascending" : direction === "desc" ? "descending" : undefined
+      }
       className={cn(
         "px-4 py-3 text-start text-xs font-semibold text-table-head-ink",
         className
       )}
     >
-      {children}
+      {/* Sortable by the system's sorting standard (lib/sorting.js): pass
+          the props useTableSort's sortProps(key) gives. */}
+      {sortable && onSort ? (
+        <SortButton direction={direction} onSort={onSort}>
+          {children}
+        </SortButton>
+      ) : (
+        children
+      )}
     </th>
+  );
+}
+
+/**
+ * The row a hand-drawn table shows when it has nothing to list - the same
+ * empty state DataTable shows, spanning every column.
+ */
+export function EmptyRow({ colSpan, ...props }) {
+  return (
+    <tr>
+      <td colSpan={colSpan}>
+        <EmptyState {...props} />
+      </td>
+    </tr>
   );
 }
 

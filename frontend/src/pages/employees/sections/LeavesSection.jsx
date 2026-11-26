@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { formatDate } from "@/pages/firm/firmData";
 import LeaveForm from "./LeaveForm";
 import { useLeaves } from "@/lib/leaves/context";
+import useDataset from "@/lib/api/useDataset";
 import {
   LEAVE_STATUS_TONE,
   canTakeAdvance,
@@ -78,6 +79,9 @@ export default function LeavesSection({ employee, canReview = true }) {
   // Shared with every other page that reads leave, so a request asked for here
   // is still there after the page moves away and back.
   const { leaves, addLeave, departmentDecision, managementDecision } = useLeaves();
+  // Every list here is read off the leave book loaded at sign-in: skeleton
+  // rows while it loads, "Unable to load leave requests" with Retry if not.
+  const dataset = useDataset(["leaves"]);
   // While a call to the server is out, its button waits rather than sending twice.
   const [busy, setBusy] = useState(false);
   const send = async (call) => {
@@ -246,6 +250,14 @@ export default function LeavesSection({ employee, canReview = true }) {
               ? balance.remaining + days + " Days / " + balance.remaining + " Days"
               : balance.remaining + " Days / " + Math.max(balance.remaining - days, 0) + " Days")
           : "-",
+      // What the request leaves behind, as a number, for the Balance
+      // column to sort by.
+      balanceAfter:
+        balance && !balance.expired
+          ? leave.status === "Approved" || encashed
+            ? balance.remaining
+            : Math.max(balance.remaining - days, 0)
+          : null,
     };
   };
 
@@ -256,6 +268,8 @@ export default function LeavesSection({ employee, canReview = true }) {
       key: "leaveNo",
       header: "Leave No.",
       width: "10%",
+      // A number in natural order: each run of digits compares as a number.
+      sort: "text",
       render: (value, leave) =>
         canReview ? (
           <button
@@ -273,6 +287,9 @@ export default function LeavesSection({ employee, canReview = true }) {
       key: "category",
       header: "Leave Details",
       width: "18%",
+      skeleton: "lines",
+      // Combined information: category and type in one cell.
+      sort: false,
       render: (value, leave) => (
         <>
           <span className="block font-semibold text-primary">{value}</span>
@@ -284,6 +301,9 @@ export default function LeavesSection({ employee, canReview = true }) {
       key: "period",
       header: "Leave Period",
       width: "22%",
+      // By the first day of leave; an encashment has no dates and sorts last.
+      sort: "date",
+      sortValue: (leave) => (leave.status === ENCASHED_PAID ? null : leave.from || null),
       render: (value, leave) => (
         <span className="whitespace-nowrap">
           {value}
@@ -297,6 +317,9 @@ export default function LeavesSection({ employee, canReview = true }) {
       key: "workflow",
       header: "Approval Workflow",
       width: "20%",
+      skeleton: "lines",
+      // Descriptive information: where it stands, and management's note.
+      sort: false,
       render: (value, leave) => (
         <>
           {value}
@@ -310,12 +333,18 @@ export default function LeavesSection({ employee, canReview = true }) {
       key: "balanceText",
       header: "Balance",
       width: "15%",
+      // By the balance the request leaves, not the "before / after" text.
+      sort: "balance",
+      sortValue: (leave) => leave.balanceAfter,
       render: (value) => <span className="whitespace-nowrap">{value}</span>,
     },
     {
       key: "status",
       header: "Status",
       width: "15%",
+      // Waiting first, then granted, then paid out; refused last.
+      sort: "status",
+      sortOrder: ["Pending", "Approved", ENCASHED_PAID, "Rejected"],
       render: (value) => {
         const Icon = STATUS_ICON[value];
         return (
@@ -360,6 +389,7 @@ export default function LeavesSection({ employee, canReview = true }) {
           <RequestTable
             rows={[...mine].sort((a, b) => b.id - a.id).map(asRow)}
             columns={columns}
+            dataset={dataset}
             searchPlaceholder="Search by leave no., type or period..."
             itemLabel="leave requests"
             exportFileName="leaves.csv"
@@ -417,6 +447,7 @@ export default function LeavesSection({ employee, canReview = true }) {
               <RequestTable
                 rows={[...mine].sort((a, b) => b.id - a.id).map(asRow)}
                 columns={columns}
+                dataset={dataset}
                 searchPlaceholder="Search by leave no., type or period..."
                 itemLabel="leave requests"
                 exportFileName="leaves.csv"
@@ -438,6 +469,7 @@ export default function LeavesSection({ employee, canReview = true }) {
           <RequestTable
             rows={rows.map(asRow)}
             columns={columns}
+            dataset={dataset}
             searchPlaceholder="Search by leave no., type or period..."
             itemLabel="leave requests"
             exportFileName={"leaves-" + year + ".csv"}

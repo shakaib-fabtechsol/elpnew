@@ -36,6 +36,7 @@ import CommissionForm from "@/pages/firm/sections/CommissionForm";
 import { useClients } from "@/lib/clients/context";
 import { commissionsApi } from "@/lib/api/modules/commissions";
 import { attempt } from "@/lib/api/notice";
+import useDataset, { useReseed } from "@/lib/api/useDataset";
 import { employeeRecords } from "../employeeData";
 
 import SalariesSection from "./SalariesSection";
@@ -81,6 +82,11 @@ const money = (amount) =>
 function CommissionTab({ employee, adding, onCloseAdd, onOpenAdd, canDecide = true }) {
   const { clients } = useClients();
   const [records, setRecords] = useState(() => commissionsFor(employee.name));
+  // The firm's commissions are loaded at sign-in: the lists below show
+  // skeleton rows until they land, and Retry if they could not be read. When
+  // they arrive (or come back after a Retry) this employee's are read again.
+  const dataset = useDataset(["commissions"]);
+  useReseed("commissions", () => setRecords(commissionsFor(employee.name)));
   // The commission on the list the form is open on, if any.
   const [openId, setOpenId] = useState(null);
   const open = records.find((record) => record.id === openId) || null;
@@ -214,6 +220,8 @@ function CommissionTab({ employee, adding, onCloseAdd, onOpenAdd, canDecide = tr
       key: "no",
       header: "Commission No.",
       width: "13%",
+      // A number in natural order: each run of digits compares as a number.
+      sort: "text",
       render: (value, record) =>
         record.status === COMMISSION_PAID ? (
           <span className="font-medium text-primary">{value}</span>
@@ -231,15 +239,20 @@ function CommissionTab({ employee, adding, onCloseAdd, onOpenAdd, canDecide = tr
       key: "dateText",
       header: "Commission Date",
       width: "12%",
+      sort: "date",
       render: (value) => <span className="whitespace-nowrap text-primary">{value}</span>,
     },
-    { key: "clientName", header: "Client Name", width: "15%" },
-    { key: "paidTo", header: "Payee", width: "14%", render: (value) => shortName(value) },
+    { key: "clientName", header: "Client Name", width: "15%", sort: "text" },
+    { key: "paidTo", header: "Payee", width: "14%", sort: "text", render: (value) => shortName(value) },
     {
       // What it was worked out from, then what it came to.
       key: "rate",
       header: "Legal Fees & Commission",
+      skeleton: "lines",
       width: "20%",
+      // By the commission paid, the figure the other two lines come to.
+      sort: "money",
+      sortValue: (record) => commissionOn(record),
       render: (value, record) => (
         <>
           <span className="block">
@@ -261,12 +274,16 @@ function CommissionTab({ employee, adding, onCloseAdd, onOpenAdd, canDecide = tr
       key: "notes",
       header: "Notes",
       width: "14%",
+      // Descriptive information.
+      sort: false,
       render: (value) => <span className="text-muted-foreground">{value || "-"}</span>,
     },
     {
       key: "status",
       header: "Status",
       width: "12%",
+      // Pending, then Approved, then Paid; Rejected last: the default order.
+      sort: "status",
       render: (value) => (
         <span
           className={cn(
@@ -319,6 +336,7 @@ function CommissionTab({ employee, adding, onCloseAdd, onOpenAdd, canDecide = tr
               <RequestTable
                 rows={records.map(asRow)}
                 columns={columns}
+                dataset={dataset}
                 searchPlaceholder="Search by commission no., client or payee..."
                 itemLabel="commissions"
                 exportFileName="commissions.csv"
@@ -364,6 +382,7 @@ function CommissionTab({ employee, adding, onCloseAdd, onOpenAdd, canDecide = tr
               <RequestTable
                 rows={records.map(asRow)}
                 columns={columns}
+                dataset={dataset}
                 searchPlaceholder="Search by commission no., client or payee..."
                 itemLabel="commissions"
                 exportFileName="commissions.csv"
@@ -373,6 +392,7 @@ function CommissionTab({ employee, adding, onCloseAdd, onOpenAdd, canDecide = tr
           <RequestTable
             rows={rows}
             columns={columns}
+            dataset={dataset}
             searchPlaceholder="Search by commission no., client or payee..."
             itemLabel="commissions"
             exportFileName="commissions.csv"

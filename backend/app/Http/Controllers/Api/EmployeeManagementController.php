@@ -144,6 +144,9 @@ class EmployeeManagementController extends Controller
             'needsAttention' => $rows->where('standing', EmployeeSignals::ATTENTION)->values()->all(),
             'notEvaluated' => $rows->where('standing', EmployeeSignals::UNRATED)->count(),
             'total' => $rows->count(),
+            // Everybody's standing and last score, for the Employees table's
+            // Performance Evaluation column.
+            'employees' => $rows->values()->all(),
         ]]);
     }
 

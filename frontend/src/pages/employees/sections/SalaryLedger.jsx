@@ -4,6 +4,7 @@ import { RecordLink } from "@/components/shared/RecordTable";
 import { amountValue, money } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { useAdvances } from "@/lib/advances/context";
+import useDataset from "@/lib/api/useDataset";
 import {
   SALARY_STATUS_TONE,
   isSalaryRequest,
@@ -48,6 +49,9 @@ export default function SalaryLedger({
   moreAdds = [],
 }) {
   const { advances } = useAdvances();
+  // The ledger is the salaries and the advances loaded at sign-in, side by
+  // side: skeleton rows until both land, and Retry if either failed.
+  const dataset = useDataset(["salaries", "salary advances"]);
   const salaries = salaryHistoryRows(history);
 
   // The salary payment number of a month: the one it was paid under, or - for
@@ -126,6 +130,8 @@ export default function SalaryLedger({
       key: "no",
       header: "Salary No.",
       width: "13%",
+      // A number in natural order: each run of digits compares as a number.
+      sort: "text",
       render: (value, row) => {
         const opens =
           row.kind === "advance" ? onOpenAdvance : isSalaryRequest(row.record) ? onOpenSalary : null;
@@ -136,11 +142,14 @@ export default function SalaryLedger({
         );
       },
     },
-    { key: "period", header: "Salary Period", width: "14%" },
+    // A month and year ("March 2026"), so it sorts as the date it is.
+    { key: "period", header: "Salary Period", width: "14%", sort: "date" },
     {
       key: "summary",
       header: "Salary Summary",
       width: "30%",
+      // Combined information: basic, allowances and deductions.
+      sort: false,
       render: (value, row) =>
         row.kind === "salary" ? (
           <span className="text-muted-foreground">
@@ -160,11 +169,17 @@ export default function SalaryLedger({
       width: "13%",
       render: (value) => <span className="whitespace-nowrap font-bold text-green-700">{money(value)}</span>,
       exportValue: (row) => row.net,
+      sort: "money",
+      sortValue: (row) => row.net,
     },
     {
       key: "status",
       header: "Transfer Status",
       width: "13%",
+      // Waiting on a decision or a correction, then approved and still to
+      // send, then sent; refused last.
+      sort: "status",
+      sortOrder: ["Pending", "Returned", "Approved", "Transferred", "Rejected"],
       render: (value) => (
         <span
           className={cn(
@@ -181,6 +196,8 @@ export default function SalaryLedger({
       key: "transfer",
       header: "Transfer Details",
       width: "17%",
+      // Combined information: method and reference.
+      sort: false,
       render: (value) => <span className="text-primary">{value || "-"}</span>,
     },
   ];
@@ -191,6 +208,7 @@ export default function SalaryLedger({
         <RequestTable
           rows={rows}
           columns={columns}
+          dataset={dataset}
           searchPlaceholder="Search by salary no., period, or transfer details..."
           itemLabel="salary payments"
           exportFileName="salary-payments.csv"

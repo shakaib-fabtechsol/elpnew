@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useReseed } from "@/lib/api/useDataset";
 import { FirmContext } from "./context";
 import {
   initialFirmInfo,
@@ -25,6 +26,8 @@ export default function FirmProvider({ children }) {
   // A copy of the list, so keeping the shared lists in step (below) never
   // empties the very array this state holds.
   const [bankAccounts, setBankAccounts] = useState(() => [...initialBankAccounts]);
+  // A Retry on a table reloads "firm bank accounts"; take the fresh records in.
+  useReseed("firm bank accounts", () => setBankAccounts([...initialBankAccounts]));
   // Payment forms read the accounts from firmData rather than from here;
   // kept in step on every change so a new account is offered at once.
   syncBankAccounts(bankAccounts);

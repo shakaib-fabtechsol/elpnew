@@ -155,6 +155,11 @@ export default function InvoicesSection({ clientNo }) {
       header: "Invoice No.",
       width: "14%",
       exportValue: (row) => row.invoiceNo + " (" + row.status + ")",
+      // By the number itself, not the export's "number (status)".
+      // An ID in natural order: each run of digits compares as a number, so
+      // A010 follows A009 and INV-2024-011 follows INV-2024-002.
+      sort: "text",
+      sortValue: (row) => row.invoiceNo,
       render: (value, row) => (
         <div>
           <button
@@ -177,6 +182,9 @@ export default function InvoicesSection({ clientNo }) {
       header: "Issue & Due Date",
       width: "13%",
       exportValue: (row) => "Issued " + row.date + ", due " + row.dueDate,
+      // By the issue date, the line that leads; the due date follows it.
+      sort: "date",
+      sortValue: (row) => row.date,
       render: (value, row) => (
         <div className="text-xs">
           <Line label="Issue">{shortDate(value)}</Line>
@@ -191,6 +199,8 @@ export default function InvoicesSection({ clientNo }) {
       key: "caseFileNo",
       header: "Case Details",
       width: "22%",
+      // Combined information: file, opponent, level and case number.
+      sort: false,
       exportValue: (row) => {
         const file = caseByFileNo(row.caseFileNo);
         if (!file) return "-";
@@ -220,6 +230,8 @@ export default function InvoicesSection({ clientNo }) {
       key: "details",
       header: "Invoice Details",
       width: "22%",
+      // Descriptive information: what was charged and why.
+      sort: false,
       exportValue: (row) =>
         row.details + (row.reason ? " - " + row.reason : ""),
       render: (value, row) => (
@@ -233,6 +245,8 @@ export default function InvoicesSection({ clientNo }) {
       key: "amount",
       header: "Invoice Amount",
       width: "14%",
+      sort: "money",
+      sortValue: (row) => row.amount,
       render: (value, row) => (
         <div>
           <p className="font-medium">{money(value)}</p>
@@ -248,6 +262,8 @@ export default function InvoicesSection({ clientNo }) {
       key: "notes",
       header: "Notes",
       width: "15%",
+      // Descriptive information.
+      sort: false,
       render: (value) =>
         value || <span className="text-muted-foreground">-</span>,
     },
@@ -298,6 +314,7 @@ export default function InvoicesSection({ clientNo }) {
         <CardContent className="p-4 sm:p-6">
           <DataTable
             columns={columns}
+            itemLabel="invoices"
             data={rows}
             searchPlaceholder="Search invoices..."
             exportFileName="client-invoices.csv"

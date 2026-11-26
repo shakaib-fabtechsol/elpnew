@@ -89,39 +89,60 @@ export const EMPLOYEE_CATEGORIES = ["Partner", "Employee"];
 /** How far up the firm somebody sits, regardless of what they do. */
 export const JOB_LEVELS = ["Top Management", "Executive Management", "Staff"];
 
-/** The side of the firm's work somebody belongs to. */
-export const DEPARTMENTS = ["Partner", "Legal Services", "Administration"];
+/**
+ * The firm's three circles: the side of its work somebody belongs to. Every
+ * record sits in one (the older departments were moved onto these), and the
+ * API takes no other (EmployeeRequest::DEPARTMENTS).
+ */
+export const JUDICIAL = "Judicial";
+export const ADMINISTRATIVE = "Administrative";
+export const FINANCIAL = "Financial / Accounting";
+export const DEPARTMENTS = [JUDICIAL, ADMINISTRATIVE, FINANCIAL];
 
 /**
- * The job titles each department can hold.
+ * The job titles each circle can hold, for a permanent employee and for an
+ * intern or trainee.
  *
- * A title belongs to a department rather than to the firm at large - there is
- * no such thing as an Accountant in Legal Services - so the list is kept here
- * by department and the form offers only the part that applies. Choosing a
- * department before a title is the order the work is actually decided in.
+ * A title belongs to a circle rather than to the firm at large - there is no
+ * such thing as an Accountant in the Judicial circle - and a trainee is taken
+ * on as one of a few trainee titles rather than a permanent one. So the list
+ * is kept here by circle and by staff category, and the form offers only the
+ * part that applies. The circle is chosen before the title because that is
+ * the order the work is actually decided in.
  */
 export const JOB_TITLES = {
-  Partner: ["Founding Partner", "Partner", "Managing Partner"],
-  "Legal Services": ["Lawyer", "Legal Consultant", "Legal Associate"],
-  Administration: ["Administrator", "Accountant", "Administrative Assistant"],
+  [JUDICIAL]: {
+    Permanent: ["Founding Partner", "Managing Partner", "Partner", "Lawyer", "Legal Consultant", "Legal Associate"],
+    "Intern / Trainee": ["Trainee Lawyer", "Legal Intern"],
+  },
+  [ADMINISTRATIVE]: {
+    Permanent: ["Administrator", "Administrative Assistant", "HR Officer", "IT Officer"],
+    "Intern / Trainee": ["Administrative Intern"],
+  },
+  [FINANCIAL]: {
+    Permanent: ["Accountant", "Senior Accountant", "Finance Officer"],
+    "Intern / Trainee": ["Accounting Intern"],
+  },
 };
 
-/** Every title there is, for reading a record back whatever its department. */
-export const OCCUPATIONS = Object.values(JOB_TITLES).flat();
+/**
+ * The titles to offer for a circle: a trainee's for an intern or trainee, the
+ * permanent ones otherwise (also when the setup question was never answered,
+ * as on records older than it).
+ */
+export const jobTitlesFor = (department, staffCategory) => {
+  const circle = JOB_TITLES[department];
+  if (!circle) return [];
+  return circle[staffCategory === "Intern / Trainee" ? "Intern / Trainee" : "Permanent"];
+};
+
+/** Every title there is, for reading a record back whatever its circle. */
+export const OCCUPATIONS = Object.values(JOB_TITLES).flatMap((circle) => Object.values(circle).flat());
 
 /* Employment Information, as Add Employee now asks it. */
 
 /** Where somebody stands in the firm's line of authority. */
 export const EMPLOYEE_POSITIONS = ["Partner", "Manager", "Employee"];
-
-/** The firm's departments, the legal work apart from what supports it. */
-export const DEPARTMENT_GROUPS = [
-  { group: "LEGAL", options: ["Litigation", "Advisory & Contracts"] },
-  {
-    group: "SUPPORT SERVICES",
-    options: ["Administration", "Finance", "Human Resources", "Information Technology"],
-  },
-];
 
 /**
  * A grade: a consultant's seniority, or the courts a lawyer may plead
@@ -383,6 +404,8 @@ export const COMMON_DOCUMENT_TYPES = [
   "University Degree",
   "Experience Certificate",
   "Training Certificate",
+  // The employee's photo, shown on the profile and the summary card.
+  "Employee Photo",
   // Administrative Decisions - one kind per decision, because a file that
   // lumps a promotion in with a warning cannot be read at a glance.
   "Appointment Decision",

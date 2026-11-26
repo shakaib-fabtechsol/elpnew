@@ -47,6 +47,10 @@ const columns = [
     width: "12%",
     cellClassName: "text-start font-medium",
     exportValue: (row) => row.case_no + " (" + row.status + ")",
+    // In natural order by the number itself ("2024/015" is year then
+    // sequence), not the export's "number (status)".
+    sort: "text",
+    sortValue: (row) => row.case_no,
     render: (value, row) => (
       <span className="flex flex-wrap items-center gap-2">
         {value}
@@ -54,20 +58,24 @@ const columns = [
       </span>
     ),
   },
-  { key: "client", header: "Client", width: "18%" },
+  { key: "client", header: "Client", width: "18%", sort: "text" },
   {
     key: "case_type",
     header: "Type",
     width: "10%",
+    sort: "text",
     render: (value) => (
       <Badge variant="outline">{value}</Badge>
     )
   },
-  { key: "court", header: "Court", width: "18%" },
+  { key: "court", header: "Court", width: "18%", sort: "text" },
   {
     key: "stage",
     header: "Stage",
     width: "12%",
+    // In the order a case moves through the stages, not A - Z.
+    sort: "status",
+    sortOrder: Object.keys(STAGE_VARIANT),
     render: (value) => (
       <Badge
         variant={STAGE_VARIANT[value] || "outline"}
@@ -81,6 +89,7 @@ const columns = [
     header: "Actions",
     width: "12%",
     disableFilter: true,
+    sort: false,
     render: (_, row) => (
       <div className="flex items-center justify-center gap-1">
         <Button variant="ghost" size="icon" className="h-8 w-8" asChild title="Open hearing">
@@ -145,6 +154,7 @@ export default function LitigationList() {
         <CardContent className="p-4 sm:p-6">
           <DataTable
             columns={columns}
+            itemLabel="cases"
             data={visibleCases}
             keepOrder
             // A closed case is kept, under the ones still running.

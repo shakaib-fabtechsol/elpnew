@@ -95,6 +95,7 @@ const DOCUMENT_CATEGORY = {
   [LAWYER_DOCUMENT_TYPE]: "Professional Licenses",
   [LAWYER_MEMBERSHIP_TYPE]: "Professional Licenses",
   CV: "Qualifications & Experience",
+  "Employee Photo": "Identity & Residency",
   "University Degree": "Qualifications & Experience",
   "Experience Certificate": "Qualifications & Experience",
   "Training Certificate": "Qualifications & Experience",
@@ -323,3 +324,57 @@ export const netSalary = (employee) =>
 
 /** An amount as it is shown anywhere in the system: figure then currency. */
 export { money as amount } from "@/lib/money";
+
+/**
+ * The papers this employee is expected to have on file.
+ *
+ * A paper is required once the record holds the details it is a copy of: a
+ * saved Civil ID number asks for the National ID (an Omani) or the Residence
+ * Card (anybody else), a passport number for the Passport, a lawyer's card
+ * number for the practice licence. Nothing is required that the record gives
+ * no reason to expect, and nothing the system cannot file.
+ */
+export function requiredDocumentTypes(employee) {
+  if (!employee) return [];
+  const fileable = documentTypesFor();
+  const idType = employee.nationality === "Omani" ? "National ID" : "Residence Card";
+  return Object.entries(RELATED_RECORD)
+    .filter(([type]) => fileable.includes(type))
+    .filter(([type]) => type === idType || !["National ID", "Residence Card"].includes(type))
+    .filter(([, related]) => Boolean(employee[related.number]))
+    .map(([type]) => type);
+}
+
+/**
+ * Where an employee's papers stand, as the Employees table shows it.
+ *
+ *   Expired        a current paper has run out
+ *   Incomplete     a required paper is missing
+ *   Expiring Soon  a current paper runs out within ninety days
+ *   Complete       everything required is filed and in date
+ *
+ * In that order: the first that applies is the standing, and the counts of
+ * each come with it.
+ */
+export function documentStanding(employee) {
+  const papers = documentsFor(employee?.id);
+  const current = papers.filter((paper) => documentStatus(paper, papers) !== "Archived");
+  const expired = current.filter((paper) => documentStatus(paper, papers) === "Expired");
+  const expiring = current.filter((paper) => documentStatus(paper, papers) === "Expiring Soon");
+  // The National ID and the Residence Card are both the copy of the Civil ID
+  // number, so either one on file answers for it.
+  const CIVIL_ID = ["National ID", "Residence Card"];
+  const onFile = (type) =>
+    current.some((paper) =>
+      CIVIL_ID.includes(type) ? CIVIL_ID.includes(paper.type) : paper.type === type
+    );
+  const missing = requiredDocumentTypes(employee).filter((type) => !onFile(type));
+  const status = expired.length
+    ? "Expired"
+    : missing.length
+      ? "Incomplete"
+      : expiring.length
+        ? "Expiring Soon"
+        : "Complete";
+  return { status, expired, expiring, missing, current, papers };
+}

@@ -29,6 +29,9 @@ export default function RequestTable({
   // Further ways to add, as [{ label, onClick }], beside the main one.
   moreAdds = [],
   endedRow,
+  // What useDataset returns for the datasets the rows come from, handed on
+  // so the table shows skeletons while they load and Retry if they failed.
+  dataset,
 }) {
   const [filters, setFilters] = useState({});
   const [page, setPage] = useState(1);
@@ -64,6 +67,7 @@ export default function RequestTable({
   return (
     <DataTable
       columns={columns}
+      dataset={dataset}
       data={shown}
       itemLabel={itemLabel}
       // Every list of requests searches the same way and says so the same

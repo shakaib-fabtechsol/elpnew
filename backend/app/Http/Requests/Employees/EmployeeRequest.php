@@ -14,14 +14,14 @@ use Illuminate\Validation\Rule;
 class EmployeeRequest extends ApiRequest
 {
     /**
-     * The departments a record may name: the three the older records were
-     * filed under, and the ones Add Employee now offers (lib/constants.js
-     * DEPARTMENT_GROUPS).
+     * The departments a record may name: the firm's three circles
+     * (lib/constants.js DEPARTMENTS). The older department names were moved
+     * onto these by a migration and are no longer taken.
      */
-    public const DEPARTMENTS = [
-        'Partner', 'Legal Services', 'Administration',
-        'Litigation', 'Advisory & Contracts', 'Finance', 'Human Resources', 'Information Technology',
-    ];
+    public const JUDICIAL = 'Judicial';
+    public const ADMINISTRATIVE = 'Administrative';
+    public const FINANCIAL = 'Financial / Accounting';
+    public const DEPARTMENTS = [self::JUDICIAL, self::ADMINISTRATIVE, self::FINANCIAL];
 
     /** A lawyer's level, as older records say it and as the grade on the form now says it. */
     public const PRACTICE_LEVELS = [
@@ -106,7 +106,11 @@ class EmployeeRequest extends ApiRequest
             'branch' => $text(60),
             'dateOfJoining' => [$creating ? 'required' : 'sometimes', 'date_format:Y-m-d'],
             'employmentType' => ['nullable', Rule::in(['Full-Time', 'Part-Time', 'Temporary'])],
-            'employmentEndDate' => [...$date, Rule::when($this->filled('dateOfJoining'), 'after_or_equal:dateOfJoining')],
+            'employmentEndDate' => [
+                ...$date,
+                Rule::when($this->filled('dateOfJoining'), 'after_or_equal:dateOfJoining'),
+                Rule::when($this->filled('contractStartDate'), 'after:contractStartDate'),
+            ],
             'category' => $text(60),
             'jobLevel' => $text(60),
             'department' => [$req, Rule::in(self::DEPARTMENTS)],
@@ -123,11 +127,30 @@ class EmployeeRequest extends ApiRequest
 
             'contractType' => ['nullable', Rule::in(['Fixed-term', 'Indefinite-term'])],
             'contractStartDate' => $date,
+            // A temporary contract's end comes after its start (employmentEndDate above).
+            // A trainee's training period, apart from any contract.
+            'trainingStart' => $date,
+            'trainingEnd' => [...$date, Rule::when($this->filled('trainingStart'), 'after:trainingStart')],
             'probationPeriod' => $text(20),
             'noticePeriod' => $text(20),
             'annualLeaveDays' => ['nullable', 'integer', 'between:0,365'],
 
-            'salary' => [$creating ? 'required' : 'sometimes', 'numeric', 'gt:0'],
+            // Asked first on Add Employee; they decide which papers and steps apply.
+            'professionalClassification' => ['nullable', Rule::in(['Lawyer', 'Non-Lawyer'])],
+            'staffCategory' => ['nullable', Rule::in(['Permanent', 'Intern / Trainee'])],
+            'paid' => ['nullable', 'boolean'],
+
+            // Personal Information: education, languages, and the CV as a paragraph.
+            'highestEducation' => ['nullable', Rule::in(self::EDUCATION_LEVELS)],
+            'languages' => ['nullable', 'array', 'max:12'],
+            'languages.*' => ['string', 'max:30'],
+            'cvSummary' => ['nullable', 'string', 'max:3000'],
+
+            // An unpaid employee (a trainee without a salary) has none to give.
+            'salary' => [
+                $creating ? Rule::requiredIf(fn () => $this->input('paid') !== false) : 'sometimes',
+                'nullable', 'numeric', $this->input('paid') === false ? 'min:0' : 'gt:0',
+            ],
             'special' => $money, 'housing' => $money, 'phoneAllowance' => $money, 'transport' => $money,
             'electricity' => $money, 'water' => $money, 'loan' => $money, 'salaryAdvance' => $money,
             'disciplinary' => $money, 'otherDeduction' => $money, 'administrative' => $money,
@@ -145,9 +168,16 @@ class EmployeeRequest extends ApiRequest
         ];
     }
 
+    /** The levels Personal Information offers, lowest first. */
+    public const EDUCATION_LEVELS = [
+        'Secondary School', 'Diploma', 'Bachelor\'s Degree', 'Master\'s Degree', 'Doctorate (PhD)', 'Other',
+    ];
+
     public function messages(): array
     {
         return [
+            'trainingEnd.after' => 'The training end date must be after its start date.',
+            'employmentEndDate.after' => 'The contract end date must be after its start date.',
             'lastWorkingDate.required_if' => 'An inactive employee needs a last working day.',
             'decisionMaker.required_if' => 'Say whose decision the leaving was.',
             'iban.regex' => 'Enter a valid IBAN: two letters, then 10 to 32 letters or digits (e.g. OM81 0270 3120 4567 8901 234).',
@@ -175,11 +205,18 @@ class EmployeeRequest extends ApiRequest
         if (isset($data['social_protection'])) {
             $data['social_protection'] = (bool) $data['social_protection'];
         }
+        if (isset($data['paid'])) {
+            $data['paid'] = (bool) $data['paid'];
+        }
+        // No salary on an unpaid record is a salary of nothing.
+        if (array_key_exists('salary', $data) && $data['salary'] === null) {
+            $data['salary'] = 0;
+        }
 
         // These columns always hold a value. Sent empty, they are left out:
         // a new record then takes the column's default (Active, +968, 30
         // days...) and an existing one keeps what it has.
-        foreach (['status', 'dial_code', 'work_dial_code', 'emergency_dial_code', 'annual_leave_days', 'social_protection'] as $key) {
+        foreach (['status', 'dial_code', 'work_dial_code', 'emergency_dial_code', 'annual_leave_days', 'social_protection', 'paid'] as $key) {
             if (array_key_exists($key, $data) && $data[$key] === null) {
                 unset($data[$key]);
             }

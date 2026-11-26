@@ -16,6 +16,8 @@ import { LAWYER_DOCUMENT_TYPE } from "@/lib/constants";
 
 /** The kinds of paper, in the order the design lists them. */
 export const INTAKE_TYPES = [
+  // A picture, not a paper: filed with the record, never read for fields.
+  { key: "photo", label: "Employee Photo", fileAs: "Employee Photo", noReading: true },
   { key: "civilId", label: "Civil ID", fileAs: "National ID", numberKey: "civilId", expiryKey: "idExpiry" },
   { key: "passport", label: "Passport", fileAs: "Passport", numberKey: "passportNumber", expiryKey: "passportExpiry" },
   { key: "contract", label: "Employment Contract", fileAs: "Employment Contract" },
@@ -27,6 +29,29 @@ export const INTAKE_TYPES = [
 ];
 
 export const intakeType = (key) => INTAKE_TYPES.find((type) => type.key === key);
+
+/**
+ * The upload cards a new employee is offered, from the setup answers:
+ * a Passport only for somebody who is not Omani, a Lawyer Card only for a
+ * lawyer. The rest are offered to everybody. Hidden cards are not asked for,
+ * and do not count towards what is required.
+ */
+export const intakeTypesFor = (values, nonOmani) =>
+  INTAKE_TYPES.filter((type) => {
+    if (type.key === "passport") return nonOmani;
+    if (type.key === "lawyerCard") return values.professionalClassification !== "Non-Lawyer";
+    return true;
+  });
+
+/** Of those, the ones a new employee's file cannot be complete without. */
+export const requiredIntakeTypes = (values, nonOmani) =>
+  intakeTypesFor(values, nonOmani)
+    .map((type) => type.key)
+    .filter((key) =>
+      ["photo", "civilId", "contract"].includes(key) ||
+      (key === "passport" && nonOmani) ||
+      (key === "lawyerCard" && values.professionalClassification === "Lawyer")
+    );
 
 /** What a paper may be uploaded as, and how large. */
 export const INTAKE_ACCEPT = ".pdf,.jpg,.jpeg,.png";
@@ -55,12 +80,13 @@ export const INTAKE_FIELDS = {
   emergencyPhone: { label: "Emergency Contact Phone", step: "personal" },
   branch: { label: "Branch / Work Location", step: "employment" },
   position: { label: "Position", step: "employment" },
-  department: { label: "Department", step: "employment" },
+  department: { label: "Department (Circle)", step: "employment" },
+  occupation: { label: "Job Title", step: "employment" },
   grade: { label: "Grade", step: "employment" },
   workEmail: { label: "Work Email", step: "employment" },
-  employmentType: { label: "Employment / Contract Type", step: "contract", el: "employmentContract" },
-  contractType: { label: "Employment / Contract Type", step: "contract", el: "employmentContract" },
-  dateOfJoining: { label: "Contract Start Date", step: "contract" },
+  employmentType: { label: "Employment Type", step: "contract" },
+  contractType: { label: "Contract Type", step: "contract" },
+  dateOfJoining: { label: "Date of Joining", step: "contract" },
   noticePeriod: { label: "Notice Period", step: "contract" },
   civilId: { label: "Civil ID / Resident Card No.", step: "identity" },
   idExpiry: { label: "Civil ID / Resident Card Expiry", step: "identity" },
@@ -72,6 +98,7 @@ export const INTAKE_FIELDS = {
   housing: { label: "Housing Allowance", step: "payroll" },
   transport: { label: "Transport Allowance", step: "payroll" },
   bankName: { label: "Bank Name", step: "banking" },
+  accountHolder: { label: "Account Name", step: "banking" },
   accountNumber: { label: "Account Number", step: "banking" },
   iban: { label: "IBAN", step: "banking" },
   swiftCode: { label: "SWIFT Code", step: "banking" },
@@ -117,19 +144,39 @@ export const requiredFields = (values) => [
   "status",
   ...(values.status === "Inactive"
     ? ["lastWorkingDate", "decisionMaker"]
-    : ["branch", "position", "department", "grade", "workEmail"]),
+    : [
+        "branch",
+        "position",
+        "department",
+        "occupation",
+        // A grade is a lawyer's practice level or a consultant's seniority:
+        // only the Judicial circle has one.
+        ...(values.department === "Judicial" ? ["grade"] : []),
+        "workEmail",
+      ]),
   "contractType",
   "dateOfJoining",
+  // A temporary contract runs between two dates; a permanent one has neither.
+  ...(values.contractType === "Fixed-term" ? ["contractStartDate", "employmentEndDate"] : []),
+  // Only a trainee has a training period.
+  ...(values.staffCategory === "Intern / Trainee" ? ["trainingStart", "trainingEnd"] : []),
+  "noticePeriod",
   "civilId",
   "idExpiry",
-  ...(values.occupation === "Lawyer" ? ["lawyerCardNo", "lawyerCardExpiry"] : []),
-  "salaryEffectiveDate",
-  "salary",
-  "bankName",
-  "accountNumber",
-  "iban",
-  "swiftCode",
-  ...(values.socialProtection === "Yes" ? ["spRegistrationNo", "spRegistrationDate"] : []),
+  ...(values.professionalClassification === "Lawyer" ||
+  (!values.professionalClassification && values.occupation === "Lawyer")
+    ? ["lawyerCardNo", "lawyerCardExpiry"]
+    : []),
+  // Pay and bank only for somebody who is paid: an unpaid trainee has
+  // neither, and their Payroll & Banking step does not apply.
+  ...(values.paid === "No"
+    ? []
+    : // IBAN and SWIFT are asked for but optional: the account number is
+      // what a local transfer is made to.
+      ["salaryEffectiveDate", "salary", "bankName", "accountHolder", "accountNumber"]),
+  ...(values.socialProtection === "Yes" && values.staffCategory !== "Intern / Trainee"
+    ? ["spRegistrationNo", "spRegistrationDate"]
+    : []),
 ];
 
 /** The step a required field is asked on, for those not filled by papers. */
@@ -138,6 +185,10 @@ const REQUIRED_STEP = {
   lastWorkingDate: "employment",
   decisionMaker: "employment",
   salaryEffectiveDate: "payroll",
+  contractStartDate: "contract",
+  employmentEndDate: "contract",
+  trainingStart: "contract",
+  trainingEnd: "contract",
 };
 export const fieldStep = (key) => INTAKE_FIELDS[key]?.step || REQUIRED_STEP[key] || "personal";
 

@@ -19,9 +19,10 @@ const references = [
   { id: 8, category: "Case Types", name: "Labor", code: "LAB", status: "Active" },
   { id: 9, category: "Case Types", name: "Criminal", code: "CRM", status: "Active" },
   { id: 10, category: "Case Types", name: "Family", code: "FAM", status: "Active" },
-  { id: 11, category: "Departments", name: "Litigation", code: "LIT", status: "Active" },
-  { id: 12, category: "Departments", name: "Corporate", code: "CORP", status: "Active" },
-  { id: 13, category: "Departments", name: "Administration", code: "ADM", status: "Active" },
+  // The firm's three circles (lib/constants.js DEPARTMENTS).
+  { id: 11, category: "Departments", name: "Judicial", code: "JUD", status: "Active" },
+  { id: 12, category: "Departments", name: "Administrative", code: "ADM", status: "Active" },
+  { id: 13, category: "Departments", name: "Financial / Accounting", code: "FIN", status: "Active" },
   { id: 14, category: "Branches", name: "Muscat", code: "MUS", status: "Active" },
   { id: 15, category: "Branches", name: "Salalah", code: "SAL", status: "Active" },
   { id: 16, category: "Branches", name: "Sohar", code: "SOH", status: "Inactive" },
@@ -32,6 +33,7 @@ const buildColumns = (onEdit, onDelete) => [
     key: "category",
     header: "Category",
     width: "18%",
+    sort: "text",
     render: (value) => (
       <Badge variant="outline">{value}</Badge>
     )
@@ -44,6 +46,9 @@ const buildColumns = (onEdit, onDelete) => [
     width: "36%",
     cellClassName: "text-start font-medium",
     exportValue: (row) => row.name + " (" + row.status + ")",
+    // By the name alone, not the export's "name (status)".
+    sort: "text",
+    sortValue: (row) => row.name,
     render: (value, row) => (
       <span className="flex flex-wrap items-center gap-2">
         {value}
@@ -51,12 +56,13 @@ const buildColumns = (onEdit, onDelete) => [
       </span>
     ),
   },
-  { key: "code", header: "Code", width: "14%", cellClassName: "font-mono" },
+  { key: "code", header: "Code", width: "14%", cellClassName: "font-mono", sort: "text" },
   {
     key: "actions",
     header: "Actions",
     width: "18%",
     disableFilter: true,
+    sort: false,
     render: (_, row) => (
       <div className="flex items-center justify-center gap-1">
         <Button

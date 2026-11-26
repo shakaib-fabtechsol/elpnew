@@ -30,7 +30,7 @@ class EmployeeTest extends ApiTestCase
             'employeeName' => 'Said Al Amri',
             'arabicName' => 'سعيد العامري',
             'dateOfJoining' => '2026-10-01',
-            'department' => 'Legal Services',
+            'department' => 'Judicial',
             'occupation' => 'Lawyer',
             'practiceLevel' => 'Trainee Lawyer',
             'salary' => 900,
@@ -42,22 +42,117 @@ class EmployeeTest extends ApiTestCase
             ->assertJsonPath('data.netSalary', 1000);
     }
 
-    public function test_add_employee_takes_the_departments_and_grades_the_form_offers(): void
+    public function test_setup_answers_are_kept_and_an_unpaid_trainee_needs_no_salary(): void
     {
         $this->as('admin')->postJson($this->api('employees'), [
-            'employeeName' => 'Salma Al Harthy',
-            'dateOfJoining' => '2026-10-15',
-            'department' => 'Litigation',
-            'occupation' => 'Lawyer',
-            'practiceLevel' => 'Primary Court Lawyer',
-            'salary' => 900,
+            'employeeName' => 'Huda Al Rawahi',
+            'dateOfJoining' => '2026-11-01',
+            'department' => 'Judicial',
+            'occupation' => 'Legal Intern',
+            'professionalClassification' => 'Lawyer',
+            'staffCategory' => 'Intern / Trainee',
+            'paid' => false,
         ])->assertCreated()
-            ->assertJsonPath('data.department', 'Litigation')
-            ->assertJsonPath('data.practiceLevel', 'Primary Court Lawyer');
+            ->assertJsonPath('data.professionalClassification', 'Lawyer')
+            ->assertJsonPath('data.staffCategory', 'Intern / Trainee')
+            ->assertJsonPath('data.paid', false)
+            ->assertJsonPath('data.netSalary', 0);
 
-        $this->as('admin')->patchJson($this->api('employees/7'), ['department' => 'Marketing'])
+        // Somebody who is paid still has to have a salary.
+        $this->as('admin')->postJson($this->api('employees'), [
+            'employeeName' => 'Salim Al Habsi',
+            'dateOfJoining' => '2026-11-01',
+            'department' => 'Judicial',
+            'occupation' => 'Lawyer',
+            'paid' => true,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['salary']);
+
+        $this->as('admin')->postJson($this->api('employees'), [
+            'employeeName' => 'Salim Al Habsi',
+            'dateOfJoining' => '2026-11-01',
+            'department' => 'Judicial',
+            'occupation' => 'Lawyer',
+            'staffCategory' => 'Contractor',
+            'salary' => 800,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['staffCategory']);
+    }
+
+    public function test_add_employee_takes_the_department_circles_and_grades_the_form_offers(): void
+    {
+        foreach (['Judicial', 'Administrative', 'Financial / Accounting'] as $circle) {
+            $this->as('admin')->postJson($this->api('employees'), [
+                'employeeName' => 'Salma '.$circle,
+                'dateOfJoining' => '2026-10-15',
+                'department' => $circle,
+                'occupation' => 'Lawyer',
+                'practiceLevel' => 'Primary Court Lawyer',
+                'salary' => 900,
+            ])->assertCreated()
+                ->assertJsonPath('data.department', $circle)
+                ->assertJsonPath('data.practiceLevel', 'Primary Court Lawyer');
+        }
+
+        // The older departments were moved onto the circles and are no longer taken.
+        foreach (['Legal Services', 'Administration', 'Partner', 'Litigation', 'Finance', 'Marketing'] as $old) {
+            $this->as('admin')->patchJson($this->api('employees/7'), ['department' => $old])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['department']);
+        }
+
+        $this->as('admin')->getJson($this->api('lookups'))
+            ->assertJsonPath('data.departments', ['Judicial', 'Administrative', 'Financial / Accounting']);
+    }
+
+    public function test_the_seeded_records_sit_in_the_circles(): void
+    {
+        $this->as('admin')->getJson($this->api('employees/1'))->assertJsonPath('data.department', 'Judicial');
+        $this->as('admin')->getJson($this->api('employees/4'))->assertJsonPath('data.department', 'Administrative');
+        $this->as('admin')->getJson($this->api('employees/13'))->assertJsonPath('data.department', 'Financial / Accounting');
+    }
+
+    public function test_the_circles_migration_moves_old_departments_and_scoped_permissions(): void
+    {
+        \DB::table('employees')->where('id', 1)->update(['department' => 'Partner']);
+        \DB::table('employees')->where('id', 3)->update(['department' => 'Legal Services']);
+        \DB::table('employees')->where('id', 4)->update(['department' => 'Administration']);
+        \DB::table('employees')->where('id', 13)->update(['department' => 'Administration']);
+        \DB::table('employees')->where('id', 8)->update(['department' => 'Finance']);
+        \DB::table('employee_permissions')->updateOrInsert(['employee_id' => 7], [
+            'template' => 'lawyer', 'grants' => '[]', 'scope' => 'department',
+            'departments' => json_encode(['Legal Services', 'Partner', 'Administration']),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        (require database_path('migrations/2026_11_27_120100_move_employee_departments_to_circles.php'))->up();
+
+        $this->assertSame(
+            [1 => 'Judicial', 3 => 'Judicial', 4 => 'Administrative', 8 => 'Financial / Accounting', 13 => 'Financial / Accounting'],
+            \DB::table('employees')->whereIn('id', [1, 3, 4, 8, 13])->orderBy('id')->pluck('department', 'id')->all()
+        );
+        $this->assertSame(['Judicial', 'Administrative'], json_decode(\DB::table('employee_permissions')->where('employee_id', 7)->value('departments'), true));
+        $this->assertSame(0, \DB::table('employees')->whereNotIn('department', ['Judicial', 'Administrative', 'Financial / Accounting'])->count());
+    }
+
+    public function test_a_trainee_keeps_a_training_period_that_ends_after_it_starts(): void
+    {
+        $base = [
+            'employeeName' => 'Hind Al Busaidi', 'dateOfJoining' => '2026-01-01', 'department' => 'Judicial',
+            'occupation' => 'Trainee Lawyer', 'staffCategory' => 'Intern / Trainee', 'paid' => false,
+        ];
+
+        $this->as('admin')->postJson($this->api('employees'), [...$base, 'trainingStart' => '2026-01-01', 'trainingEnd' => '2026-06-30'])
+            ->assertCreated()
+            ->assertJsonPath('data.trainingStart', '2026-01-01')
+            ->assertJsonPath('data.trainingEnd', '2026-06-30');
+
+        $this->as('admin')->postJson($this->api('employees'), [...$base, 'trainingStart' => '2026-06-30', 'trainingEnd' => '2026-01-01'])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['department']);
+            ->assertJsonPath('errors.trainingEnd.0', 'The training end date must be after its start date.');
+
+        // A temporary contract's end likewise comes after its start.
+        $this->as('admin')->postJson($this->api('employees'), [...$base, 'contractType' => 'Fixed-term', 'contractStartDate' => '2026-03-01', 'employmentEndDate' => '2026-02-01'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['employmentEndDate']);
     }
 
     public function test_bank_codes_in_small_letters_are_taken_and_bad_ones_say_why(): void
@@ -82,7 +177,7 @@ class EmployeeTest extends ApiTestCase
         // What the form sends when Annual Leave Days, Status and the dial
         // codes are left empty: null. The record is still made.
         $this->as('admin')->postJson($this->api('employees'), [
-            'employeeName' => 'Noor Al Said', 'dateOfJoining' => '2026-10-01', 'department' => 'Finance',
+            'employeeName' => 'Noor Al Said', 'dateOfJoining' => '2026-10-01', 'department' => 'Financial / Accounting',
             'occupation' => 'Accountant', 'salary' => 700,
             'annualLeaveDays' => null, 'status' => null, 'dialCode' => null, 'workDialCode' => null,
             'emergencyDialCode' => null, 'socialProtection' => null, 'housing' => null,

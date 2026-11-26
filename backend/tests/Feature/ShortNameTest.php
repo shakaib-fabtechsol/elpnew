@@ -33,7 +33,7 @@ class ShortNameTest extends ApiTestCase
     public function test_a_new_employee_is_given_a_short_name_and_the_full_name_is_kept(): void
     {
         $this->as('admin')->postJson($this->api('employees'), [
-            'employeeName' => 'Mohammed Abdullah Saeed Al Yahyai', 'arabicName' => 'محمد عبدالله سعيد اليحيائي', 'salary' => 900, 'dateOfJoining' => '2026-01-05', 'department' => 'Legal Services', 'occupation' => 'Lawyer',
+            'employeeName' => 'Mohammed Abdullah Saeed Al Yahyai', 'arabicName' => 'محمد عبدالله سعيد اليحيائي', 'salary' => 900, 'dateOfJoining' => '2026-01-05', 'department' => 'Judicial', 'occupation' => 'Lawyer',
         ])->assertCreated()
             ->assertJsonPath('data.name', 'Mohammed Abdullah Saeed Al Yahyai')
             ->assertJsonPath('data.shortName', 'Mohammed Al Yahyai')
@@ -43,7 +43,7 @@ class ShortNameTest extends ApiTestCase
 
     public function test_two_people_who_would_share_one_are_told_apart_by_the_shortest_name_that_does(): void
     {
-        $this->as('admin')->postJson($this->api('employees'), ['employeeName' => 'Mohammed Abdullah Saeed Al Yahyai', 'salary' => 900, 'dateOfJoining' => '2026-01-05', 'department' => 'Legal Services', 'occupation' => 'Lawyer'])->assertCreated();
+        $this->as('admin')->postJson($this->api('employees'), ['employeeName' => 'Mohammed Abdullah Saeed Al Yahyai', 'salary' => 900, 'dateOfJoining' => '2026-01-05', 'department' => 'Judicial', 'occupation' => 'Lawyer'])->assertCreated();
 
         // What the form shows while the second is being typed.
         $this->as('admin')->getJson($this->api('employees/short-name').'?name='.urlencode('Mohammed Salim Rashid Al Yahyai'))
@@ -51,18 +51,18 @@ class ShortNameTest extends ApiTestCase
             ->assertJsonPath('data.shortName', 'Mohammed Salim Al Yahyai')
             ->assertJsonPath('data.sharedWith.shortName', 'Mohammed Al Yahyai');
 
-        $this->as('admin')->postJson($this->api('employees'), ['employeeName' => 'Mohammed Salim Rashid Al Yahyai', 'salary' => 900, 'dateOfJoining' => '2026-01-05', 'department' => 'Legal Services', 'occupation' => 'Lawyer'])
+        $this->as('admin')->postJson($this->api('employees'), ['employeeName' => 'Mohammed Salim Rashid Al Yahyai', 'salary' => 900, 'dateOfJoining' => '2026-01-05', 'department' => 'Judicial', 'occupation' => 'Lawyer'])
             ->assertCreated()->assertJsonPath('data.shortName', 'Mohammed Salim Al Yahyai');
 
         // Taking the one already in use is refused, with the way out named.
-        $this->as('admin')->postJson($this->api('employees'), ['employeeName' => 'Mohammed Hamad Nasser Al Yahyai', 'shortName' => 'mohammed al yahyai', 'salary' => 900, 'dateOfJoining' => '2026-01-05', 'department' => 'Legal Services', 'occupation' => 'Lawyer'])
+        $this->as('admin')->postJson($this->api('employees'), ['employeeName' => 'Mohammed Hamad Nasser Al Yahyai', 'shortName' => 'mohammed al yahyai', 'salary' => 900, 'dateOfJoining' => '2026-01-05', 'department' => 'Judicial', 'occupation' => 'Lawyer'])
             ->assertUnprocessable()->assertJsonValidationErrors('shortName')
             ->assertJsonPath('errors.shortName.0', fn ($message) => str_contains($message, 'Suggested: Mohammed Hamad Al Yahyai.'));
     }
 
     public function test_a_short_name_set_by_hand_is_kept_when_the_full_name_changes(): void
     {
-        $id = $this->as('admin')->postJson($this->api('employees'), ['employeeName' => 'Khalfan Said Nasser Al Mamari', 'shortName' => 'Abu Said Al Mamari', 'salary' => 900, 'dateOfJoining' => '2026-01-05', 'department' => 'Legal Services', 'occupation' => 'Lawyer'])
+        $id = $this->as('admin')->postJson($this->api('employees'), ['employeeName' => 'Khalfan Said Nasser Al Mamari', 'shortName' => 'Abu Said Al Mamari', 'salary' => 900, 'dateOfJoining' => '2026-01-05', 'department' => 'Judicial', 'occupation' => 'Lawyer'])
             ->assertCreated()->assertJsonPath('data.shortName', 'Abu Said Al Mamari')->json('data.id');
 
         $this->as('admin')->patchJson($this->api('employees/'.$id), ['employeeName' => 'Khalfan Said Nasser Hamed Al Mamari'])

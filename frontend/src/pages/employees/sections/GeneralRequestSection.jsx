@@ -57,6 +57,7 @@ import {
 } from "../generalRequestData";
 import { generalRequestsApi } from "@/lib/api/modules/generalRequests";
 import { attempt } from "@/lib/api/notice";
+import useDataset, { useReseed } from "@/lib/api/useDataset";
 import { upsert, upserted } from "@/lib/api/store";
 import { shortName } from "@/lib/shortName";
 
@@ -92,6 +93,11 @@ export default function GeneralRequestSection({
 }) {
   const sort = REQUEST_KINDS[kind] || REQUEST_KINDS.general;
   const [requests, setRequests] = useState(initialGeneralRequests);
+  // The requests are loaded at sign-in: the lists show skeleton rows until
+  // they land and Retry if they could not be read, and take them in when
+  // they arrive or come back after a Retry.
+  const dataset = useDataset(["general requests"]);
+  useReseed("general requests", () => setRequests([...initialGeneralRequests]));
   const [draft, setDraft] = useState(emptyDraft);
   const [decision, setDecision] = useState(emptyDecision);
   const [document, setDocument] = useState(null);
@@ -214,19 +220,23 @@ export default function GeneralRequestSection({
   const refusing = decision.answer === REJECTED;
 
   const columns = [
-    { key: "no", header: "#", width: "5%", render: (value) => <span className="font-medium text-primary">{value}</span> },
+    { key: "no", header: "#", width: "5%", sort: "number", render: (value) => <span className="font-medium text-primary">{value}</span> },
     {
       // The number is the way back into the request.
       key: "requestNo",
       header: "Request No.",
       width: "13%",
+      // A number in natural order: each run of digits compares as a number.
+      sort: "text",
       render: (value, request) => <RecordLink onClick={() => track(request)}>{value}</RecordLink>,
     },
-    { key: "requestType", header: sort.typeLabel, width: "15%" },
+    { key: "requestType", header: sort.typeLabel, width: "15%", sort: "text" },
     {
       key: "comment",
       header: "Employee Comment",
       width: "21%",
+      // Descriptive information.
+      sort: false,
       render: (value, request) => (
         <span className="inline-flex items-start gap-1.5">
           {request.document && (
@@ -243,12 +253,17 @@ export default function GeneralRequestSection({
       key: "dateText",
       header: "Request Date",
       width: "10%",
+      // By the date itself, not the date as written on screen.
+      sort: "date",
+      sortValue: (request) => request.date || null,
       render: (value) => <span className="whitespace-nowrap">{value}</span>,
     },
     {
       key: "status",
       header: "Status",
       width: "10%",
+      // Pending, then Approved, then Rejected: the default order.
+      sort: "status",
       render: (value) => (
         <span
           className={cn(
@@ -265,17 +280,21 @@ export default function GeneralRequestSection({
       key: "remarks",
       header: "Management Comment",
       width: "14%",
+      // Descriptive information.
+      sort: false,
       render: (value) => <span className="text-muted-foreground">{value || "-"}</span>,
     },
     {
       key: "reviewedBy",
       header: "Reviewed By",
       width: "12%",
+      sort: "text",
       render: (value) => <span className="text-muted-foreground">{shortName(value) || "-"}</span>,
     },
   ];
 
   const tableProps = {
+    dataset,
     searchPlaceholder: "Search by request no., type or comment...",
     itemLabel: sort.noun + "s",
     exportFileName: sort.noun.replace(/ /g, "-") + "s.csv",

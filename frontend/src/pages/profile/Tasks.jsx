@@ -32,16 +32,20 @@ const columns = [
     key: "completed",
     header: "",
     width: "5%",
+    // The tick box; Status already orders by whether a task is done.
+    sort: false,
     render: (value) => (
       <Checkbox checked={value} className="mx-auto" />
     ),
   },
-  { key: "task", header: "Task", width: "35%", cellClassName: "text-start" },
-  { key: "case_no", header: "Case No.", width: "12%" },
+  { key: "task", header: "Task", width: "35%", cellClassName: "text-start", sort: "text" },
+  // A case number in natural order: "2024/015" is year then sequence.
+  { key: "case_no", header: "Case No.", width: "12%", sort: "text" },
   {
     key: "due_date",
     header: "Due Date",
     width: "12%",
+    sort: "date",
     render: (value) => (
       <span className="flex items-center justify-center gap-1">
         <Calendar className="h-3 w-3" />
@@ -53,6 +57,8 @@ const columns = [
     key: "priority",
     header: "Priority",
     width: "10%",
+    // High, then Medium, then Low: the default order.
+    sort: "status",
     render: (value) => (
       <Badge
         variant={
@@ -71,6 +77,8 @@ const columns = [
     key: "status",
     header: "Status",
     width: "12%",
+    // Pending, then In Progress, then Completed: the default order.
+    sort: "status",
     render: (value) => (
       <Badge
         variant={
@@ -121,6 +129,7 @@ export default function Tasks() {
         <CardContent className="p-4 sm:p-6">
           <DataTable
             columns={columns}
+            itemLabel="tasks"
             data={visibleTasks}
             searchPlaceholder="Search tasks..."
             currentPage={currentPage}

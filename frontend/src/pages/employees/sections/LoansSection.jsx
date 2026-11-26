@@ -86,6 +86,7 @@ import {
 import { loansApi } from "@/lib/api/modules/loans";
 import { attempt } from "@/lib/api/notice";
 import { upsert, upserted } from "@/lib/api/store";
+import { useReseed } from "@/lib/api/useDataset";
 import { shortName } from "@/lib/shortName";
 
 // Three figures are asked for and everything else is counted from them:
@@ -188,6 +189,9 @@ export default function LoansSection({
   const [records, setRecords] = useState(() =>
     loansFor(loanRecords, employee?.name)
   );
+  // Taken again whenever the loans are fetched afresh - they may still have
+  // been on their way when this opened, or a Retry brought them back.
+  useReseed("loans", () => setRecords(loansFor(loanRecords, employee?.name)));
   const [draft, setDraft] = useState(emptyDraft);
   // Which stage of the request is open, and what management decided.
   const [stage, setStage] = useState("request");

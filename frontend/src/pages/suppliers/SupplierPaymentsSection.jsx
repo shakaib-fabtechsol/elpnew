@@ -6,6 +6,7 @@ import DataTable from "@/components/shared/DataTable";
 import { Plus } from "lucide-react";
 import { useExpenses } from "@/lib/expenses/context";
 import { useSuppliers } from "@/lib/suppliers/context";
+import useDataset from "@/lib/api/useDataset";
 import {
   expenseRecords,
   submittedRequest,
@@ -27,6 +28,12 @@ import { money as omr } from "@/lib/money";
 export default function SupplierPaymentsSection({ supplier }) {
   const { expenses, invoices, addInvoice } = useExpenses();
   const { suppliers } = useSuppliers();
+  // The expenses are kept in the browser, but each row's account is read off
+  // the supplier directory loaded at sign-in: skeletons until it lands.
+  // The rows live in the browser; only one column reads "suppliers" from the
+  // API. Followed so that column refreshes when it loads, but not passed to
+  // the table: a failed load must not hide records that are all here.
+  useDataset(["suppliers"]);
 
   // The expense is raised here rather than on the Expenses page: the
   // expenses are read and managed here, so sending someone away to add one
@@ -93,6 +100,7 @@ export default function SupplierPaymentsSection({ supplier }) {
         <CardContent className="p-4 sm:p-6">
           <DataTable
             columns={columns}
+            itemLabel="expenses"
             data={rows}
             searchPlaceholder="Ask about this supplier's expenses..."
             exportFileName="supplier-expenses.csv"

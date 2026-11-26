@@ -26,12 +26,14 @@ import {
   TriangleAlert,
   Upload,
   X,
+  ImagePlus as ImageUser,
 } from "lucide-react";
 import { Loader } from "@/components/shared/Loader";
 import { INTAKE_ACCEPT, INTAKE_TYPES, intakeFileProblem, intakeType } from "../documentIntake";
 
 /** Each kind's mark and colour, on its tile and its chip in the table. */
 const LOOK = {
+  photo: { icon: ImageUser, tile: "bg-blue-50 text-blue-600", chip: "bg-blue-50 text-blue-700" },
   civilId: { icon: IdCard, tile: "bg-blue-50 text-blue-600", chip: "bg-blue-50 text-blue-700" },
   passport: { icon: Globe, tile: "bg-slate-800 text-white", chip: "bg-violet-50 text-violet-700" },
   contract: { icon: FileSignature, tile: "bg-emerald-50 text-emerald-600", chip: "bg-teal-50 text-teal-700" },
@@ -111,6 +113,14 @@ export default function DocumentIntake({
   filed = [],
   // On a record: its own Cancel and Save in place of Continue.
   footer = null,
+  // While adding: the setup questions above the cards, and how many of the
+  // required papers are in (Required 2 / 4).
+  setup = null,
+  progress = null,
+  // The cards offered - the setup answers decide which apply.
+  types = INTAKE_TYPES,
+  title = "Document Intake",
+  note = "Upload employee documents. SADEED will classify them, extract the information and automatically fill the employee profile.",
 }) {
   const { docs, busy, summary } = intake;
   const rows = [...filed.map((paper) => ({ ...paper, filed: true })), ...docs];
@@ -177,21 +187,23 @@ export default function DocumentIntake({
           <span aria-hidden="true" className="w-1 self-stretch rounded-full bg-primary" />
           <FileText strokeWidth={1.5} aria-hidden="true" className="size-8 shrink-0 text-primary" />
           <div className="min-w-0 flex-1">
-            <h2 className="text-xl font-bold text-primary">Document Intake</h2>
-            <p className="text-sm text-primary/75">
-              Upload employee documents. SADEED will classify them, extract the
-              information and automatically fill the employee profile.
-            </p>
+            <h2 className="text-xl font-bold text-primary">{title}</h2>
+            <p className="text-sm text-primary/75">{note}</p>
           </div>
+          {progress}
           <Button type="button" variant="outline" onClick={() => openPanel("")}>
             <Upload className="me-2 h-4 w-4" aria-hidden="true" />
             Upload Documents
           </Button>
         </div>
 
+        {setup && <div className="mb-6">{setup}</div>}
+
         {/* One tile per kind of paper; the + under it adds one of that kind. */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
-          {INTAKE_TYPES.map((type) => {
+        {/* As many to a row as fit, all the same width - the setup answers
+            decide how many cards there are. */}
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(128px, 1fr))" }}>
+          {types.map((type) => {
             const look = LOOK[type.key];
             const Icon = look.icon;
             return (

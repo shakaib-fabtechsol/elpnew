@@ -153,6 +153,9 @@ export default function LeasesPage() {
       header: "#",
       width: "5%",
       exportValue: (row) => row.rowNo + " (" + LEASE_STATE[row.state].label + ")",
+      // By the number itself, not the export's "number (standing)".
+      sort: "number",
+      sortValue: (row) => row.rowNo,
       render: (value, row) => (
         <span className="inline-flex items-center gap-2">
           {/* The number opens the lease itself. */}
@@ -174,6 +177,9 @@ export default function LeasesPage() {
       subHeader: "Property Type",
       width: "10%",
       exportValue: (row) => row.branchName + " - " + row.propertyType,
+      // By the branch, A - Z; the property type under it qualifies it.
+      sort: "text",
+      sortValue: (row) => row.branchName,
       render: (value, row) => (
         <div>
           <p className="font-semibold text-primary">{value}</p>
@@ -186,6 +192,8 @@ export default function LeasesPage() {
       header: "Property Information",
       width: "15%",
       exportValue: (row) => propertyLines(row).join(" - "),
+      // Descriptive information: building and unit, or the address.
+      sort: false,
       render: (_, row) => (
         <div className="text-primary/80">
           {propertyLines(row).map((line) => (
@@ -198,12 +206,15 @@ export default function LeasesPage() {
       key: "landlord",
       header: "Landlord",
       width: "14%",
+      sort: "text",
       render: (value) => <span className="text-primary/80">{value}</span>,
     },
     {
       key: "contractNo",
       header: "Contract No.",
       width: "10%",
+      // An ID in natural order: each run of digits compares as a number.
+      sort: "text",
       render: (value) => (
         <span className="whitespace-nowrap text-primary/80">{value || "-"}</span>
       ),
@@ -223,6 +234,9 @@ export default function LeasesPage() {
             leaseMonths(row.start, row.end) +
             " Months)"
           : "-",
+      // By the start date, the line the period opens with.
+      sort: "date",
+      sortValue: (row) => row.start || null,
       render: (value, row) =>
         value && row.end ? (
           <div className="whitespace-nowrap text-primary/80">
@@ -240,6 +254,9 @@ export default function LeasesPage() {
       header: "Rental Value · VAT 5% · Total",
       width: "12%",
       // Monthly rent. A lease exempt from VAT (a flat, say) shows 0.000 VAT.
+      // Sorted on the rent itself, the figure the VAT and total follow from.
+      sort: "money",
+      sortValue: (row) => (Number(row.rent) > 0 ? Number(row.rent) : null),
       exportValue: (row) =>
         Number(row.rent) > 0
           ? omr(row.rent) +
@@ -268,6 +285,8 @@ export default function LeasesPage() {
       width: "12%",
       // How often is read off the contract's months and its number of
       // installments - twelve months in four installments is Quarterly.
+      // Combined information: how often and how, in one cell.
+      sort: false,
       exportValue: (row) =>
         frequencyLabel(row) ? frequencyLabel(row) + " - " + (row.method || "-") : "-",
       render: (_, row) =>
@@ -285,6 +304,9 @@ export default function LeasesPage() {
       header: "Next Payment Date",
       width: "11%",
       exportValue: (row) => shortDate(nextPaymentDate(row)),
+      // A lease with nothing more to pay has no date and sorts last.
+      sort: "date",
+      sortValue: (row) => nextPaymentDate(row) || null,
       render: (_, row) => (
         <span className="whitespace-nowrap text-primary/80">
           {shortDate(nextPaymentDate(row))}

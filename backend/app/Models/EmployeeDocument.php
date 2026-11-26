@@ -29,7 +29,7 @@ class EmployeeDocument extends Model
     public const CRITICAL_TYPES = ['Law Practice License', 'Residence Card'];
 
     public const COMMON_TYPES = [
-        'CV', 'University Degree', 'Experience Certificate', 'Training Certificate',
+        'Employee Photo', 'CV', 'University Degree', 'Experience Certificate', 'Training Certificate',
         'Appointment Decision', 'Promotion Decision', 'Transfer Decision', 'Warning Decision',
         'Termination Decision', 'Committee Formation Decision',
         'Other Identity Document', 'Other Professional Licence', 'Other Qualification', 'Other Decision', 'Other',

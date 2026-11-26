@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Http\Requests\Employees\EmployeeRequest;
 use App\Support\Numbering;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -63,9 +64,11 @@ class Circular extends Model
         $groupMatches = match ($this->target_group) {
             'All Employees' => true,
             'Lawyers' => $employee->occupation === 'Lawyer' || $employee->practice_level !== null,
-            'Partners' => $employee->department === 'Partner',
-            'Administration' => $employee->department === 'Administration',
-            'Accounting' => $employee->occupation === 'Accountant',
+            // Partners sit in the Judicial circle with the lawyers, so a
+            // partner is known by their title rather than their department.
+            'Partners' => str_contains((string) $employee->occupation, 'Partner'),
+            'Administration' => $employee->department === EmployeeRequest::ADMINISTRATIVE,
+            'Accounting' => $employee->occupation === 'Accountant' || $employee->department === EmployeeRequest::FINANCIAL,
             default => false,
         };
 

@@ -58,6 +58,7 @@ import {
   X,
 } from "lucide-react";
 import { useAdvances } from "@/lib/advances/context";
+import useDataset from "@/lib/api/useDataset";
 import { amount, formatDate } from "../loanData";
 import { PAYMENT_METHODS } from "@/pages/expenses/expenseData";
 import { advanceSummaryPdf } from "../advanceSummaryPdf";
@@ -1303,6 +1304,9 @@ export function AdvanceRequests({
   moreAdds = [],
 }) {
   const { advances } = useAdvances();
+  // The advances are loaded at sign-in: skeleton rows until they land, and
+  // "Unable to load salary advances" with Retry if they could not be read.
+  const dataset = useDataset(["salary advances"]);
   const rows =advancesFor(advances, employee?.name).map((advance) => ({
     ...advance,
     deductFrom: deductedFrom(advance),
@@ -1315,6 +1319,8 @@ export function AdvanceRequests({
       key: "requestNo",
       header: "Request No.",
       width: "14%",
+      // A number in natural order: each run of digits compares as a number.
+      sort: "text",
       render: (value, advance) =>
         onOpenRequest ? (
           <RecordLink onClick={() => onOpenRequest(advance)}>{value}</RecordLink>
@@ -1326,6 +1332,7 @@ export function AdvanceRequests({
       key: "requestedOn",
       header: "Request Date",
       width: "13%",
+      sort: "date",
       render: (value) => <span className="whitespace-nowrap text-primary">{formatDate(value)}</span>,
     },
     {
@@ -1335,12 +1342,18 @@ export function AdvanceRequests({
       width: "15%",
       render: (value) => <span className="whitespace-nowrap font-bold text-green-700">{amount(value)}</span>,
       exportValue: (row) => row.amount,
+      sort: "money",
+      sortValue: (row) => row.amount,
     },
-    { key: "deductFrom", header: "Deducted From", width: "14%" },
+    // A month and year ("March 2026"), so it sorts as the date it is.
+    { key: "deductFrom", header: "Deducted From", width: "14%", sort: "date" },
     {
       key: "purpose",
       header: "Request Details",
       width: "30%",
+      skeleton: "lines",
+      // Descriptive information: the purpose and the reason given.
+      sort: false,
       render: (value, advance) => (
         <span className="text-muted-foreground">
           {value && <span className="block font-medium text-primary">{value}</span>}
@@ -1352,6 +1365,10 @@ export function AdvanceRequests({
       key: "status",
       header: "Status",
       width: "14%",
+      // Waiting on management, then sent back to be corrected, then
+      // decided.
+      sort: "status",
+      sortOrder: ["Pending", "Returned", "Approved", "Rejected"],
       render: (value) => (
         <span
           className={cn(
@@ -1371,6 +1388,7 @@ export function AdvanceRequests({
         <RequestTable
           rows={rows}
           columns={columns}
+          dataset={dataset}
           searchPlaceholder="Search by request no., month or purpose..."
           itemLabel="salary advances"
           exportFileName="salary-advances.csv"

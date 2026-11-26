@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useReseed } from "@/lib/api/useDataset";
 import {
   CircularsContext,
   initialCirculars,
@@ -26,6 +27,12 @@ export default function CircularsProvider({ children }) {
   const [circulars, setCirculars] = useState(initialCirculars);
   const [pending, setPending] = useState(pendingCirculars);
   const [audit, setAudit] = useState(initialAudit);
+  // A Retry on a table reloads "circulars"; take the fresh records in.
+  useReseed("circulars", () => {
+    setCirculars([...initialCirculars]);
+    setPending([...pendingCirculars]);
+    setAudit([...initialAudit]);
+  });
 
   const keep = (record) => {
     if (record) setCirculars((prev) => upserted(prev, record));

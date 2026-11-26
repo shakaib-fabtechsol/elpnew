@@ -26,8 +26,9 @@ import {
   Th,
   Row,
   Td,
+  EmptyRow,
 } from "@/components/shared/RecordTable";
-import { EmptyState } from "@/components/shared/panels";
+import { useTableSort } from "@/lib/sorting";
 import { ArrowRight, Check } from "lucide-react";
 import { useClients } from "@/lib/clients/context";
 import { clientDisplayName, mergedInto } from "../clientRecords";
@@ -82,6 +83,16 @@ export default function MergeSection({ client }) {
   const absorbed = [...mergedInto(clients, client)].sort((a, b) =>
     String(b.mergedOn || "").localeCompare(String(a.mergedOn || ""))
   );
+  // The serial number is the row's place in the list and the main client is
+  // this client on every row, so neither is something to sort by.
+  const { rows: history, sortProps } = useTableSort(absorbed, {
+    mergedOn: { sort: "date" },
+    clientName: { sort: "text" },
+    resultName: {
+      sort: "text",
+      sortValue: (record) => record.mergeResultName || client.clientName,
+    },
+  });
 
   // A client already folded into somewhere cannot be folded in again, and a
   // client this one was folded into cannot be pulled back the other way.
@@ -296,39 +307,36 @@ export default function MergeSection({ client }) {
         <CardContent className="p-4 sm:p-6">
           <p className="mb-4 text-base font-bold text-primary">Merge History</p>
 
-          {absorbed.length === 0 ? (
-            <EmptyState>No client has been merged into this one yet.</EmptyState>
-          ) : (
-            <RecordTable minWidth={860}>
-              <HeadRow>
-                <Th width="10%">Serial No.</Th>
-                <Th width="15%">Merge Date</Th>
-                <Th width="25%">Main Client</Th>
-                <Th width="25%">Merged Client</Th>
-                <Th width="25%">Resulting Client Name</Th>
-              </HeadRow>
-              <tbody>
-                {absorbed.map((record, index) => (
-                  <Row key={record.id}>
-                    <Td className="font-medium text-primary">{index + 1}</Td>
-                    <Td className="whitespace-nowrap">
-                      {shortDate(record.mergedOn)}
-                    </Td>
-                    <Td>{client.clientName}</Td>
-                    <Td>{record.clientName}</Td>
-                    <Td>
-                      <span className="block font-semibold text-primary">
-                        {record.mergeResultName || client.clientName}
-                      </span>
-                      <span className="block text-muted-foreground" dir="rtl">
-                        {record.mergeResultArabic || client.arabicName}
-                      </span>
-                    </Td>
-                  </Row>
-                ))}
-              </tbody>
-            </RecordTable>
-          )}
+          <RecordTable minWidth={860}>
+            <HeadRow>
+              <Th width="10%">Serial No.</Th>
+              <Th width="15%" {...sortProps("mergedOn")}>Merge Date</Th>
+              <Th width="25%">Main Client</Th>
+              <Th width="25%" {...sortProps("clientName")}>Merged Client</Th>
+              <Th width="25%" {...sortProps("resultName")}>Resulting Client Name</Th>
+            </HeadRow>
+            <tbody>
+              {history.length === 0 && <EmptyRow colSpan={5} label="merged clients" />}
+              {history.map((record, index) => (
+                <Row key={record.id}>
+                  <Td className="font-medium text-primary">{index + 1}</Td>
+                  <Td className="whitespace-nowrap">
+                    {shortDate(record.mergedOn)}
+                  </Td>
+                  <Td>{client.clientName}</Td>
+                  <Td>{record.clientName}</Td>
+                  <Td>
+                    <span className="block font-semibold text-primary">
+                      {record.mergeResultName || client.clientName}
+                    </span>
+                    <span className="block text-muted-foreground" dir="rtl">
+                      {record.mergeResultArabic || client.arabicName}
+                    </span>
+                  </Td>
+                </Row>
+              ))}
+            </tbody>
+          </RecordTable>
         </CardContent>
       </Card>
 

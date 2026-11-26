@@ -22,9 +22,12 @@ import {
   FileCheck,
   Plus,
   Search,
-  Landmark,  Info,
+  Landmark,
+  Info,
 } from "lucide-react";
 import { EmptyState } from "@/components/shared/panels";
+import { RecordTable, HeadRow, Th, SkeletonRows, ErrorRow } from "@/components/shared/RecordTable";
+import useDataset from "@/lib/api/useDataset";
 import { cn } from "@/lib/utils";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { amountInWords } from "@/lib/amountInWords";
@@ -325,6 +328,9 @@ export default function BankAccountsSection({ canEdit, canRecord }) {
   const firm = useFirm();
   const { bankAccounts, branches, transfers, addBankAccount, addTransfer } =
     firm;
+  // The accounts are loaded at sign-in; read here, where the list and the
+  // strip over it are drawn, so both show them coming or that they failed.
+  const accountData = useDataset(["firm bank accounts"]);
 
   const ledgers = {
     payments: firm.payments,
@@ -588,6 +594,7 @@ export default function BankAccountsSection({ canEdit, canRecord }) {
                 onClick: () => choose(String(account.id)),
               })),
             ]}
+            status={accountData.status}
           />
 
           {/* All Banks is the list of accounts; one bank is that account's
@@ -622,103 +629,108 @@ export default function BankAccountsSection({ canEdit, canRecord }) {
                 )}
               </div>
 
-              {listed.length === 0 ? (
+              {accountData.status === "ready" && listed.length === 0 ? (
                 <EmptyState>No accounts match that search.</EmptyState>
               ) : (
                 <>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[920px] border text-sm">
-                      <thead>
-                        <tr className="border-b bg-muted/50 text-start text-xs text-muted-foreground">
-                          <th className="p-3 font-semibold">Bank Name</th>
-                          <th className="p-3 font-semibold">Branch Details</th>
-                          <th className="p-3 font-semibold">
-                            Bank Account Details
-                          </th>
-                          <th className="p-3 font-semibold">Balance</th>
-                          <th className="p-3 font-semibold">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {shown.map((account) => (
-                          <tr
-                            key={account.id}
-                            className="border-b align-top transition-colors last:border-0 hover:bg-primary/10"
-                          >
-                            {/* The name opens the bank for editing */}
-                            <td className="p-3">
+                  {/* On the shared table, so its heading stays in sight
+                      while a long list scrolls under it. */}
+                  <RecordTable minWidth={920}>
+                    <HeadRow>
+                      <Th>Bank Name</Th>
+                      <Th>Branch Details</Th>
+                      <Th>Bank Account Details</Th>
+                      <Th>Balance</Th>
+                      <Th>Actions</Th>
+                    </HeadRow>
+                    <tbody>
+                      {/* On the way, or not fetched: skeleton rows, or the
+                          way to try again - the search typed above stays. */}
+                      {accountData.status === "loading" && (
+                        <SkeletonRows columns={5} rows={5} shapes={["lines", "lines", "lines"]} />
+                      )}
+                      {accountData.status === "failed" && (
+                        <ErrorRow colSpan={5} label="bank accounts" onRetry={accountData.retry} />
+                      )}
+                      {accountData.status === "ready" && shown.map((account) => (
+                        <tr
+                          key={account.id}
+                          className="border-b align-top transition-colors last:border-0 hover:bg-primary/10"
+                        >
+                          {/* The name opens the bank for editing */}
+                          <td className="p-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate("/settings/bank/" + account.id)
+                              }
+                              className="rounded font-semibold text-primary focus:outline-none focus:ring-2 focus:ring-ring"
+                            >
+                              {account.bankName}
+                            </button>
+                          </td>
+                          <td className="p-3">
+                            <p className="font-semibold">
+                              {account.bankBranch || "-"}
+                            </p>
+                            {account.branchArea && (
+                              <p className="text-muted-foreground">
+                                {account.branchArea}
+                              </p>
+                            )}
+                            {account.location && (
+                              <p className="text-muted-foreground">
+                                {account.location}
+                              </p>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {/* Enough of the number to tell accounts apart */}
+                            <Pair label="Account No.:">
+                              {maskAccountNumber(account.accountNumber)}
+                            </Pair>
+                            <Pair label="IBAN:">{account.iban}</Pair>
+                            <Pair label="SWIFT Code:">{account.swift}</Pair>
+                          </td>
+                          <td className="p-3">
+                            <Pair label="Opening Balance:">
+                              {money(account.openingBalance)}
+                            </Pair>
+                            <Pair label="Current Balance:" strong>
+                              {money(balanceOf(account))}
+                            </Pair>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex flex-wrap items-center gap-2 text-sm">
                               <button
                                 type="button"
-                                onClick={() =>
-                                  navigate("/settings/bank/" + account.id)
-                                }
-                                className="rounded font-semibold text-primary focus:outline-none focus:ring-2 focus:ring-ring"
+                                onClick={() => choose(String(account.id))}
+                                className="rounded text-primary focus:outline-none focus:ring-2 focus:ring-ring"
                               >
-                                {account.bankName}
+                                Account Activity
                               </button>
-                            </td>
-                            <td className="p-3">
-                              <p className="font-semibold">
-                                {account.bankBranch || "-"}
-                              </p>
-                              {account.branchArea && (
-                                <p className="text-muted-foreground">
-                                  {account.branchArea}
-                                </p>
+                              {canEdit && (
+                                <>
+                                  <span className="text-muted-foreground">
+                                    |
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => transferFrom(account)}
+                                    className="rounded text-primary focus:outline-none focus:ring-2 focus:ring-ring"
+                                  >
+                                    Transfer
+                                  </button>
+                                </>
                               )}
-                              {account.location && (
-                                <p className="text-muted-foreground">
-                                  {account.location}
-                                </p>
-                              )}
-                            </td>
-                            <td className="p-3">
-                              {/* Enough of the number to tell accounts apart */}
-                              <Pair label="Account No.:">
-                                {maskAccountNumber(account.accountNumber)}
-                              </Pair>
-                              <Pair label="IBAN:">{account.iban}</Pair>
-                              <Pair label="SWIFT Code:">{account.swift}</Pair>
-                            </td>
-                            <td className="p-3">
-                              <Pair label="Opening Balance:">
-                                {money(account.openingBalance)}
-                              </Pair>
-                              <Pair label="Current Balance:" strong>
-                                {money(balanceOf(account))}
-                              </Pair>
-                            </td>
-                            <td className="p-3">
-                              <div className="flex flex-wrap items-center gap-2 text-sm">
-                                <button
-                                  type="button"
-                                  onClick={() => choose(String(account.id))}
-                                  className="rounded text-primary focus:outline-none focus:ring-2 focus:ring-ring"
-                                >
-                                  Account Activity
-                                </button>
-                                {canEdit && (
-                                  <>
-                                    <span className="text-muted-foreground">
-                                      |
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => transferFrom(account)}
-                                      className="rounded text-primary focus:outline-none focus:ring-2 focus:ring-ring"
-                                    >
-                                      Transfer
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </RecordTable>
 
+                  {accountData.status === "ready" && (
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm text-muted-foreground">
                     <span>
                       Showing {start + 1} to{" "}
@@ -778,6 +790,7 @@ export default function BankAccountsSection({ canEdit, canRecord }) {
                       </Button>
                     </div>
                   </div>
+                  )}
                 </>
               )}
             </CardContent>

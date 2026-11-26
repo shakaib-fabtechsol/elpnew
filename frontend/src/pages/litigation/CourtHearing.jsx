@@ -20,20 +20,37 @@ import DateField from "@/components/shared/DateField";
 const hearings = [];
 
 const columns = [
-  { key: "date", header: "Hearing Date", width: "15%", cellClassName: "font-medium" },
-  { key: "type", header: "Hearing Type", width: "18%" },
+  { key: "date", header: "Hearing Date", width: "15%", cellClassName: "font-medium", sort: "date" },
+  {
+    key: "type",
+    header: "Hearing Type",
+    width: "18%",
+    // In the order a case is heard in, not A - Z.
+    sort: "status",
+    sortOrder: [
+      "First Hearing",
+      "Evidence Submission",
+      "Witness Examination",
+      "Final Arguments",
+      "Judgement",
+    ],
+  },
   {
     key: "outcome",
     header: "Outcome",
     width: "12%",
+    // Still to be decided first, then put off, then done.
+    sort: "status",
+    sortOrder: ["Pending", "Adjourned", "Completed"],
     render: (value) => (
       <Badge variant={value === "Adjourned" ? "warning" : "outline"}>
         {value}
       </Badge>
     )
   },
-  { key: "next_date", header: "Next Date", width: "15%" },
-  { key: "notes", header: "Notes", width: "30%", cellClassName: "text-start" },
+  { key: "next_date", header: "Next Date", width: "15%", sort: "date" },
+  // Descriptive information.
+  { key: "notes", header: "Notes", width: "30%", cellClassName: "text-start", sort: false },
 ];
 
 export default function CourtHearing() {
@@ -217,6 +234,7 @@ export default function CourtHearing() {
           <h3 className="mb-4 font-semibold text-primary">Hearing History</h3>
           <DataTable
             columns={columns}
+            itemLabel="hearings"
             data={hearings}
             searchPlaceholder="Search hearings..."
             onAdd={showForm ? null : () => setShowForm(true)}

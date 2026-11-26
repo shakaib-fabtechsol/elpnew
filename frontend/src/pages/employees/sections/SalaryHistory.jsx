@@ -3,14 +3,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import AiSearch from "@/components/shared/AiSearch";
-import { EmptyState } from "@/components/shared/panels";
 import {
   RecordTable,
   HeadRow,
   Th,
   Row,
   Td,
+  EmptyRow,
+  SkeletonRows,
+  ErrorRow,
 } from "@/components/shared/RecordTable";
+import useDataset from "@/lib/api/useDataset";
+import { useTableSort } from "@/lib/sorting";
 import { cn } from "@/lib/utils";
 import { money, amountValue } from "@/lib/money";
 import { smartSearch } from "@/lib/search/smartSearch";
@@ -49,6 +53,9 @@ export default function SalaryHistory({
   addLabel = "Add Salary",
 }) {
   const [query, setQuery] = useState("");
+  // The salaries are loaded at sign-in; read here, where the rows are drawn,
+  // so the table shows them coming, or that they could not be fetched.
+  const dataset = useDataset(["salaries"]);
 
   // Newest first, and each row carrying the period it is for so the search
   // finds "September 2026" the way the table writes it.
@@ -57,7 +64,14 @@ export default function SalaryHistory({
     period: salaryPeriod(row),
   }));
 
-  const shown = smartSearch(rows, query);
+  // The summary and the transfer details each put several facts in one
+  // cell, so there is no single value to sort them by. The period is a month,
+  // sorted as the first day of it.
+  const { rows: shown, sortProps } = useTableSort(smartSearch(rows, query), {
+    salaryNo: { sort: "text", sortValue: salaryRef },
+    period: { sort: "date", sortValue: (row) => new Date(row.year, row.month - 1, 1) },
+    net: { sort: "money" },
+  });
 
   return (
     <Card>
@@ -80,87 +94,95 @@ export default function SalaryHistory({
           )}
         </div>
 
-        {shown.length === 0 ? (
-          <EmptyState>No salary matches that search.</EmptyState>
-        ) : (
-          <RecordTable minWidth={1040}>
-            <HeadRow>
-              <Th width="10%">Salary No.</Th>
-              <Th width="16%">Salary Period</Th>
-              <Th width="36%">Salary Summary</Th>
-              <Th width="16%">Net Salary</Th>
-              <Th width="22%">Transfer Details</Th>
-            </HeadRow>
-            <tbody>
-              {shown.map((row) => (
-                <Row key={row.id}>
-                  {/* A request that has not been approved opens back into
-                      the form: to be followed, corrected, or decided. Where
-                      it stands is said under its own number rather than in a
-                      column of its own. */}
-                  <Td className="whitespace-nowrap font-bold text-primary">
-                    {isSalaryRequest(row) && onOpenRequest ? (
-                      <button
-                        type="button"
-                        onClick={() => onOpenRequest(row)}
-                        className="rounded font-bold text-primary focus:outline-none focus:ring-2 focus:ring-ring"
-                      >
-                        {salaryRef(row)}
-                      </button>
-                    ) : (
-                      salaryRef(row)
-                    )}
-                    <span
-                      className={cn(
-                        "mt-1 flex w-fit items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                        SALARY_STATUS_TONE[row.status] ||
-                          "bg-muted text-muted-foreground"
-                      )}
+        <RecordTable minWidth={1040}>
+          <HeadRow>
+            <Th width="10%" {...sortProps("salaryNo")}>Salary No.</Th>
+            <Th width="16%" {...sortProps("period")}>Salary Period</Th>
+            <Th width="36%">Salary Summary</Th>
+            <Th width="16%" {...sortProps("net")}>Net Salary</Th>
+            <Th width="22%">Transfer Details</Th>
+          </HeadRow>
+          <tbody>
+            {dataset.status === "loading" && <SkeletonRows columns={5} rows={5} shapes={["lines"]} />}
+            {dataset.status === "failed" && (
+              <ErrorRow colSpan={5} label="salaries" onRetry={dataset.retry} />
+            )}
+            {dataset.status === "ready" && shown.length === 0 && (
+              <EmptyRow
+                colSpan={5}
+                label="salaries"
+                searching={query.trim() !== ""}
+                onClearSearch={() => setQuery("")}
+              />
+            )}
+            {dataset.status === "ready" && shown.map((row) => (
+              <Row key={row.id}>
+                {/* A request that has not been approved opens back into
+                    the form: to be followed, corrected, or decided. Where
+                    it stands is said under its own number rather than in a
+                    column of its own. */}
+                <Td className="whitespace-nowrap font-bold text-primary">
+                  {isSalaryRequest(row) && onOpenRequest ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenRequest(row)}
+                      className="rounded font-bold text-primary focus:outline-none focus:ring-2 focus:ring-ring"
                     >
-                      <span
-                        aria-hidden="true"
-                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-current"
-                      />
-                      {row.status}
-                    </span>
-                  </Td>
-
-                  <Td className="whitespace-nowrap">{row.period}</Td>
-
-                  {/* What the month was made of, read left to right: the pay,
-                      what was added to it, and what came off. */}
-                  <Td>
-                    <span className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
-                      {/* Three figures in one cell: the currency is said once,
-                          on the net beside them. */}
-                      <Part label="Basic" value={amountValue(row.basic)} />
-                      <span className="text-muted-foreground">/</span>
-                      <Part label="Allowances" value={amountValue(row.allowances)} />
-                      <span className="text-muted-foreground">/</span>
-                      <Part label="Deductions" value={amountValue(row.deductions)} />
-                    </span>
-                  </Td>
-
-                  {/* What actually reached the account, which is what the row
-                      is for. */}
-                  <Td className="whitespace-nowrap font-bold text-green-700">
-                    {money(row.net)}
-                  </Td>
-
-                  <Td>
-                    {row.method}
-                    {row.reference && (
-                      <>
-                        <span className="px-1.5 text-muted-foreground">/</span>
-                        {row.reference}
-                      </>
+                      {salaryRef(row)}
+                    </button>
+                  ) : (
+                    salaryRef(row)
+                  )}
+                  <span
+                    className={cn(
+                      "mt-1 flex w-fit items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                      SALARY_STATUS_TONE[row.status] ||
+                        "bg-muted text-muted-foreground"
                     )}
-                  </Td>
-                </Row>
-              ))}
-            </tbody>
-          </RecordTable>
-        )}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-current"
+                    />
+                    {row.status}
+                  </span>
+                </Td>
+
+                <Td className="whitespace-nowrap">{row.period}</Td>
+
+                {/* What the month was made of, read left to right: the pay,
+                    what was added to it, and what came off. */}
+                <Td>
+                  <span className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
+                    {/* Three figures in one cell: the currency is said once,
+                        on the net beside them. */}
+                    <Part label="Basic" value={amountValue(row.basic)} />
+                    <span className="text-muted-foreground">/</span>
+                    <Part label="Allowances" value={amountValue(row.allowances)} />
+                    <span className="text-muted-foreground">/</span>
+                    <Part label="Deductions" value={amountValue(row.deductions)} />
+                  </span>
+                </Td>
+
+                {/* What actually reached the account, which is what the row
+                    is for. */}
+                <Td className="whitespace-nowrap font-bold text-green-700">
+                  {money(row.net)}
+                </Td>
+
+                <Td>
+                  {row.method}
+                  {row.reference && (
+                    <>
+                      <span className="px-1.5 text-muted-foreground">/</span>
+                      {row.reference}
+                    </>
+                  )}
+                </Td>
+              </Row>
+            ))}
+          </tbody>
+        </RecordTable>
       </CardContent>
     </Card>
   );

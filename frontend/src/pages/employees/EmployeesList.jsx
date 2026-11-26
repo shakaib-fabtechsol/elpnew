@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,12 @@ import DataTable from "@/components/shared/DataTable";
 import PageHeader from "@/components/shared/PageHeader";
 import FilterPanel from "@/components/shared/FilterPanel";
 import { filterChips, withoutChip } from "@/lib/filterChips";
+import { StatCard, StatCards } from "@/components/shared/StatCard";
 import {
   Users,
-  User,
+  UserCheck,
   UserX,
-  FileWarning,
-  ArrowUp,
+  FileText,
   Eye,
   AlertCircle,
   AlertTriangle,
@@ -26,7 +26,25 @@ import {
   UserRoundCog,
   Scale,
   KeyRound,
+  Network,
+  ChevronRight,
+  Coins,
+  CheckCircle2,
+  Clock3,
+  BarChart3,
+  Gavel,
+  ClipboardList,
 } from "lucide-react";
+import { SalaryView, LeaveView, DocumentsView } from "./EmployeeQuickViews";
+import { mayView } from "./viewAccess";
+import { managementApi } from "@/lib/api/modules/management";
+import { initialViolations } from "./violationData";
+import { initialAdvances } from "./advanceSalaryData";
+import { initialBonuses } from "./bonusData";
+import { loanRecords } from "./loanData";
+import { assistanceRecords } from "./assistanceData";
+import { initialEntitlements } from "./entitlementData";
+import { initialGeneralRequests } from "./generalRequestData";
 import { cn } from "@/lib/utils";
 import { IdStatusDot, isEndedStatus } from "@/components/shared/panels";
 import {
@@ -37,9 +55,11 @@ import {
   documentStatus,
   employeeDocuments,
   accessHold,
+  documentStanding,
 } from "./employeeData";
 import { readDocumentControl } from "@/lib/settings/documentControl";
 import { can } from "@/lib/access";
+import useDataset from "@/lib/api/useDataset";
 
 /** A fact with its heading beside it, where the pair fits on one line. */
 /**
@@ -88,12 +108,6 @@ const STATUS_TONE = {
   Inactive: "bg-status-inactive",
 };
 
-/** A date as the firm writes them. */
-const formatDate = (iso) => {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-");
-  return d && m && y ? d + "/" + m + "/" + y : iso;
-};
 
 /**
  * The one document worth showing in a row, and how many others are waiting.
@@ -207,6 +221,7 @@ const filterFields = (canSeeDocuments) =>
       type: "checkbox",
       // Either, both, or neither: neither is no document filter at all.
       options: [
+        { value: "Missing", label: "Missing" },
         { value: "Expired", label: "Expired" },
         { value: "Expiring Soon", label: "Expiring Soon" },
       ],
@@ -252,7 +267,10 @@ const matches = (row, filters, leaves) =>
         return onLeaveToday(leaves, row.name) === (value === "on");
       // Either mark, or both; a paper only has to be in one of them.
       case "documentStatus":
-        return documentsFor(row.id).some((doc) => value.includes(documentStatus(doc)));
+        return (
+          (value.includes("Missing") && documentStanding(row).missing.length > 0) ||
+          documentsFor(row.id).some((doc) => value.includes(documentStatus(doc)))
+        );
       case "practiceLevel":
         return levelOf(row) === value;
       default:
@@ -283,106 +301,88 @@ const leftAs = (row) => {
   return "";
 };
 
-/** The tint of a chip under a figure. */
-const CHIP_TONE = {
-  blue: "bg-blue-50 text-blue-700",
-  orange: "bg-orange-50 text-orange-600",
-  red: "bg-red-50 text-red-700",
-};
-
-/** The tint of a breakdown tile under a figure. */
-const TILE_TONE = {
-  green: "bg-emerald-50",
-  blue: "bg-blue-50",
-  plain: "bg-slate-50",
-};
-
-/**
- * One figure across the top of the list, in the one style every card wears:
- * a navy rule along the top, the mark, the figure and what it counts. Under
- * it, either a chip - this month's movement, or what needs doing - or a row
- * of tiles that break the figure down. Pressing the card, or a tile that can
- * narrow the list, narrows it.
- */
-function SummaryCard({ icon, value, label, chip, tiles, active, onClick }) {
-  const Icon = icon;
-  return (
-    <div
-      className={cn(
-        "flex w-full min-w-0 flex-col gap-3 rounded-container border border-t-4 border-container-border border-t-primary bg-card p-4",
-        active && "ring-2 ring-primary/40"
-      )}
-    >
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={!onClick}
-        aria-pressed={active}
-        className="flex items-center gap-3 rounded-lg text-start transition-colors enabled:hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
-      >
-        <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-primary">
-          <Icon className="size-6" strokeWidth={1.5} aria-hidden="true" />
-        </span>
-        <span className="min-w-0">
-          <span className="block text-3xl font-bold leading-none text-primary">
-            {value.toLocaleString("en-US")}
-          </span>
-          <span className="mt-1.5 block whitespace-nowrap text-sm text-primary/80">{label}</span>
-        </span>
-      </button>
-
-      {chip && (
-        <span
-          className={cn(
-            "mx-auto inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold",
-            CHIP_TONE[chip.tone]
-          )}
-        >
-          {chip.icon === "alert" ? (
-            <AlertCircle className="size-4 fill-red-600 text-white" aria-hidden="true" />
-          ) : (
-            <ArrowUp className="size-4" aria-hidden="true" />
-          )}
-          {chip.text}
-        </span>
-      )}
-
-      {tiles && (
-        <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }}>
-          {tiles.map((tile) => (
-            <button
-              key={tile.label}
-              type="button"
-              onClick={tile.onClick}
-              disabled={!tile.onClick}
-              aria-pressed={tile.active}
-              className={cn(
-                "min-w-0 rounded-lg px-0.5 py-1.5 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
-                TILE_TONE[tile.tone || "plain"],
-                tile.onClick && "hover:brightness-95",
-                tile.active && "ring-2 ring-primary/40"
-              )}
-            >
-              <span className="block text-sm font-bold text-primary">{tile.value}</span>
-              <span className="block whitespace-nowrap text-[10px] leading-tight tracking-tight text-primary/75">{tile.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+/** "Mohammed Al Yahyaei" -> "MY": the mark where a photo would be. */
+const initials = (name) =>
+  String(name || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .filter((_, index, all) => index === 0 || index === all.length - 1)
+    .join("")
+    .toUpperCase();
 
 /** Whether an ISO date falls in the current calendar month. */
 const inThisMonth = (iso) =>
   Boolean(iso) && String(iso).slice(0, 7) === new Date().toISOString().slice(0, 7);
 
+/** A small "View More >" link under a figure, opening one of the windows. */
+/*
+ * Defined out here, not inside the page: a component made afresh on every
+ * render is a new component to React, so the button that opened a window
+ * would be torn down and rebuilt - and the page would lose its place.
+ */
+const More = ({ children = "View More", onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="inline-flex items-center gap-0.5 rounded text-sm font-medium text-record-link hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+  >
+    {children}
+    <ChevronRight className="size-3.5" aria-hidden="true" />
+  </button>
+);
+
+const DOCUMENT_TONE = {
+  Complete: "bg-emerald-50 text-emerald-700",
+  "Expiring Soon": "bg-amber-50 text-amber-700",
+  Incomplete: "bg-red-50 text-red-700",
+  Expired: "bg-red-50 text-red-700",
+};
+const DocumentMark = ({ status }) =>
+  status === "Complete" ? (
+    <CheckCircle2 className="size-4" aria-hidden="true" />
+  ) : status === "Expiring Soon" ? (
+    <Clock3 className="size-4" aria-hidden="true" />
+  ) : (
+    <AlertCircle className="size-4" aria-hidden="true" />
+  );
+
 export default function EmployeesList() {
   const navigate = useNavigate();
   const { leaves } = useLeaves();
+  // Every column here is read off these three: the records, their papers and
+  // the leave book. Followed here, so the page re-renders with fresh records
+  // after a Retry; the table shows skeletons while any is loading and
+  // "Unable to load employees" with Retry if any failed.
+  const dataset = useDataset(["employees", "employee documents", "leaves"]);
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [filters, setFilters] = useState({});
+  // The window open on one employee - { kind: "salary" | "leave" |
+  // "documents", id } - or null. A window over the table, never a page of
+  // its own, so closing it leaves the table exactly where it was.
+  const [openView, setOpenView] = useState(null);
+  // Re-read after a paper is filed from the documents window.
+  const [, setChanged] = useState(0);
+
+  // Each employee's latest evaluation score and standing, for the
+  // Performance Evaluation column. Fetched once; somebody not allowed to read
+  // evaluations simply sees dashes.
+  const [standings, setStandings] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    managementApi
+      .standing()
+      .then((rows) => {
+        if (cancelled) return;
+        const all = rows?.employees || [];
+        setStandings(Object.fromEntries(all.map((one) => [one.id, one])));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Standard: the document group is the general manager's. Left out of the
   // list entirely for anybody else - the server enforces the same rule, this
@@ -402,6 +402,31 @@ export default function EmployeesList() {
     setCurrentPage(1);
   };
 
+  /** Investigations still open against somebody - those without a penalty decided. */
+  const openInvestigations = (row) =>
+    initialViolations.filter(
+      (one) => one.employeeId === row.id && one.investigationStatus === "Under Investigation"
+    ).length;
+
+  /** Requests of every kind still waiting on a decision. */
+  const pendingRequests = (row) =>
+    [
+      ...leaves,
+      ...initialAdvances,
+      ...loanRecords,
+      ...assistanceRecords,
+      ...initialBonuses,
+      ...initialEntitlements,
+      ...initialGeneralRequests,
+    ].filter(
+      (one) =>
+        (one.employeeId === row.id || (!one.employeeId && one.employee === row.name)) &&
+        /pending|awaiting|returned|under review/i.test(String(one.status))
+    ).length;
+
+  const viewing = openView && employees.find((row) => row.id === openView.id);
+  const closeView = (open) => !open && setOpenView(null);
+
   const shown = employees
     .filter((row) => matches(row, filters, leaves))
     .sort(byUrgency);
@@ -417,6 +442,14 @@ export default function EmployeesList() {
   );
   const expiredDocuments = employeeDocuments.filter(
     (doc) => documentStatus(doc) === "Expired"
+  );
+  const expiringDocuments = employeeDocuments.filter(
+    (doc) => documentStatus(doc) === "Expiring Soon"
+  );
+  // Required papers not on file, across everybody (requiredDocumentTypes).
+  const missingDocuments = employees.reduce(
+    (total, row) => total + documentStanding(row).missing.length,
+    0
   );
 
   /** A card toggles its own filter on and off, and leaves the rest alone. */
@@ -435,6 +468,20 @@ export default function EmployeesList() {
   const inactive = employees.filter((row) => isEndedStatus(row.status));
   const leftBy = (how) => inactive.filter((row) => leftAs(row) === how).length;
   const joinedThisMonth = employees.filter((row) => inThisMonth(row.dateOfJoining)).length;
+  // The document breakdown narrows the list only for the general manager,
+  // whose filter it is; for anybody else it reports the figures.
+  const documentTile = (label, status, tone) => ({
+    label,
+    tone,
+    value:
+      status === "Expired"
+        ? expiredDocuments.length
+        : status === "Missing"
+          ? missingDocuments
+          : expiringDocuments.length,
+    active: Array.isArray(filters.documentStatus) && filters.documentStatus.includes(status),
+    onClick: canSeeRestricted ? () => toggle("documentStatus", status) : undefined,
+  });
   const levelTile = (label, level) => ({
     label,
     value: atLevel(level),
@@ -446,29 +493,32 @@ export default function EmployeesList() {
     {
       key: "total",
       icon: Users,
+      tone: "blue",
       value: employees.length,
       label: "Total Employees",
-      chip: { tone: "blue", text: "+" + joinedThisMonth + " this month" },
+      note: { icon: "trend", text: "+" + joinedThisMonth + " this month" },
       // Nothing is marked chosen while the whole list shows: the cards are
       // alike until one narrows it.
       onClick: () => narrow({}),
     },
     {
       key: "active",
-      icon: User,
+      icon: UserCheck,
+      tone: "green",
       value: active.length,
       label: "Active Employees",
       tiles: [
         {
           label: "Omani",
           tone: "green",
+          dot: "green",
           value: omani + " (" + share(omani) + "%)",
           active: filters.nationality === "Omani",
           onClick: () => toggle("nationality", "Omani"),
         },
         {
           label: "Non-Omani",
-          tone: "blue",
+          dot: "slate",
           value: active.length - omani + " (" + share(active.length - omani) + "%)",
           active: filters.nationality === "Non-Omani",
           onClick: () => toggle("nationality", "Non-Omani"),
@@ -482,6 +532,7 @@ export default function EmployeesList() {
       // trainee's register.
       key: "lawyers",
       icon: Scale,
+      tone: "purple",
       value: lawyers.length,
       label: "Lawyers",
       tiles: [
@@ -493,30 +544,31 @@ export default function EmployeesList() {
     },
     {
       key: "leave",
-      icon: Briefcase,
+      icon: CalendarDays,
+      tone: "orange",
       value: onLeave.length,
       label: "On Leave",
-      chip: {
-        tone: "orange",
-        text: leaveStartedThisMonth.size + " this month",
-      },
+      note: { icon: "dot", text: leaveStartedThisMonth.size + " this month" },
       active: filters.leave === "on",
       onClick: () => toggle("leave", "on"),
     },
     {
-      key: "expired",
-      icon: FileWarning,
-      value: expiredDocuments.length,
-      label: "Expired Documents",
-      chip: expiredDocuments.length > 0 && { tone: "red", icon: "alert", text: "Requires Action" },
-      active: Array.isArray(filters.documentStatus) && filters.documentStatus.includes("Expired"),
-      // The document filter is the general manager's; for anybody else the
-      // card reports the figure and goes nowhere.
-      onClick: canSeeRestricted ? () => toggle("documentStatus", "Expired") : undefined,
+      key: "documents",
+      icon: FileText,
+      tone: "amber",
+      // Papers that need somebody to act: missing, run out, or about to.
+      value: missingDocuments + expiredDocuments.length + expiringDocuments.length,
+      label: "Documents",
+      tiles: [
+        documentTile("Missing", "Missing"),
+        documentTile("Expiring Soon", "Expiring Soon", "orange"),
+        documentTile("Expired", "Expired", "red"),
+      ],
     },
     {
       key: "inactive",
       icon: UserX,
+      tone: "red",
       value: inactive.length,
       label: "Inactive Employees",
       tiles: [
@@ -532,7 +584,10 @@ export default function EmployeesList() {
     {
       key: "empNo",
       header: "Employee No.",
-      width: "10%",
+      width: "9%",
+      // A reference: sorted as text, which puts the digits in numeric order
+      // ("EMP-0009" before "EMP-0010"), like every ID in the system.
+      sort: "text",
       render: (value, row) => (
         <button
           type="button"
@@ -546,29 +601,65 @@ export default function EmployeesList() {
     {
       key: "name",
       header: "Employee",
-      width: "17%",
+      width: "18%",
+      sort: "text",
+      skeleton: "avatar",
+      // The name opens the full profile: employment, personal, contract and
+      // administrative information.
       render: (value, row) => (
-        <div className="space-y-0.5">
-          <p className="font-semibold text-primary">{value}</p>
-          <p className="text-xs text-muted-foreground">
-            {row.nationality} <span className="px-1">|</span> {row.gender}
-          </p>
+        <div className="flex items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-primary"
+          >
+            {initials(value)}
+          </span>
+          <div className="min-w-0 space-y-0.5">
+            <button
+              type="button"
+              onClick={() => navigate("/employees/" + row.id)}
+              className="text-start font-semibold text-primary hover:text-record-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {value}
+            </button>
+            <p className="text-xs text-muted-foreground">
+              {row.empNo} <span className="px-1">|</span> {row.nationality}
+            </p>
+          </div>
         </div>
       ),
     },
     {
       key: "designation",
       header: "Employment Details",
-      width: "21%",
+      width: "24%",
+      // Combined information: nothing single to put it in order by.
+      sort: false,
+      skeleton: "lines",
       render: (value, row) => (
-        <div className="space-y-0.5">
-          <p className="font-semibold text-primary">{value}</p>
-          <Fact label="Department">{row.department}</Fact>
-          <Fact label="Branch">{row.branch} Branch</Fact>
-          <Fact label="Contract">{row.contractType}</Fact>
+        <div className="space-y-1.5">
+          <span className="inline-flex rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-primary">
+            {value || "\u2013"}
+          </span>
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-primary/80">
+            <span className="inline-flex items-center gap-1">
+              <Network className="size-3.5" aria-hidden="true" />
+              {row.department || "\u2013"}
+            </span>
+            <span aria-hidden="true">|</span>
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="size-3.5" aria-hidden="true" />
+              {row.branch || "\u2013"}
+            </span>
+            <span aria-hidden="true">|</span>
+            <span className="inline-flex items-center gap-1">
+              <FileText className="size-3.5" aria-hidden="true" />
+              {row.contractType || "\u2013"}
+            </span>
+          </p>
           {/* Only lawyers hold one, and only the general manager may read it. */}
           {canSeeRestricted && row.practiceLevel && (
-            <Fact label="Practice level">{row.practiceLevel}</Fact>
+            <p className="text-xs text-muted-foreground">Practice level: {row.practiceLevel}</p>
           )}
         </div>
       ),
@@ -576,88 +667,94 @@ export default function EmployeesList() {
     {
       key: "salary",
       header: "Net Salary",
-      width: "11%",
-      sortValue: (row) => netSalary(row),
-      render: (value, row) => (
-        <span className="font-semibold text-emerald-700">{money(netSalary(row))}</span>
-      ),
+      width: "12%",
+      sort: "money",
+      skeleton: "lines",
+      sortValue: (row) => (mayView.salary() ? netSalary(row) : null),
+      exportValue: (row) => (mayView.salary() ? netSalary(row) : ""),
+      // Salary is shown only to somebody allowed to read payroll.
+      render: (value, row) =>
+        mayView.salary() ? (
+          <div className="flex gap-2">
+            <Coins className="mt-0.5 size-[18px] shrink-0 text-primary/60" strokeWidth={1.5} aria-hidden="true" />
+            <div className="space-y-0.5">
+              <p className="numeric-value font-semibold text-emerald-700">{money(netSalary(row))}</p>
+              <More onClick={() => setOpenView({ kind: "salary", id: row.id })} />
+            </div>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">Restricted</span>
+        ),
     },
     {
       key: "leave",
       header: "Leave",
-      width: "9%",
-      sortValue: (row) => annualLeaveLeft(leaves, row.name) ?? -1,
+      width: "11%",
+      // By the remaining balance; an employee with no balance sorts last.
+      sort: "balance",
+      skeleton: "lines",
+      sortValue: (row) => annualLeaveLeft(leaves, row.name),
+      exportValue: (row) => annualLeaveLeft(leaves, row.name) ?? "",
       render: (value, row) => {
         const left = annualLeaveLeft(leaves, row.name);
         return (
-          <div className="space-y-1">
-            <p className="text-primary">
-              {left === null ? "\u2013" : left + " days"}
-            </p>
-            {/* Approved leave covering today, worked out from the requests
-                themselves rather than read off a standing on the record. */}
-            {onLeaveToday(leaves, row.name) && (
-              <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                On leave
-              </span>
-            )}
+          <div className="flex gap-2">
+            <CalendarDays className="mt-0.5 size-[18px] shrink-0 text-primary/60" strokeWidth={1.5} aria-hidden="true" />
+            <div className="space-y-0.5">
+              <p className="font-semibold text-primary">
+                {left === null ? "\u2013" : left + " days"}
+              </p>
+              <p className="text-xs text-muted-foreground">remaining</p>
+              {/* Approved leave covering today, worked out from the requests
+                  themselves rather than read off a standing on the record. */}
+              {onLeaveToday(leaves, row.name) && (
+                <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                  On leave
+                </span>
+              )}
+              {mayView.leave() && <More onClick={() => setOpenView({ kind: "leave", id: row.id })} />}
+            </div>
           </div>
         );
       },
     },
     {
-      key: "access",
-      header: "Access Level",
-      width: "9%",
-      render: () => <span className="text-doc-absent">&ndash;</span>,
-    },
-    {
       key: "documents",
       header: "Documents",
       width: "14%",
-      // One paper only: the one nearest to costing the firm something.
-      // Everything else is counted, not listed, because a column that lists
-      // six documents is a column nobody reads.
+      // By how urgent the papers are: expired, missing, expiring, in order.
+      sort: "status",
+      sortOrder: ["Expired", "Incomplete", "Expiring Soon", "Complete"],
+      sortValue: (row) => documentStanding(row).status,
+      exportValue: (row) => documentStanding(row).status,
+      skeleton: "lines",
       render: (value, row) => {
-        const alert = criticalDocument(row.id);
-        if (!alert) return <span className="text-muted-foreground">&ndash;</span>;
-
-        const expired = alert.document.status === "Expired";
+        const standing = documentStanding(row);
+        const count =
+          standing.status === "Expired"
+            ? standing.expired.length
+            : standing.status === "Incomplete"
+              ? standing.missing.length
+              : standing.status === "Expiring Soon"
+                ? standing.expiring.length
+                : 0;
         return (
-          <div className="flex gap-2">
-            <Eye
-              strokeWidth={1.5}
-              aria-hidden="true"
-              className="mt-0.5 size-[18px] shrink-0 text-doc-present"
-            />
-            <div className="min-w-0 space-y-1">
-              <p className="truncate font-medium text-primary">
-                {alert.document.type}
-              </p>
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
-                  expired
-                    ? "bg-red-50 text-red-700"
-                    : "bg-amber-50 text-amber-700"
-                )}
-              >
-                {expired ? (
-                  <AlertCircle className="size-3" aria-hidden="true" />
-                ) : (
-                  <AlertTriangle className="size-3" aria-hidden="true" />
-                )}
-                {alert.document.status}
-              </span>
-              <p className="text-xs text-muted-foreground">
-                {expired ? "Expired" : "Expires"} {formatDate(alert.document.expiry)}
-              </p>
-              {alert.more > 0 && (
-                <p className="text-[11px] text-muted-foreground">
-                  +{alert.more} more document{alert.more === 1 ? "" : "s"} needs action
-                </p>
+          <div className="space-y-1">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
+                DOCUMENT_TONE[standing.status]
               )}
-            </div>
+            >
+              <DocumentMark status={standing.status} />
+              {standing.status}
+              {count > 0 && " (" + count + ")"}
+            </span>
+            {mayView.documents() && (
+              <div>
+                <More onClick={() => setOpenView({ kind: "documents", id: row.id })}>View Documents</More>
+              </div>
+            )}
           </div>
         );
       },
@@ -666,6 +763,8 @@ export default function EmployeesList() {
       key: "status",
       header: "Status",
       width: "9%",
+      sort: "status",
+      sortOrder: ["Active", "Inactive"],
       // Its own column rather than a line under the name: standing is the one
       // thing on this row that changes, and a column can be scanned down and
       // sorted where a line buried in a cell cannot.
@@ -703,6 +802,76 @@ export default function EmployeesList() {
         );
       },
     },
+    /* Additional columns - hidden by default, turned on from Columns. */
+    {
+      key: "access",
+      header: "Access Level",
+      width: "9%",
+      hidden: true,
+      sort: false,
+      render: () => <span className="text-doc-absent">&ndash;</span>,
+    },
+    {
+      key: "evaluation",
+      optional: true,
+      icon: BarChart3,
+      header: "Performance Evaluation",
+      width: "11%",
+      hidden: true,
+      sort: "number",
+      sortValue: (row) => standings[row.id]?.lastScore ?? null,
+      exportValue: (row) => standings[row.id]?.lastScore ?? "",
+      render: (value, row) => {
+        const one = standings[row.id];
+        if (!one || one.lastScore == null) return <span className="text-muted-foreground">&ndash;</span>;
+        return (
+          <div className="space-y-0.5">
+            <p className="numeric-value font-semibold text-primary">{one.lastScore}</p>
+            {one.standing && <p className="text-xs text-muted-foreground">{one.standing}</p>}
+          </div>
+        );
+      },
+    },
+    {
+      key: "investigations",
+      optional: true,
+      icon: Gavel,
+      header: "Investigation Committees",
+      width: "10%",
+      hidden: true,
+      sort: "number",
+      sortValue: (row) => openInvestigations(row),
+      exportValue: (row) => openInvestigations(row),
+      render: (value, row) => {
+        const open = openInvestigations(row);
+        return open ? (
+          <span className="inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+            {open} under investigation
+          </span>
+        ) : (
+          <span className="text-muted-foreground">None</span>
+        );
+      },
+    },
+    {
+      key: "pendingRequests",
+      optional: true,
+      icon: ClipboardList,
+      header: "Pending Requests",
+      width: "9%",
+      hidden: true,
+      sort: "number",
+      sortValue: (row) => pendingRequests(row),
+      exportValue: (row) => pendingRequests(row),
+      render: (value, row) => {
+        const count = pendingRequests(row);
+        return count ? (
+          <span className="numeric-value font-semibold text-primary">{count}</span>
+        ) : (
+          <span className="text-muted-foreground">None</span>
+        );
+      },
+    },
   ];
 
   return (
@@ -721,14 +890,15 @@ export default function EmployeesList() {
           {/* Inside the same box as the table, so the row of cards starts and
               ends where the table does. Five equal columns on a wide screen;
               fewer, still equal, as it narrows. */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <StatCards count={summary.length}>
             {summary.map(({ key, ...card }) => (
-              <SummaryCard key={key} {...card} />
+              <StatCard key={key} {...card} status={dataset.status} />
             ))}
-          </div>
+          </StatCards>
           <DataTable
             columns={columns}
             itemLabel="employees"
+            dataset={dataset}
             data={shown}
             keepOrder
             appliedFilters={chips}
@@ -736,9 +906,8 @@ export default function EmployeesList() {
             onClearFilters={() => narrow({})}
             // Anyone who has left is kept, at the foot of the list.
             endedRow={(row) => isEndedStatus(row.status)}
-            searchPlaceholder="Search employee by name, ID, department..."
+            searchPlaceholder="Search employees by name, ID, department..."
             enableColumnSearch={false}
-            enableSorting
             currentPage={currentPage}
             totalPages={Math.ceil(shown.length / pageSize)}
             filters={
@@ -754,6 +923,15 @@ export default function EmployeesList() {
           />
         </CardContent>
       </Card>
+
+      <SalaryView employee={viewing} open={openView?.kind === "salary"} onOpenChange={closeView} />
+      <LeaveView employee={viewing} open={openView?.kind === "leave"} onOpenChange={closeView} />
+      <DocumentsView
+        employee={viewing}
+        open={openView?.kind === "documents"}
+        onOpenChange={closeView}
+        onChanged={() => setChanged((n) => n + 1)}
+      />
     </div>
   );
 }

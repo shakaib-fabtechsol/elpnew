@@ -29,6 +29,10 @@ export function useDocumentIntake(formData, setFormData) {
    * reading that failed leaves the paper to be typed in by hand.
    */
   const readOne = async (doc) => {
+    // A photo is filed as it is; there is nothing in it to read.
+    if (intakeType(doc.typeKey)?.noReading) {
+      return { typeKey: doc.typeKey, fields: {}, number: "", expiry: "", status: doc.size ? "processed" : "failed" };
+    }
     if (!doc.size || !doc.file) return extractDemo(doc);
     try {
       const read = await employeesApi.readPaper(doc.file, doc.typeKey);

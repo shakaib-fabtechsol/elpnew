@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { Search } from "lucide-react";
 import { Loader } from "./Loader";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -13,17 +13,20 @@ const understood = new Map();
 const isQuestion = (text) => text.trim().split(/\s+/).length >= 3 && !/[:<>]/.test(text);
 
 /**
- * The one search box in the system.
+ * The one search box in the system - SADEED's approved search layout, used on
+ * every page. Later reference images may draw it differently; they are not to
+ * be followed.
  *
- * Every list is searched the same way and in the same place - the left of the
- * row above the table - so finding something is never a matter of working out
- * how this particular page does it. The mark is a spark rather than a
- * magnifying glass because the query is read for meaning, not matched
+ * Every list is searched the same way and in the same place - the start of
+ * the row above the table - so finding something is never a matter of working
+ * out how this particular page does it: a magnifying glass, the words, and a
+ * Ctrl + K hint, since Ctrl + K (Cmd + K on a Mac) puts the cursor here from
+ * anywhere on the page. The query is still read for meaning, not matched
  * literally: see `smartSearch`.
  *
  * A word or two is searched as it is typed. A question in plain words - three
  * words or more - is also sent, once the typing pauses, to the AI service,
- * which answers with a query the list can run ("department:legal
+ * which answers with a query the list can run ("department:judicial
  * salary>1500"); that query replaces the words for the search, while the box
  * goes on showing what was typed. The AI is told the question and the list's
  * column names, never its rows - and where no AI is answering, the word
@@ -42,6 +45,22 @@ export default function AiSearch({
   const [reading, setReading] = useState(false);
   const [meaning, setMeaning] = useState("");
   const latest = useRef(text);
+  const input = useRef(null);
+
+  // Ctrl + K / Cmd + K: into the search. Where a page has more than one list,
+  // the first on the page is the one the shortcut means.
+  useEffect(() => {
+    const onKey = (event) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "k") return;
+      if (document.querySelector("[data-list-search]") !== input.current) return;
+      event.preventDefault();
+      input.current?.focus();
+      input.current?.select();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
   // Cleared or set from outside (a filter reset, a page change): follow it.
   if (value !== sent) {
@@ -98,20 +117,30 @@ export default function AiSearch({
   }, [text]);
 
   return (
-    <div className={cn("relative w-full sm:w-80 lg:w-96", className)}>
+    <div className={cn("relative w-full sm:w-96 lg:w-[30rem]", className)}>
       {reading ? (
         <Loader size={16} label="Reading your question" className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2" />
       ) : (
-        <Sparkles className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
+        <Search className="pointer-events-none absolute start-3 top-1/2 size-[18px] -translate-y-1/2 text-primary" strokeWidth={1.75} />
       )}
       <Input
+        ref={input}
+        data-list-search=""
         type="search"
+        aria-keyshortcuts={isMac ? "Meta+K" : "Control+K"}
         value={text}
         onChange={(e) => type(e.target.value)}
         placeholder={placeholder}
         title={meaning ? "Understood as: " + meaning : undefined}
-        className={cn("ps-9", meaning && "pe-12")}
+        className={cn("h-[42px] ps-10", meaning ? "pe-12" : "pe-20")}
       />
+      {/* The shortcut, said where it applies. Gone once something is typed,
+          where the box's own clear button takes the space. */}
+      {!text && (
+        <kbd className="pointer-events-none absolute end-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-container-border bg-slate-50 px-1.5 py-0.5 font-sans text-[11px] font-semibold text-muted-foreground sm:inline-block">
+          {isMac ? "\u2318 K" : "Ctrl + K"}
+        </kbd>
+      )}
       {/* That the question was read, and - on hover - how. */}
       {meaning && (
         <span

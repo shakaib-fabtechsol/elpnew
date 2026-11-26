@@ -43,7 +43,7 @@ class CircularInsightTest extends ApiTestCase
             'keyPoints' => ['File through the case file.', 'Do not email the registry.'],
             'actions' => [['action' => 'File pleadings through the case file', 'who' => 'Lawyers', 'deadline' => 'soon'], ['who' => 'nobody']],
             'deadlines' => [['date' => '2026-11-01', 'label' => 'Email filing stops']],
-            'affectedDepartments' => ['Legal Services', 'The Moon'],
+            'affectedDepartments' => ['Judicial', 'The Moon'],
             'affectedRoles' => ['Lawyers'],
         ]);
         $id = $this->issue('All pleadings must be filed through the case file, not by direct email to the court registry.', 'Lawyers');
@@ -52,7 +52,7 @@ class CircularInsightTest extends ApiTestCase
             ->assertJsonPath('data.engine', 'gemini')
             ->assertJsonPath('data.actions.0.deadline', null)          // "soon" is not a date
             ->assertJsonCount(1, 'data.actions')                        // one with no action is dropped
-            ->assertJsonPath('data.affectedDepartments', ['Legal Services']);
+            ->assertJsonPath('data.affectedDepartments', ['Judicial']);
 
         // The next reader gets the same brief; the AI is not asked again.
         $this->as('aisha')->postJson($this->api("circulars/$id/brief"))->assertOk()->assertJsonPath('data.summary', 'Pleadings are to be filed through the case file.');
@@ -72,7 +72,7 @@ class CircularInsightTest extends ApiTestCase
             ->assertOk()->assertJsonPath('data.engine', 'gemini')->assertJsonPath('data.answer', 'As a lawyer you now upload pleadings in the case file; the circular gives no deadline.');
 
         Http::assertSent(fn ($request) => str_contains($request['contents'][0]['parts'][0]['text'], 'Does this apply to appeals?')
-            && str_contains($request['contents'][0]['parts'][0]['text'], 'The person asking is a Lawyer in Legal Services'));
+            && str_contains($request['contents'][0]['parts'][0]['text'], 'The person asking is a Lawyer in Judicial'));
     }
 
     public function test_without_ai_a_question_gets_the_circulars_own_words(): void
@@ -113,14 +113,14 @@ class CircularInsightTest extends ApiTestCase
 
     public function test_the_brief_says_whose_work_a_circular_changes_most(): void
     {
-        $this->gemini(['summary' => 'x', 'plainLanguage' => 'x', 'keyPoints' => [], 'actions' => [], 'deadlines' => [], 'affectedDepartments' => ['Administration'], 'affectedRoles' => []]);
+        $this->gemini(['summary' => 'x', 'plainLanguage' => 'x', 'keyPoints' => [], 'actions' => [], 'deadlines' => [], 'affectedDepartments' => ['Administrative'], 'affectedRoles' => []]);
         $id = $this->issue('Reception hours change to 08:00.');
         $this->as('admin')->postJson($this->api("circulars/$id/brief"))->assertOk();
 
         $row = collect($this->as('admin')->getJson($this->api('circulars-compliance'))->json('data.circulars'))->firstWhere('id', $id);
 
         $this->assertNotEmpty($row['mostAffected']);
-        $this->assertSame(['Administration'], array_values(array_unique(array_column($row['mostAffected'], 'department'))));
+        $this->assertSame(['Administrative'], array_values(array_unique(array_column($row['mostAffected'], 'department'))));
         $this->assertLessThan($row['targeted'], count($row['mostAffected']));
     }
 }

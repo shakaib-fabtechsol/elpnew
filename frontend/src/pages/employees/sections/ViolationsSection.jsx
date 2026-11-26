@@ -19,7 +19,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import UploadIcon from "@/components/shared/UploadIcon";
-import { EmptyState } from "@/components/shared/panels";
 import { RequestSteps } from "@/components/shared/RequestSteps";
 import {
   RecordTable,
@@ -27,7 +26,12 @@ import {
   Th,
   Row,
   Td,
+  EmptyRow,
+  SkeletonRows,
+  ErrorRow,
 } from "@/components/shared/RecordTable";
+import useDataset from "@/lib/api/useDataset";
+import { useTableSort } from "@/lib/sorting";
 import { FileCheck, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useViolations } from "@/lib/violations/context";
@@ -223,6 +227,9 @@ export default function ViolationsSection({ employee, canEdit = true }) {
     appealViolation,
     settleAppeal,
   } = useViolations();
+  // The violations are loaded at sign-in; read here, where the rows are
+  // drawn, so the table shows them coming, or that they could not be fetched.
+  const dataset = useDataset(["violations"]);
 
   // The record being worked on: "new" while it is being added, then its id.
   const [openId, setOpenId] = useState(null);
@@ -259,7 +266,7 @@ export default function ViolationsSection({ employee, canEdit = true }) {
 
   const mine = violationsFor(violations, employee?.name);
   const search = query.trim().toLowerCase();
-  const shown = search
+  const found = search
     ? mine.filter((v) =>
         [v.violationNo, v.type, v.investigationStatus, v.investigator, v.penaltyType, v.modifiedPenaltyType, v.approvedBy, v.status]
           .join(" ")
@@ -267,6 +274,13 @@ export default function ViolationsSection({ employee, canEdit = true }) {
           .includes(search)
       )
     : mine;
+  // The four middle columns each pair two facts (what and when, who and
+  // when), so by the sorting standard they are not sortable. A case's status
+  // sorts in the order a case moves through them.
+  const { rows: shown, sortProps } = useTableSort(found, {
+    violationNo: { sort: "text" },
+    status: { sort: "status", sortOrder: Object.keys(VIOLATION_STATUS_TONE) },
+  });
 
   const openNew = () => {
     setOpenId("new");
@@ -698,79 +712,83 @@ export default function ViolationsSection({ employee, canEdit = true }) {
             )}
           </div>
 
-          {shown.length === 0 ? (
-            <EmptyState>
-              {mine.length === 0
-                ? "No violation has been recorded for this employee."
-                : "No violation matches that search."}
-            </EmptyState>
-          ) : (
-            <RecordTable minWidth={1040}>
-              <HeadRow>
-                <Th width="10%">Violation No.</Th>
-                <Th width="19%">Violation Details</Th>
-                <Th width="19%">Investigation</Th>
-                <Th width="17%">Penalty Details</Th>
-                <Th width="19%">Approval &amp; Notification</Th>
-                <Th width="16%">Status</Th>
-              </HeadRow>
-              <tbody>
-                {shown.map((violation) => {
-                  const tone =
-                    VIOLATION_STATUS_TONE[violation.status] ||
-                    VIOLATION_STATUS_TONE["Under Investigation"];
-                  const penalty = finalPenalty(violation);
-                  return (
-                    <Row key={violation.id}>
-                      {/* The number opens the case at the stage it has reached. */}
-                      <Td className="whitespace-nowrap">
-                        {canOpen ? (
-                          <button
-                            type="button"
-                            onClick={() => openRecord(violation)}
-                            className="rounded font-bold text-primary focus:outline-none focus:ring-2 focus:ring-ring"
-                          >
-                            {violation.violationNo || "Pending"}
-                          </button>
-                        ) : (
-                          <span className="font-bold text-primary">
-                            {violation.violationNo || "Pending"}
-                          </span>
-                        )}
-                      </Td>
-                      <Td>
-                        <Pair first={violation.type} second={violation.date && formatDate(violation.date)} />
-                      </Td>
-                      <Td>
-                        <Pair first={violation.investigationStatus} second={shortName(violation.investigator)} />
-                      </Td>
-                      <Td>
-                        {/* The penalty that stands. Where the appeal changed
-                            it, the one it replaced is said under it. */}
-                        <Pair first={penalty.type} second={violation.penaltyDate && formatDate(violation.penaltyDate)} />
-                        {penalty.modified && (
-                          <span className="block text-xs text-muted-foreground">
-                            Modified on appeal from {violation.penaltyType}
-                          </span>
-                        )}
-                      </Td>
-                      <Td>
-                        <Pair first={shortName(violation.approvedBy)} second={violation.approvalDate && formatDate(violation.approvalDate)} />
-                      </Td>
-                      <Td>
-                        <span className="inline-flex items-center gap-2">
-                          <span aria-hidden="true" className={cn("h-3 w-3 shrink-0 rounded-full", tone.dot)} />
-                          <span className={cn("whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold", tone.chip)}>
-                            {violation.status}
-                          </span>
+          <RecordTable minWidth={1040}>
+            <HeadRow>
+              <Th width="10%" {...sortProps("violationNo")}>Violation No.</Th>
+              <Th width="19%">Violation Details</Th>
+              <Th width="19%">Investigation</Th>
+              <Th width="17%">Penalty Details</Th>
+              <Th width="19%">Approval &amp; Notification</Th>
+              <Th width="16%" {...sortProps("status")}>Status</Th>
+            </HeadRow>
+            <tbody>
+              {dataset.status === "loading" && <SkeletonRows columns={6} rows={5} shapes={[null, "lines", "lines", "lines", "lines"]} />}
+              {dataset.status === "failed" && (
+                <ErrorRow colSpan={6} label="violations" onRetry={dataset.retry} />
+              )}
+              {dataset.status === "ready" && shown.length === 0 && (
+                <EmptyRow
+                  colSpan={6}
+                  label="violations"
+                  searching={search !== ""}
+                  onClearSearch={() => setQuery("")}
+                />
+              )}
+              {dataset.status === "ready" && shown.map((violation) => {
+                const tone =
+                  VIOLATION_STATUS_TONE[violation.status] ||
+                  VIOLATION_STATUS_TONE["Under Investigation"];
+                const penalty = finalPenalty(violation);
+                return (
+                  <Row key={violation.id}>
+                    {/* The number opens the case at the stage it has reached. */}
+                    <Td className="whitespace-nowrap">
+                      {canOpen ? (
+                        <button
+                          type="button"
+                          onClick={() => openRecord(violation)}
+                          className="rounded font-bold text-primary focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          {violation.violationNo || "Pending"}
+                        </button>
+                      ) : (
+                        <span className="font-bold text-primary">
+                          {violation.violationNo || "Pending"}
                         </span>
-                      </Td>
-                    </Row>
-                  );
-                })}
-              </tbody>
-            </RecordTable>
-          )}
+                      )}
+                    </Td>
+                    <Td>
+                      <Pair first={violation.type} second={violation.date && formatDate(violation.date)} />
+                    </Td>
+                    <Td>
+                      <Pair first={violation.investigationStatus} second={shortName(violation.investigator)} />
+                    </Td>
+                    <Td>
+                      {/* The penalty that stands. Where the appeal changed
+                          it, the one it replaced is said under it. */}
+                      <Pair first={penalty.type} second={violation.penaltyDate && formatDate(violation.penaltyDate)} />
+                      {penalty.modified && (
+                        <span className="block text-xs text-muted-foreground">
+                          Modified on appeal from {violation.penaltyType}
+                        </span>
+                      )}
+                    </Td>
+                    <Td>
+                      <Pair first={shortName(violation.approvedBy)} second={violation.approvalDate && formatDate(violation.approvalDate)} />
+                    </Td>
+                    <Td>
+                      <span className="inline-flex items-center gap-2">
+                        <span aria-hidden="true" className={cn("h-3 w-3 shrink-0 rounded-full", tone.dot)} />
+                        <span className={cn("whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold", tone.chip)}>
+                          {violation.status}
+                        </span>
+                      </span>
+                    </Td>
+                  </Row>
+                );
+              })}
+            </tbody>
+          </RecordTable>
         </CardContent>
       </Card>
     </div>

@@ -22,12 +22,15 @@ import DateField from "@/components/shared/DateField";
 const executionActions = [];
 
 const columns = [
-  { key: "date", header: "Date", width: "12%", cellClassName: "font-medium" },
-  { key: "action", header: "Action", width: "20%" },
+  { key: "date", header: "Date", width: "12%", cellClassName: "font-medium", sort: "date" },
+  { key: "action", header: "Action", width: "20%", sort: "text" },
   {
     key: "status",
     header: "Status",
     width: "12%",
+    // Waiting and under way first, then done; a failed action last.
+    sort: "status",
+    sortOrder: ["Pending", "In Progress", "Completed", "Failed"],
     render: (value) => (
       <Badge
         variant={
@@ -43,8 +46,9 @@ const columns = [
     )
   },
   // The figure carries the currency, so the heading does not repeat it.
-  { key: "amount", header: "Amount", width: "12%", className: "text-end", cellClassName: "text-end", render: (value) => withRial(value) },
-  { key: "notes", header: "Notes", width: "34%", cellClassName: "text-start" },
+  { key: "amount", header: "Amount", width: "12%", className: "text-end", cellClassName: "text-end", sort: "money", render: (value) => withRial(value) },
+  // Descriptive information.
+  { key: "notes", header: "Notes", width: "34%", cellClassName: "text-start", sort: false },
 ];
 
 export default function Execution() {
@@ -257,6 +261,7 @@ export default function Execution() {
           <h3 className="mb-4 font-semibold text-primary">Execution Actions</h3>
           <DataTable
             columns={columns}
+            itemLabel="actions"
             data={executionActions}
             searchPlaceholder="Search actions..."
             onAdd={showForm ? null : () => setShowForm(true)}

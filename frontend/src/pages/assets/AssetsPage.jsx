@@ -42,6 +42,7 @@ import {
   netBookValue,
 } from "./assetData";
 import { RecordLink } from "@/components/shared/RecordTable";
+import useDataset from "@/lib/api/useDataset";
 
 import DateField from "@/components/shared/DateField";
 const emptyDraft = {
@@ -115,6 +116,12 @@ const Missing = () => <span className="text-muted-foreground">-</span>;
  */
 export default function AssetsPage() {
   const { branches, bankAccounts } = useFirm();
+  // The register is kept in the browser, but the Payment Details column reads
+  // the firm's bank accounts loaded at sign-in: skeleton rows until they land.
+  // The rows live in the browser; only one column reads "firm bank accounts" from the
+  // API. Followed so that column refreshes when it loads, but not passed to
+  // the table: a failed load must not hide records that are all here.
+  useDataset(["firm bank accounts"]);
   const { suppliers } = useSuppliers();
   const navigate = useNavigate();
   const { assets, addAsset } = useAssets();
@@ -213,8 +220,13 @@ export default function AssetsPage() {
       header: "Asset No.",
       subHeader: "Branch",
       width: "9%",
+      skeleton: "lines",
       exportValue: (row) =>
         row.assetNo + " - " + row.branchLabel + " (" + ASSET_STATUS[row.state].label + ")",
+      // By the number itself, not the export's number, branch and standing.
+      // An ID in natural order: each run of digits compares as a number, so
+      // A010 follows A009 and INV-2024-011 follows INV-2024-002.
+      sort: "text",
       sortValue: (row) => row.assetNo,
       render: (value, row) => (
         <div className="flex items-start gap-3">
@@ -238,11 +250,13 @@ export default function AssetsPage() {
       header: "Asset Details",
       subHeader: "Name / Type / Brand & Model / Serial No.",
       width: "16%",
+      skeleton: "lines",
       exportValue: (row) =>
         [row.name || "-", typeOf(row), row.brandModel, row.serialNo && "SN: " + row.serialNo]
           .filter(Boolean)
           .join(" - "),
-      sortValue: (row) => row.name || null,
+      // Combined information: name, type, model and serial in one cell.
+      sort: false,
       render: (value, row) => (
         <div className="text-primary/80">
           <p className="font-semibold text-primary">{value || "-"}</p>
@@ -257,9 +271,11 @@ export default function AssetsPage() {
       header: "Purchase Details",
       subHeader: "Date / Supplier / Invoice No.",
       width: "15%",
+      skeleton: "lines",
       exportValue: (row) =>
         [shortDate(row.purchaseDate), row.supplier || "-", row.invoiceNo].filter(Boolean).join(" - "),
-      sortValue: (row) => row.purchaseDate || null,
+      // Combined information: date, supplier and invoice in one cell.
+      sort: false,
       render: (value, row) => (
         <div className="space-y-0.5 text-primary/80">
           <p className="font-semibold text-primary">{shortDate(value)}</p>
@@ -278,6 +294,7 @@ export default function AssetsPage() {
       className: "text-end",
       cellClassName: "text-end",
       exportValue: (row) => (row.hasCost ? omr(row.cost) : "-"),
+      sort: "money",
       sortValue: (row) => (row.hasCost ? row.cost : null),
       render: (value, row) => figure(row.hasCost ? value : null),
     },
@@ -289,6 +306,7 @@ export default function AssetsPage() {
       className: "text-end",
       cellClassName: "text-end",
       exportValue: (row) => (row.rate ? row.rate + "%" : "-"),
+      sort: "number",
       sortValue: (row) => row.rate || null,
       render: (value) => (value ? <span className="text-primary/80">{value}%</span> : <Missing />),
     },
@@ -299,7 +317,9 @@ export default function AssetsPage() {
       width: "10%",
       className: "text-end",
       cellClassName: "text-end",
-      disableSort: true,
+      // By the figure; an asset with no cost has none and sorts last.
+      sort: "money",
+      sortValue: (row) => (row.hasCost ? row.accumulated : null),
       exportValue: (row) => (row.hasCost ? omr(row.accumulated) : "-"),
       render: (value) => figure(value),
     },
@@ -310,6 +330,7 @@ export default function AssetsPage() {
       className: "text-end",
       cellClassName: "text-end",
       exportValue: (row) => (row.hasCost ? omr(row.netBookValue) : "-"),
+      sort: "money",
       sortValue: (row) => row.netBookValue,
       render: (value) => figure(value),
     },
@@ -318,7 +339,9 @@ export default function AssetsPage() {
       header: "Payment Details",
       subHeader: "Method / Bank / Account No. / Transaction No.",
       width: "16%",
-      disableSort: true,
+      skeleton: "lines",
+      // Combined information: method, bank, account and transaction.
+      sort: false,
       exportValue: (row) =>
         [row.method || "-", ...paymentLines(row), row.transactionNo].filter(Boolean).join(" - "),
       render: (value, row) => (
@@ -489,7 +512,6 @@ export default function AssetsPage() {
             searchPlaceholder="Ask AI anything..."
             exportFileName="assets.csv"
             enableColumnSearch={false}
-            enableSorting
             currentPage={currentPage}
             totalPages={Math.ceil(rows.length / pageSize)}
             pageSize={pageSize}

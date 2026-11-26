@@ -88,6 +88,32 @@ export async function viewDocument(paper) {
   }
 }
 
+/** Saves a filed paper's copy to the computer, under the name it was filed with. */
+export async function downloadDocument(paper) {
+  try {
+    let blob;
+    if (paper.fileUrl) {
+      blob = await (await fetch(paper.fileUrl)).blob();
+    } else {
+      const response = await fetch(BASE + "/" + paper.downloadPath, {
+        headers: { Authorization: "Bearer " + getToken() },
+      });
+      if (!response.ok) throw new Error();
+      blob = await response.blob();
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = paper.fileName || paper.type || "document";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch {
+    notify("The copy of this document could not be downloaded.");
+  }
+}
+
 registerLoader("employee documents", async () => {
   await employeesLoaded();
   const lists = await Promise.all(

@@ -35,6 +35,27 @@ use Illuminate\Validation\ValidationException;
  */
 class EmployeePermissionController extends Controller
 {
+    /**
+     * The catalogue without an employee - for Add Employee's System
+     * Permissions step, which sets access before the record exists and saves
+     * it once the record is made. Management access is not offered there: it
+     * is given separately, with approval.
+     */
+    public function catalog(): JsonResponse
+    {
+        Gate::authorize('permission', 'permissions.edit');
+
+        $templates = array_filter(PermissionCatalog::TEMPLATES, fn ($key) => $key !== 'admin', ARRAY_FILTER_USE_KEY);
+
+        return response()->json(['data' => [
+            'catalog' => PermissionCatalog::groups(),
+            'actions' => PermissionCatalog::ACTIONS,
+            'templates' => array_map(fn ($key, $label) => ['value' => $key, 'label' => $label, ...PermissionCatalog::template($key)], array_keys($templates), $templates),
+            'scopes' => array_map(fn ($key, $label) => ['value' => $key, 'label' => $label], array_keys(PermissionCatalog::SCOPES), PermissionCatalog::SCOPES),
+            'departmentOptions' => PermissionCatalog::departments(),
+        ]]);
+    }
+
     public function show(Employee $employee): JsonResponse
     {
         Gate::authorize('permission', 'permissions.view');

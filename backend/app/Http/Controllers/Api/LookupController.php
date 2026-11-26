@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Employees\EmployeeRequest;
 use App\Http\Requests\Workflow\PaymentRequest;
 use App\Models\AssistanceRequest;
 use App\Models\Bonus;
@@ -26,7 +27,7 @@ class LookupController extends Controller
     public function __invoke(): JsonResponse
     {
         return response()->json(['data' => [
-            'departments' => ['Partner', 'Legal Services', 'Administration'],
+            'departments' => EmployeeRequest::DEPARTMENTS,
             'employmentTypes' => ['Full-Time', 'Part-Time', 'Temporary'],
             'contractTypes' => ['Fixed-term', 'Indefinite-term'],
             'practiceLevels' => ['Trainee Lawyer', 'Primary Lawyer', 'Appeal Lawyer', 'Supreme Court Lawyer', 'Non-Practicing Lawyers Register'],

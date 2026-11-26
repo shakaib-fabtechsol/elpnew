@@ -15,7 +15,9 @@ import {
 } from "@/components/ui/select";
 import DateField from "@/components/shared/DateField";
 import { EmptyState } from "@/components/shared/panels";
-import { RecordTable, HeadRow, Th, Row, Td } from "@/components/shared/RecordTable";
+import { RecordTable, HeadRow, Th, Row, Td, EmptyRow, SkeletonRows, ErrorRow } from "@/components/shared/RecordTable";
+import { Bone } from "@/components/shared/TableStates";
+import { useTableSort } from "@/lib/sorting";
 import { cn } from "@/lib/utils";
 import { shortName } from "@/lib/shortName";
 import { managementApi } from "@/lib/api/modules/management";
@@ -49,6 +51,9 @@ const STATUS_TONE = {
   Cancelled: "bg-muted text-muted-foreground",
 };
 
+// One empty list for the tables to sort while their records are on the way.
+const NONE = [];
+
 const canEditRecords = () => (CURRENT_USER.permissions?.granted || []).includes("employees.edit");
 const stamp = (iso) => {
   if (!iso) return "";
@@ -57,10 +62,16 @@ const stamp = (iso) => {
   return two(at.getDate()) + "/" + two(at.getMonth() + 1) + "/" + at.getFullYear() + " " + two(at.getHours()) + ":" + two(at.getMinutes());
 };
 
-/** Loads the employee's management page once, and hands back how to replace it. */
+/**
+ * Loads the employee's management page once, and hands back how to replace
+ * it, and how to try again when it could not be fetched. `status` is the
+ * same "loading" | "ready" | "failed" every table shows.
+ */
 function useManagement(employeeId) {
   const [page, setPage] = useState(null);
   const [failed, setFailed] = useState("");
+  // Each Retry fetches again; nothing else the panel holds is touched.
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let cancelled = false;
     managementApi.load(employeeId).then(
@@ -70,8 +81,13 @@ function useManagement(employeeId) {
     return () => {
       cancelled = true;
     };
-  }, [employeeId]);
-  return { page, setPage, failed };
+  }, [employeeId, attempt]);
+  const retry = () => {
+    setFailed("");
+    setAttempt((n) => n + 1);
+  };
+  const status = failed ? "failed" : page ? "ready" : "loading";
+  return { page, setPage, failed, status, retry };
 }
 
 function Loading() {
@@ -306,14 +322,87 @@ const emptyEvaluation = (criteria) => ({
   goals: "",
 });
 
+/** The ratings from best to worst - the order a rating is read in. */
+const RATING_ORDER = ["Outstanding", "Exceeds Expectations", "Meets Expectations", "Needs Improvement", "Unsatisfactory"];
+
+/**
+ * Every evaluation on record, one row a period. Its own component so it can
+ * sort: the panel above it returns early while the page loads, and a hook
+ * cannot sit after that.
+ */
+function EvaluationsTable({ criteria, evaluations, status = "ready", onRetry }) {
+  const { rows, sortProps } = useTableSort(evaluations, {
+    // A period is named freely ("2026 H1"), so it sorts by the day it began.
+    period: { sort: "date", sortValue: (one) => one.periodStart },
+    overall: { sort: "number" },
+    rating: { sort: "status", sortOrder: RATING_ORDER },
+    ...Object.fromEntries(
+      criteria.map((one) => ["score:" + one.key, { sort: "number", sortValue: (row) => row.scores[one.key] }])
+    ),
+    evaluator: { sort: "text", sortValue: (one) => shortName(one.evaluator) },
+  });
+
+  return (
+    <RecordTable minWidth={900}>
+      <HeadRow>
+        <Th {...sortProps("period")}>Period</Th>
+        <Th {...sortProps("overall")}>Overall</Th>
+        <Th {...sortProps("rating")}>Rating</Th>
+        {criteria.map((one) => (
+          <Th key={one.key} className="text-center" {...sortProps("score:" + one.key)}>
+            {one.label}
+          </Th>
+        ))}
+        <Th {...sortProps("evaluator")}>Evaluator</Th>
+      </HeadRow>
+      <tbody>
+        {status === "loading" && <SkeletonRows columns={criteria.length + 4} rows={5} shapes={["lines"]} />}
+        {status === "failed" && (
+          <ErrorRow colSpan={criteria.length + 4} label="evaluations" onRetry={onRetry} />
+        )}
+        {status === "ready" && rows.length === 0 && (
+          <EmptyRow colSpan={criteria.length + 4} label="evaluations" />
+        )}
+        {status === "ready" && rows.map((one) => (
+          <Row key={one.id}>
+            <Td className="whitespace-nowrap font-medium text-primary">
+              {one.period}
+              <span className="block text-xs font-normal text-muted-foreground">
+                {formatDate(one.periodStart)} – {formatDate(one.periodEnd)}
+              </span>
+            </Td>
+            <Td className="font-semibold text-primary">{one.overall.toFixed(2)}</Td>
+            <Td>{one.rating}</Td>
+            {criteria.map((criterion) => (
+              <Td key={criterion.key} className={cn("text-center", one.scores[criterion.key] <= 2 && "font-semibold text-red-700")}>
+                {one.scores[criterion.key] ?? "-"}
+              </Td>
+            ))}
+            <Td>{shortName(one.evaluator) || "-"}</Td>
+          </Row>
+        ))}
+      </tbody>
+    </RecordTable>
+  );
+}
+
 /** The periodic evaluations: each scored on the firm's criteria, and how the scores move. */
 export function EvaluationsPanel({ employee }) {
-  const { page, setPage, failed } = useManagement(employee.id);
+  const { page, setPage, status, retry } = useManagement(employee.id);
   const [form, setForm] = useState(null);
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
-  if (failed) return <EmptyState>{failed}</EmptyState>;
-  if (!page) return <Loading />;
+  // Until the page arrives the table stands in its place, with skeleton rows
+  // or the way to try again. The criteria are part of the page, so only the
+  // columns every evaluation has are drawn meanwhile.
+  if (!page) {
+    return (
+      <div className="space-y-6">
+        <Heading title="Performance Evaluations" note="Each period scored from 1 to 5 on the firm's criteria" />
+        <EvaluationsTable criteria={NONE} evaluations={NONE} status={status} onRetry={retry} />
+      </div>
+    );
+  }
 
   const { criteria, evaluations } = page;
   const oldestFirst = [...evaluations].filter((one) => one.status === "Final").reverse();
@@ -444,7 +533,7 @@ export function EvaluationsPanel({ employee }) {
       )}
 
       {evaluations.length === 0 ? (
-        !form && <EmptyState>No evaluation has been recorded for this employee yet.</EmptyState>
+        !form && <EvaluationsTable criteria={criteria} evaluations={evaluations} />
       ) : (
         <>
           {/* How the overall score has moved, one bar a period. */}
@@ -465,39 +554,7 @@ export function EvaluationsPanel({ employee }) {
             </div>
           )}
 
-          <RecordTable minWidth={900}>
-            <HeadRow>
-              <Th>Period</Th>
-              <Th>Overall</Th>
-              <Th>Rating</Th>
-              {criteria.map((one) => (
-                <Th key={one.key} className="text-center">
-                  {one.label}
-                </Th>
-              ))}
-              <Th>Evaluator</Th>
-            </HeadRow>
-            <tbody>
-              {evaluations.map((one) => (
-                <Row key={one.id}>
-                  <Td className="whitespace-nowrap font-medium text-primary">
-                    {one.period}
-                    <span className="block text-xs font-normal text-muted-foreground">
-                      {formatDate(one.periodStart)} – {formatDate(one.periodEnd)}
-                    </span>
-                  </Td>
-                  <Td className="font-semibold text-primary">{one.overall.toFixed(2)}</Td>
-                  <Td>{one.rating}</Td>
-                  {criteria.map((criterion) => (
-                    <Td key={criterion.key} className={cn("text-center", one.scores[criterion.key] <= 2 && "font-semibold text-red-700")}>
-                      {one.scores[criterion.key] ?? "-"}
-                    </Td>
-                  ))}
-                  <Td>{shortName(one.evaluator) || "-"}</Td>
-                </Row>
-              ))}
-            </tbody>
-          </RecordTable>
+<EvaluationsTable criteria={criteria} evaluations={evaluations} />
 
           {evaluations[0] && (evaluations[0].strengths || evaluations[0].improvements || evaluations[0].goals) && (
             <div className="grid gap-4 lg:grid-cols-3">
@@ -523,13 +580,95 @@ export function EvaluationsPanel({ employee }) {
 
 /* ---------------------------------------------------- development plan */
 
+/** Who an action came from, as its row says it. */
+const sourceOf = (one) => (one.source === "ai" ? "AI recommendation" : shortName(one.createdBy) || "Management");
+
+/**
+ * The development plan's actions, sortable. Its own component because the
+ * panel returns early while the page loads, and a hook cannot sit after that.
+ * The reason is free text, so it is not something to sort by; statuses sort
+ * in the order the firm defines them.
+ */
+function DevelopmentTable({ page, editable, busy, onStatus, status = "ready", onRetry }) {
+  const { rows, sortProps } = useTableSort(page?.development ?? NONE, {
+    title: { sort: "text" },
+    kind: { sort: "text" },
+    dueOn: { sort: "date" },
+    source: { sort: "text", sortValue: sourceOf },
+    status: { sort: "status", sortOrder: page?.actionStatuses },
+  });
+
+  return (
+    <RecordTable minWidth={900}>
+      <HeadRow>
+        <Th width="28%" {...sortProps("title")}>Action</Th>
+        <Th {...sortProps("kind")}>Type</Th>
+        <Th width="26%">Reason</Th>
+        <Th {...sortProps("dueOn")}>Due Date</Th>
+        <Th {...sortProps("source")}>Source</Th>
+        <Th width="16%" {...sortProps("status")}>Status</Th>
+      </HeadRow>
+      <tbody>
+        {status === "loading" && <SkeletonRows columns={6} rows={5} />}
+        {status === "failed" && <ErrorRow colSpan={6} label="development actions" onRetry={onRetry} />}
+        {status === "ready" && rows.length === 0 && <EmptyRow colSpan={6} label="development actions" />}
+        {status === "ready" && rows.map((one) => (
+          <Row key={one.id}>
+            <Td className="font-medium text-primary">{one.title}</Td>
+            <Td>{one.kind}</Td>
+            <Td>{one.reason || "-"}</Td>
+            <Td className={cn("whitespace-nowrap", one.overdue && "font-semibold text-red-700")}>
+              {one.dueOn ? formatDate(one.dueOn) : "-"}
+              {one.overdue && <span className="block text-xs">Overdue</span>}
+            </Td>
+            <Td>{sourceOf(one)}</Td>
+            <Td>
+              {editable ? (
+                <Select
+                  value={one.status}
+                  onValueChange={(status) => status !== one.status && onStatus(one, status)}
+                  disabled={busy}
+                >
+                  <SelectTrigger aria-label={"Status of " + one.title}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {page.actionStatuses.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className={cn("rounded-md px-2 py-0.5 text-xs font-semibold", STATUS_TONE[one.status])}>{one.status}</span>
+              )}
+            </Td>
+          </Row>
+        ))}
+      </tbody>
+    </RecordTable>
+  );
+}
+
 /** Training, coaching, corrective actions and recognition: planned, followed up, closed. */
 export function DevelopmentPlan({ employee }) {
-  const { page, setPage, failed } = useManagement(employee.id);
+  const { page, setPage, status, retry } = useManagement(employee.id);
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
-  if (failed) return <EmptyState>{failed}</EmptyState>;
-  if (!page) return <Loading />;
+  // Until the page arrives the table stands in its place, with skeleton rows
+  // or the way to try again.
+  if (!page) {
+    return (
+      <div className="space-y-6">
+        <Heading
+          title="Development Plan"
+          note="What is being done for this employee's development, and how each action ended"
+        />
+        <DevelopmentTable page={null} status={status} onRetry={retry} />
+      </div>
+    );
+  }
 
   const editable = canEditRecords();
   const set = (patch) => setForm((prev) => ({ ...prev, ...patch }));
@@ -620,55 +759,13 @@ export function DevelopmentPlan({ employee }) {
         </div>
       )}
 
-      {page.development.length === 0 ? (
-        !form && <EmptyState>Nothing is planned yet. The AI insight on the overview recommends where to start.</EmptyState>
-      ) : (
-        <RecordTable minWidth={900}>
-          <HeadRow>
-            <Th width="28%">Action</Th>
-            <Th>Type</Th>
-            <Th width="26%">Reason</Th>
-            <Th>Due Date</Th>
-            <Th>Source</Th>
-            <Th width="16%">Status</Th>
-          </HeadRow>
-          <tbody>
-            {page.development.map((one) => (
-              <Row key={one.id}>
-                <Td className="font-medium text-primary">{one.title}</Td>
-                <Td>{one.kind}</Td>
-                <Td>{one.reason || "-"}</Td>
-                <Td className={cn("whitespace-nowrap", one.overdue && "font-semibold text-red-700")}>
-                  {one.dueOn ? formatDate(one.dueOn) : "-"}
-                  {one.overdue && <span className="block text-xs">Overdue</span>}
-                </Td>
-                <Td>{one.source === "ai" ? "AI recommendation" : shortName(one.createdBy) || "Management"}</Td>
-                <Td>
-                  {editable ? (
-                    <Select
-                      value={one.status}
-                      onValueChange={(status) => status !== one.status && run(() => managementApi.updateAction(employee.id, one.id, { status }), "Status updated.")}
-                      disabled={busy}
-                    >
-                      <SelectTrigger aria-label={"Status of " + one.title}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {page.actionStatuses.map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {status}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <span className={cn("rounded-md px-2 py-0.5 text-xs font-semibold", STATUS_TONE[one.status])}>{one.status}</span>
-                  )}
-                </Td>
-              </Row>
-            ))}
-          </tbody>
-        </RecordTable>
+      {(page.development.length > 0 || !form) && (
+        <DevelopmentTable
+          page={page}
+          editable={editable}
+          busy={busy}
+          onStatus={(one, status) => run(() => managementApi.updateAction(employee.id, one.id, { status }), "Status updated.")}
+        />
       )}
     </div>
   );
@@ -676,10 +773,60 @@ export function DevelopmentPlan({ employee }) {
 
 /* -------------------------------------------------------- team insights */
 
+/**
+ * One of the team lists, sortable. The reasons are several facts joined
+ * together, so they are not something to sort by.
+ */
+function TeamTable({ rows, label, employee, status = "ready", onRetry }) {
+  const { rows: sorted, sortProps } = useTableSort(rows, {
+    name: { sort: "text" },
+    department: { sort: "text" },
+    lastScore: { sort: "number" },
+    violations12m: { sort: "number" },
+  });
+
+  return (
+    <RecordTable minWidth={760}>
+      <HeadRow>
+        <Th width="26%" {...sortProps("name")}>Employee</Th>
+        <Th {...sortProps("department")}>Department</Th>
+        <Th {...sortProps("lastScore")}>Last Score</Th>
+        <Th {...sortProps("violations12m")}>Violations (12 Months)</Th>
+        <Th width="34%">Why</Th>
+      </HeadRow>
+      <tbody>
+        {status === "loading" && <SkeletonRows columns={5} rows={5} shapes={["lines"]} />}
+        {status === "failed" && <ErrorRow colSpan={5} label={label} onRetry={onRetry} />}
+        {status === "ready" && sorted.length === 0 && <EmptyRow colSpan={5} label={label} />}
+        {status === "ready" && sorted.map((one) => (
+          <Row key={one.id} className={one.id === employee.id ? "bg-blue-50/60" : undefined}>
+            <Td>
+              <Link to={"/employees/" + one.id} state={{ section: "management" }} className="font-semibold text-primary">
+                {one.name}
+              </Link>
+              <span className="block text-xs text-muted-foreground">
+                {one.empNo} · {one.occupation || "-"}
+              </span>
+            </Td>
+            <Td>{one.department || "-"}</Td>
+            <Td>
+              {one.lastScore != null ? one.lastScore.toFixed(2) : "-"} <Trend value={one.scoreTrend} />
+            </Td>
+            <Td>{one.violations12m}</Td>
+            <Td>{one.reasons.join(" · ") || "-"}</Td>
+          </Row>
+        ))}
+      </tbody>
+    </RecordTable>
+  );
+}
+
 /** Across the firm: who to recognise, and who needs a manager's attention. */
 export function TeamInsights({ employee }) {
   const [team, setTeam] = useState(null);
   const [failed, setFailed] = useState("");
+  // Each Retry fetches again; the tables stay mounted, sorted as they were.
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let cancelled = false;
     managementApi.standing().then(
@@ -689,65 +836,49 @@ export function TeamInsights({ employee }) {
     return () => {
       cancelled = true;
     };
-  }, []);
-  if (failed) return <EmptyState>{failed}</EmptyState>;
-  if (!team) return <Loading />;
+  }, [attempt]);
+  const status = failed ? "failed" : team ? "ready" : "loading";
+  const retry = () => {
+    setFailed("");
+    setAttempt((n) => n + 1);
+  };
 
-  const list = (title, note, rows, empty) => (
+  const list = (title, note, rows, label) => (
     <section className="space-y-3">
       <div>
         <h3 className="text-base font-bold text-primary">{title}</h3>
         <p className="text-sm text-primary/75">{note}</p>
       </div>
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{empty}</p>
-      ) : (
-        <RecordTable minWidth={760}>
-          <HeadRow>
-            <Th width="26%">Employee</Th>
-            <Th>Department</Th>
-            <Th>Last Score</Th>
-            <Th>Violations (12 Months)</Th>
-            <Th width="34%">Why</Th>
-          </HeadRow>
-          <tbody>
-            {rows.map((one) => (
-              <Row key={one.id} className={one.id === employee.id ? "bg-blue-50/60" : undefined}>
-                <Td>
-                  <Link to={"/employees/" + one.id} state={{ section: "management" }} className="font-semibold text-primary">
-                    {one.name}
-                  </Link>
-                  <span className="block text-xs text-muted-foreground">
-                    {one.empNo} · {one.occupation || "-"}
-                  </span>
-                </Td>
-                <Td>{one.department || "-"}</Td>
-                <Td>
-                  {one.lastScore != null ? one.lastScore.toFixed(2) : "-"} <Trend value={one.scoreTrend} />
-                </Td>
-                <Td>{one.violations12m}</Td>
-                <Td>{one.reasons.join(" · ") || "-"}</Td>
-              </Row>
-            ))}
-          </tbody>
-        </RecordTable>
-      )}
+      <TeamTable rows={rows} label={label} employee={employee} status={status} onRetry={retry} />
     </section>
   );
 
   return (
     <div className="space-y-6">
-      <Heading title="Team Insights" note={"Every active employee your access reaches (" + team.total + "), by what their records show"} />
+      <Heading
+        title="Team Insights"
+        note={
+          "Every active employee your access reaches" +
+          (team ? " (" + team.total + ")" : "") +
+          ", by what their records show"
+        }
+      />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {["High Performer", "On Track", "Needs Attention", "Not Yet Evaluated"].map((standing) => (
           <div key={standing} className={cn("rounded-lg border p-4", STANDING_TONE[standing])}>
             <p className="text-xs font-medium opacity-80">{standing}</p>
-            <p className="mt-1 text-2xl font-bold">{team.counts[standing] || 0}</p>
+            {/* A placeholder while counting, a dash if the count failed -
+                never a 0 that is not true. */}
+            {status === "loading" ? (
+              <Bone className="mt-2 h-7 w-12" />
+            ) : (
+              <p className="mt-1 text-2xl font-bold">{team ? team.counts[standing] || 0 : "-"}</p>
+            )}
           </div>
         ))}
       </div>
-      {list("Employees Requiring Attention", "A weak or falling evaluation, recurring violations or an attendance pattern", team.needsAttention, "Nobody needs attention on what is recorded.")}
-      {list("High Performers", "A strong last evaluation and a clean record: recognise and retain", team.highPerformers, "No employee has an evaluation of 4.2 or above with a clean record yet.")}
+      {list("Employees Requiring Attention", "A weak or falling evaluation, recurring violations or an attendance pattern", team?.needsAttention ?? NONE, "employees requiring attention")}
+      {list("High Performers", "A strong last evaluation and a clean record: recognise and retain", team?.highPerformers ?? NONE, "high performers")}
     </div>
   );
 }

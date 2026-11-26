@@ -188,10 +188,9 @@ final class CircularAnalyst
             'actions' => $actions,
             'deadlines' => $deadlines,
             'affectedDepartments' => match ($circular->target_group) {
-                'Administration' => ['Administration'],
-                'Partners' => ['Partner'],
-                'Lawyers' => ['Legal Services', 'Litigation', 'Advisory & Contracts'],
-                'Accounting' => ['Finance'],
+                'Administration' => [EmployeeRequest::ADMINISTRATIVE],
+                'Partners', 'Lawyers' => [EmployeeRequest::JUDICIAL],
+                'Accounting' => [EmployeeRequest::FINANCIAL],
                 default => [],
             },
             'affectedRoles' => $circular->target_group === 'All Employees' ? [] : [$circular->target_group],

@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import AiSearch from "./AiSearch";
-import { CardLoader } from "./Loader";
+import { SkeletonCell, LoadError } from "./TableStates";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -23,36 +23,29 @@ import {
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   ChevronLeft,
-  ChevronUp,
-  ChevronDown,
-  ChevronsUpDown,
   ChevronRight,
+  ChevronDown,
+  Columns3,
   Plus,
   X,
-  Sparkles,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { smartSearch } from "@/lib/search/smartSearch";
-
-/**
- * Which way a column is sorted.
- *
- * An unsorted column still shows a faint pair of arrows, so a sortable
- * heading looks sortable before anybody clicks it.
- */
-function SortMark({ direction }) {
-  if (!direction) {
-    // Standard 06: an idle arrow on every heading is a row of arrows, and a
-    // row of arrows reads as decoration. It appears when the heading is
-    // pointed at or focused, which is when it means something.
-    return (
-      <ChevronsUpDown className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover/sort:opacity-40 group-focus-visible/sort:opacity-40" />
-    );
-  }
-  const Icon = direction === "asc" ? ChevronUp : ChevronDown;
-  return <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" />;
-}
+import { sortTypeOf, sortRows, nextSort } from "@/lib/sorting";
+import { SortButton } from "./SortMark";
+import EmptyState from "./EmptyState";
+import { Switch } from "@/components/ui/switch";
+import { EyeOff } from "lucide-react";
 
 /**
  * A column's heading: the title and nothing else.
@@ -63,6 +56,11 @@ function SortMark({ direction }) {
  */
 function ColumnHeading({ header }) {
   return header;
+}
+
+/** The thin upright rule between the toolbar's groups. */
+function ToolbarRule() {
+  return <span aria-hidden="true" className="hidden h-8 w-px bg-container-border sm:block" />;
 }
 
 /**
@@ -81,8 +79,28 @@ export default function DataTable({
   onPageSizeChange,
   currentPage = 1,
   pageSize = 100,
+  /**
+   * Where the rows come from: what useDataset returns for the datasets loaded
+   * at sign-in ("employees", "leaves" - see lib/api/modules). The page calls
+   * useDataset itself, so the page re-renders with the fresh records when
+   * they arrive, and hands the result here:
+   *
+   *   const employees = useDataset(["employees", "leaves"]);
+   *   <DataTable dataset={employees} data={...} />
+   *
+   * The table then shows skeleton rows while it loads, and "Unable to load
+   * ..." with Retry if it failed - Retry reloads only that data and keeps the
+   * search, filters, sorting, page and page size. A list kept only in the
+   * browser passes none.
+   */
+  dataset,
+  // The same three, for a page that fetches its rows itself.
   isLoading = false,
+  loadError = false,
+  onRetry,
   showExport = true,
+  // The Columns menu, for choosing which columns show.
+  showColumns = true,
   itemLabel,
   exportFileName = "export.csv",
   onAdd,
@@ -119,7 +137,13 @@ export default function DataTable({
   onClearFilters,
   onRowClick,
   enableColumnSearch = true,
-  enableSorting = false,
+  /**
+   * The system's sorting standard (lib/sorting.js) is on for every table.
+   * Each column sorts the way its type says - text A-Z, numbers and money by
+   * their value, dates by time, statuses by their defined order - and a
+   * column of descriptive or combined information says `sort: false`.
+   */
+  enableSorting = true,
   // Says whether a row's record has ended - cancelled, inactive, expired.
   // Those are kept, but they belong under the live ones.
   endedRow,
@@ -136,6 +160,17 @@ export default function DataTable({
   freezeHeader = true,
 }) {
   const [searchValue, setSearchValue] = useState("");
+  const loading = isLoading || dataset?.status === "loading";
+  const failed = Boolean(loadError) || dataset?.status === "failed";
+  const [retrying, setRetrying] = useState(false);
+  const retry = async () => {
+    setRetrying(true);
+    try {
+      await (onRetry ? onRetry() : dataset.retry());
+    } finally {
+      setRetrying(false);
+    }
+  };
   const toolbarRef = useRef(null);
   const [toolbarHeight, setToolbarHeight] = useState(0);
   // The styled scroll area scrolls both ways, which would hold a frozen
@@ -152,18 +187,33 @@ export default function DataTable({
     return () => observer.disconnect();
   }, [freezeHeader]);
   const [columnFilters, setColumnFilters] = useState({});
+
+  /**
+   * Which columns are hidden. A column marked `hidden: true` starts hidden and
+   * can be turned on from Columns; a column marked `hideable: false` (the
+   * record's own name or number, usually the first) is always shown. Held
+   * here, so it survives a Retry and a page change like the rest of the view.
+   */
+  const [hiddenKeys, setHiddenKeys] = useState(
+    () => new Set(columns.filter((column) => column.hidden).map((column) => column.key))
+  );
+  const hideable = (column, index) =>
+    column.hideable !== false && index !== 0 && column.key !== "actions" && Boolean(column.header);
+  const shownColumns = columns.filter((column) => !hiddenKeys.has(column.key));
+  const optionalColumns = columns.filter((column) => column.optional);
+  const toggleColumn = (key) =>
+    setHiddenKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   // Column key and direction, or null while the table is in its natural order.
   const [sort, setSort] = useState(null);
 
   // Off, then ascending, then descending, then back to the order the data came
   // in - so a sort can always be taken back off.
-  const toggleSort = (columnKey) =>
-    setSort((prev) => {
-      if (prev?.key !== columnKey) return { key: columnKey, direction: "asc" };
-      return prev.direction === "asc"
-        ? { key: columnKey, direction: "desc" }
-        : null;
-    });
+  const toggleSort = (columnKey) => setSort((prev) => nextSort(prev, columnKey));
 
   const handleSearch = (value) => {
     setSearchValue(value);
@@ -198,17 +248,15 @@ export default function DataTable({
   }) : searchedData;
 
   /**
-   * What a column sorts on.
-   *
-   * A rendered cell can hold anything, so the column says what its value is:
-   * its own sortValue where it needs one, the export value where that already
-   * flattens the row, and the raw field otherwise.
+   * How each column sorts, read once from the whole list rather than the page
+   * on screen, so a column does not change type as the pages turn.
    */
-  const sortValueOf = (column, row) => {
-    if (column.sortValue) return column.sortValue(row);
-    if (column.exportValue) return column.exportValue(row);
-    return row[column.key];
-  };
+  const sortTypes = Object.fromEntries(
+    columns.map((column) => [
+      column.key,
+      enableSorting ? sortTypeOf(column, data) : false,
+    ])
+  );
 
   /**
    * Newest first, until somebody sorts a column.
@@ -225,23 +273,9 @@ export default function DataTable({
   const sortedData = (() => {
     if (!sort) return newestFirst;
     const column = columns.find((c) => c.key === sort.key);
-    if (!column) return filteredData;
-    const direction = sort.direction === "asc" ? 1 : -1;
-    return [...filteredData].sort((a, b) => {
-      const left = sortValueOf(column, a);
-      const right = sortValueOf(column, b);
-      if (left === right) return 0;
-      // Blanks sort last whichever way the column is pointing.
-      if (left === null || left === undefined) return 1;
-      if (right === null || right === undefined) return -1;
-      if (typeof left === "number" && typeof right === "number") {
-        return (left - right) * direction;
-      }
-      return (
-        String(left).localeCompare(String(right), undefined, { numeric: true }) *
-        direction
-      );
-    });
+    const type = column && sortTypes[column.key];
+    if (!type) return newestFirst;
+    return sortRows(filteredData, column, sort.direction, type);
   })();
 
   /**
@@ -264,11 +298,15 @@ export default function DataTable({
   // The same rule for whatever narrows the list from outside this component:
   // a filter applied or cleared, a smaller page size. The page that no longer
   // exists is left rather than shown empty.
+  // Not while the rows are on their way or could not be fetched: the list is
+  // empty then only for that moment, and the page being read has to be the
+  // page Retry comes back to.
   useEffect(() => {
+    if (loading || failed) return;
     if (currentPage > calculatedTotalPages && onPageChange) {
       onPageChange(calculatedTotalPages);
     }
-  }, [currentPage, calculatedTotalPages, onPageChange]);
+  }, [currentPage, calculatedTotalPages, onPageChange, loading, failed]);
 
   /**
    * Which page buttons to draw: always the first and the last, the three
@@ -300,6 +338,17 @@ export default function DataTable({
     return out;
   })();
 
+  // Narrowed by the page's filters or by a column's own filter box.
+  const columnFiltering = Object.values(columnFilters).some(Boolean);
+  const filtering = appliedFilters.length > 0 || columnFiltering;
+  const clearFilters =
+    filtering && (onClearFilters || columnFiltering)
+      ? () => {
+          setColumnFilters({});
+          if (onClearFilters) onClearFilters();
+        }
+      : undefined;
+
   // Paginate filtered data
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
@@ -330,7 +379,12 @@ export default function DataTable({
       >
       <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 border-b border-container-border p-3">
 
-        {/* Global Search, first on the row wherever it appears */}
+        {/*
+          SADEED's approved search layout - the same on every page, whatever
+          a later reference image shows: the search box, then Filters, then
+          Columns, then rows per page, then Excel, each group set apart by a
+          thin rule.
+        */}
         <AiSearch
           value={searchValue}
           onChange={handleSearch}
@@ -338,16 +392,59 @@ export default function DataTable({
           className={searchClassName}
         />
 
-        {/* Custom Filters */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          {filters}
-        </div>
+        <div className="flex flex-1 flex-wrap items-center gap-3">
+          {filters && (
+            <>
+              <ToolbarRule />
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">{filters}</div>
+            </>
+          )}
 
-        {/* Everything that acts on this list, gathered on one side of the row.
-            Splitting the controls between the two ends made the eye cross the
-            whole table to set a page size, and left the middle saying nothing.
-            The far end is kept clear for whatever acts on a record. */}
-        <div className="flex flex-1 items-center gap-2">
+          {/* Which columns the table shows. */}
+          {showColumns && columns.some(hideable) && (
+            <>
+              <ToolbarRule />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      "group h-[42px] gap-2 border-primary/30 bg-blue-50/60 font-semibold text-primary hover:bg-blue-50",
+                      hiddenKeys.size > 0 && "border-primary"
+                    )}
+                  >
+                    <Columns3 className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
+                    Columns
+                    <ChevronDown
+                      className="size-3.5 transition-transform group-data-[state=open]:rotate-180"
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-60">
+                  <DropdownMenuLabel>Show columns</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {columns.map((column, index) =>
+                    hideable(column, index) ? (
+                      <DropdownMenuCheckboxItem
+                        key={column.key}
+                        checked={!hiddenKeys.has(column.key)}
+                        // Stays open, so several can be changed at once.
+                        onSelect={(event) => event.preventDefault()}
+                        onCheckedChange={() => toggleColumn(column.key)}
+                      >
+                        {column.header}
+                      </DropdownMenuCheckboxItem>
+                    ) : null
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
+
+          <ToolbarRule />
           <Select
             value={pageSize.toString()}
             onValueChange={(value) => {
@@ -358,7 +455,7 @@ export default function DataTable({
               if (onPageChange) onPageChange(1);
             }}
           >
-            <SelectTrigger className="w-20">
+            <SelectTrigger className="h-[42px] w-24" aria-label="Rows per page">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -369,22 +466,43 @@ export default function DataTable({
             </SelectContent>
           </Select>
 
-          {/* Square, and the same 42px every other control on this row stands
-              at, so the mark inside has room to be recognised rather than
-              guessed at. */}
+          {/* Excel: what is on screen - the search, filters, sort and the
+              columns shown - or every record with every column. */}
           {showExport && (
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-[42px] w-[42px] shrink-0 [&_svg]:size-6"
-              title="Export to Excel"
-              onClick={() =>
-                downloadCsv(toCsv(columns, filteredData), exportFileName)
-              }
-            >
-              <ExcelIcon className="size-6" />
-              <span className="sr-only">Export to Excel</span>
-            </Button>
+            <>
+              <ToolbarRule />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="group h-[42px] gap-2 font-semibold text-primary"
+                  >
+                    <ExcelIcon className="size-6" />
+                    Excel
+                    <ChevronDown
+                      className="size-3.5 transition-transform group-data-[state=open]:rotate-180"
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      downloadCsv(toCsv(shownColumns, orderedData), exportFileName)
+                    }
+                  >
+                    Export current view ({orderedData.length})
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => downloadCsv(toCsv(columns, data), exportFileName)}
+                  >
+                    Export all {itemLabel || "records"} ({data.length})
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           )}
 
           {/* The way to add, at the logical end of the toolbar. It goes
@@ -485,10 +603,6 @@ export default function DataTable({
 
       <div className="block">
           <div className="relative">
-            {isLoading && (
-              <CardLoader className="rounded-lg" />
-            )}
-
             {/* Frozen, the table has no scroll box of its own: the page is the
                 one thing that scrolls, and the headings hold against it. A box
                 that scrolls - even only sideways - is what a sticky heading
@@ -515,7 +629,7 @@ export default function DataTable({
                       freezeHeader ? { top: APP_HEADER + toolbarHeight } : undefined
                     }
                   >
-                    {columns.map((column) => (
+                    {shownColumns.map((column) => (
                       <TableHead
                         key={column.key}
                         className={cn(
@@ -526,24 +640,18 @@ export default function DataTable({
                         )}
                         style={{ width: column.width }}
                       >
-                        {enableSorting && !column.disableSort ? (
-                          <button
-                            type="button"
-                            onClick={() => toggleSort(column.key)}
-                            className="group/sort inline-flex items-start gap-1 rounded text-start hover:text-primary/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        {sortTypes[column.key] ? (
+                          <SortButton
+                            onSort={() => toggleSort(column.key)}
+                            direction={
+                              sort?.key === column.key ? sort.direction : null
+                            }
                           >
-                            <span>
-                              <ColumnHeading
-                                header={column.header}
-                                subHeader={column.subHeader}
-                              />
-                            </span>
-                            <SortMark
-                              direction={
-                                sort?.key === column.key ? sort.direction : null
-                              }
+                            <ColumnHeading
+                              header={column.header}
+                              subHeader={column.subHeader}
                             />
-                          </button>
+                          </SortButton>
                         ) : (
                           <ColumnHeading
                             header={column.header}
@@ -555,7 +663,7 @@ export default function DataTable({
                   </TableRow>
                   {enableColumnSearch && (
                     <TableRow className="sticky top-0 z-10 bg-table-head shadow-[0_1px_0_0_var(--container-border)] hover:bg-table-head">
-                      {columns.map((column) => (
+                      {shownColumns.map((column) => (
                         <TableHead
                           key={`filter-${column.key}`}
                           className="px-4 py-2"
@@ -577,13 +685,46 @@ export default function DataTable({
                   )}
                 </TableHeader>
                 <TableBody>
-                  {paginatedData.length === 0 ? (
+                  {/* Skeleton rows while the records load or refresh: the
+                      header and columns stay where they are, and the records
+                      replace the skeletons in place once they arrive. */}
+                  {loading ? (
+                    Array.from(
+                      { length: Math.min(paginatedData.length || pageSize, 10) },
+                      (_, row) => (
+                        <TableRow
+                          key={"skeleton-" + row}
+                          aria-hidden="true"
+                          className="h-[56px] border-b border-container-border last:border-0 hover:bg-transparent"
+                        >
+                          {shownColumns.map((column, index) => (
+                            <TableCell key={column.key} className="px-4 py-4 align-middle">
+                              <SkeletonCell shape={column.skeleton} row={row + index} />
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      )
+                    )
+                  ) : failed ? (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={shownColumns.length} className="p-0">
+                        <LoadError
+                          label={itemLabel}
+                          onRetry={onRetry || dataset ? retry : undefined}
+                          retrying={retrying}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ) : paginatedData.length === 0 ? (
                     <TableRow>
-                      <TableCell
-                        colSpan={columns.length}
-                        className="h-24 text-center text-muted-foreground"
-                      >
-                        No data available
+                      <TableCell colSpan={shownColumns.length} className="p-0">
+                        <EmptyState
+                          label={itemLabel}
+                          searching={Boolean(searchValue.trim())}
+                          filtering={filtering}
+                          onClearSearch={() => handleSearch("")}
+                          onClearFilters={clearFilters}
+                        />
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -603,7 +744,7 @@ export default function DataTable({
                         )}
                         onClick={() => onRowClick && onRowClick(row)}
                       >
-                        {columns.map((column) => (
+                        {shownColumns.map((column) => (
                           <TableCell
                             key={column.key}
                             className={cn(
@@ -625,6 +766,38 @@ export default function DataTable({
             </Scroller>
           </div>
       </div>
+
+      {/* Additional Columns: a list's optional columns (`optional: true`,
+          usually also `hidden: true`), each with its switch, under the table
+          where they are offered. The same choice as in Columns - turning one
+          on here ticks it there. */}
+      {optionalColumns.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 border-t border-container-border bg-slate-50/70 px-4 py-3">
+          <p className="flex items-center gap-2 text-sm font-semibold text-primary">
+            <EyeOff className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
+            Additional Columns
+            <span className="font-normal text-muted-foreground">(Hidden by Default)</span>
+          </p>
+          {optionalColumns.map((column) => {
+            const id = "extra-column-" + column.key;
+            return (
+              <label
+                key={column.key}
+                htmlFor={id}
+                className="flex cursor-pointer items-center gap-3 rounded-lg border border-container-border bg-card px-3 py-2 text-sm font-medium text-primary"
+              >
+                {column.icon && <column.icon className="size-4 text-primary/70" aria-hidden="true" />}
+                {column.header}
+                <Switch
+                  id={id}
+                  checked={!hiddenKeys.has(column.key)}
+                  onCheckedChange={() => toggleColumn(column.key)}
+                />
+              </label>
+            );
+          })}
+        </div>
+      )}
       </Card>
 
       {/* Pagination */}
@@ -634,7 +807,11 @@ export default function DataTable({
               the page named what it holds: "Page 1 of 3" answers a
               question nobody asked, while the count answers the one they
               did. */}
-          {filteredData.length > 0
+          {loading
+            ? "Loading " + (itemLabel || "records") + "\u2026"
+            : failed
+              ? ""
+              : filteredData.length > 0
             ? "Showing " +
               ((currentPage - 1) * pageSize + 1) +
               "–" +

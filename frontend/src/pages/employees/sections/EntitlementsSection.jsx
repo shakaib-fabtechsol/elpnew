@@ -5,6 +5,7 @@ import TabBar from "@/components/shared/TabBar";
 import { FileSpreadsheet } from "lucide-react";
 import { ENTITLEMENT_TABS } from "../entitlementTabs";
 import { initialEntitlements } from "../entitlementData";
+import { useReseed } from "@/lib/api/useDataset";
 import EntitlementTab from "./EntitlementTab";
 
 /**
@@ -29,6 +30,9 @@ export default function EntitlementsSection({
 }) {
   const [tab, setTab] = useState(initialTab || ENTITLEMENT_TABS[0].key);
   const [records, setRecords] = useState(initialEntitlements);
+  // Taken again whenever the entitlements are fetched afresh - they may still
+  // have been on their way when this opened, or a table's Retry brought them.
+  useReseed("entitlements", () => setRecords([...initialEntitlements]));
   // Whether the window is open, and on which tab it was opened.
   const [adding, setAdding] = useState(null);
 

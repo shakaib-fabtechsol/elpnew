@@ -11,14 +11,16 @@ import { Briefcase, Eye, Edit } from "lucide-react";
 const corporateMatters = [];
 
 const buildColumns = (openRecord) => [
-  { key: "ref_no", header: "Reference No.", width: "15%", cellClassName: "text-start font-medium" },
-  { key: "client", header: "Client", width: "20%" },
-  { key: "matter_type", header: "Matter Type", width: "18%" },
-  { key: "created_date", header: "Created Date", width: "12%" },
+  { key: "ref_no", header: "Reference No.", width: "15%", cellClassName: "text-start font-medium", sort: "text" },
+  { key: "client", header: "Client", width: "20%", sort: "text" },
+  { key: "matter_type", header: "Matter Type", width: "18%", sort: "text" },
+  { key: "created_date", header: "Created Date", width: "12%", sort: "date" },
   {
     key: "status",
     header: "Status",
     width: "12%",
+    // Open matters first, completed after them: the default order.
+    sort: "status",
     render: (value) => (
       <Badge
         variant={
@@ -38,6 +40,7 @@ const buildColumns = (openRecord) => [
     header: "Actions",
     width: "13%",
     disableFilter: true,
+    sort: false,
     render: (_, row) => (
       <div className="flex items-center justify-center gap-1">
         <Button

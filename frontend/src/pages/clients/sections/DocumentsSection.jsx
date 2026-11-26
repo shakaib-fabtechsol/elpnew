@@ -218,6 +218,7 @@ export default function DocumentsSection({ formData, onChange }) {
       key: "serial",
       header: "Serial No.",
       width: "10%",
+      sort: "number",
       render: (value, row) => (
         <button
           type="button"
@@ -238,6 +239,7 @@ export default function DocumentsSection({ formData, onChange }) {
       header: "Document Date",
       subHeader: "(Actual Date)",
       width: "14%",
+      sort: "date",
     },
     {
       // The type and the life left in it read as one thing: what the paper is
@@ -252,6 +254,9 @@ export default function DocumentsSection({ formData, onChange }) {
         (row.expiryDate
           ? row.expiryDate + " (" + EXPIRY_LABEL[expiryState(row.expiryDate)] + ")"
           : "no expiry"),
+      // By the type, A - Z; the expiry under it qualifies the type.
+      sort: "text",
+      sortValue: (row) => row.documentType,
       render: (value, row) => (
         <div className="space-y-1">
           <p className="font-medium">{value}</p>
@@ -263,6 +268,8 @@ export default function DocumentsSection({ formData, onChange }) {
       key: "fileName",
       header: "Document",
       width: "22%",
+      // A link to the file, not something to put in order.
+      sort: false,
       render: (value, row) => (
         <button
           type="button"
@@ -278,6 +285,8 @@ export default function DocumentsSection({ formData, onChange }) {
       key: "notes",
       header: "Notes",
       width: "24%",
+      // Descriptive information.
+      sort: false,
       render: (value) => (
         <span className="text-muted-foreground">{value || "-"}</span>
       ),
@@ -489,6 +498,7 @@ export default function DocumentsSection({ formData, onChange }) {
 
       <DataTable
         columns={columns}
+        itemLabel="documents"
         data={documents}
         searchPlaceholder="Search documents..."
         enableColumnSearch={false}

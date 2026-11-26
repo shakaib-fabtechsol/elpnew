@@ -52,7 +52,12 @@ import {
   Th,
   Row,
   Td,
+  EmptyRow,
+  SkeletonRows,
+  ErrorRow,
 } from "@/components/shared/RecordTable";
+import useDataset, { useReseed } from "@/lib/api/useDataset";
+import { useTableSort } from "@/lib/sorting";
 import { useViolations } from "@/lib/violations/context";
 import { useAdvances } from "@/lib/advances/context";
 import { owedAdvances, deductedFrom } from "../advanceSalaryData";
@@ -388,6 +393,15 @@ export default function SalariesSection({
   const [history, setHistory] = useState(() =>
     salaryHistory.filter((row) => row.employee === employee?.name)
   );
+  // Taken again whenever the salaries are fetched afresh - they may still
+  // have been on their way when this opened, or a Retry brought them back.
+  useReseed("salaries", () =>
+    setHistory(salaryHistory.filter((row) => row.employee === employee?.name))
+  );
+  // The two short tables of what comes off the pay are read off the loans,
+  // the advances and the violations loaded at sign-in.
+  const debtData = useDataset(["loans", "salary advances"]);
+  const penaltyData = useDataset(["violations"]);
   // While a call to the server is out, its button waits rather than sending twice.
   const [busy, setBusy] = useState(false);
   const send = async (call) => {
@@ -492,6 +506,19 @@ export default function SalariesSection({
       }, {})
   );
   const penaltyDue = penalties.reduce((sum, row) => sum + row.total, 0);
+
+  // Both short lists sort the same way every table does. A month is a date,
+  // so it sorts as the first day of it rather than by the month's name.
+  const debtSort = useTableSort(debts, {
+    type: { sort: "text" },
+    number: { sort: "number" },
+    monthly: { sort: "money", sortValue: (debt) => Number(debt.monthly || 0) },
+  });
+  const penaltySort = useTableSort(penalties, {
+    month: { sort: "date", sortValue: (penalty) => penalty.key + "-01" },
+    year: { sort: "number" },
+    total: { sort: "money" },
+  });
 
   const deductions = Number((loanDue + penaltyDue).toFixed(3));
   const net = Number((earnings - deductions).toFixed(3));
@@ -1137,19 +1164,19 @@ export default function SalariesSection({
           <Panel title="Debt Installments" icon={Landmark}>
             <RecordTable minWidth={320}>
               <HeadRow>
-                <Th width="40%">Debt Type</Th>
-                <Th width="28%">Installment No.</Th>
-                <Th width="32%">Installment Amount</Th>
+                <Th width="40%" {...debtSort.sortProps("type")}>Debt Type</Th>
+                <Th width="28%" {...debtSort.sortProps("number")}>Installment No.</Th>
+                <Th width="32%" {...debtSort.sortProps("monthly")}>Installment Amount</Th>
               </HeadRow>
               <tbody>
-                {debts.length === 0 ? (
-                  <Row>
-                    <Td className="text-muted-foreground" colSpan={3}>
-                      No debt is being repaid.
-                    </Td>
-                  </Row>
+                {debtData.status === "loading" ? (
+                  <SkeletonRows columns={3} rows={5} />
+                ) : debtData.status === "failed" ? (
+                  <ErrorRow colSpan={3} label="debt installments" onRetry={debtData.retry} />
+                ) : debtSort.rows.length === 0 ? (
+                  <EmptyRow colSpan={3} label="debt installments" />
                 ) : (
-                  debts.map((debt) => (
+                  debtSort.rows.map((debt) => (
                     <Row key={debt.id}>
                       <Td>
                         {debt.type}
@@ -1175,19 +1202,19 @@ export default function SalariesSection({
           <Panel title="Disciplinary Deductions" icon={ShieldCheck}>
             <RecordTable minWidth={320}>
               <HeadRow>
-                <Th width="40%">Month</Th>
-                <Th width="28%">Year</Th>
-                <Th width="32%">Total Deduction</Th>
+                <Th width="40%" {...penaltySort.sortProps("month")}>Month</Th>
+                <Th width="28%" {...penaltySort.sortProps("year")}>Year</Th>
+                <Th width="32%" {...penaltySort.sortProps("total")}>Total Deduction</Th>
               </HeadRow>
               <tbody>
-                {penalties.length === 0 ? (
-                  <Row>
-                    <Td className="text-muted-foreground" colSpan={3}>
-                      No penalty has been deducted.
-                    </Td>
-                  </Row>
+                {penaltyData.status === "loading" ? (
+                  <SkeletonRows columns={3} rows={5} />
+                ) : penaltyData.status === "failed" ? (
+                  <ErrorRow colSpan={3} label="disciplinary deductions" onRetry={penaltyData.retry} />
+                ) : penaltySort.rows.length === 0 ? (
+                  <EmptyRow colSpan={3} label="disciplinary deductions" />
                 ) : (
-                  penalties.map((penalty) => (
+                  penaltySort.rows.map((penalty) => (
                     <Row key={penalty.key}>
                       <Td>{penalty.month}</Td>
                       <Td>{penalty.year}</Td>

@@ -193,6 +193,7 @@ export default function VatPage() {
       header: "Date",
       width: "10%",
       exportValue: (row) => shortDate(row.date),
+      sort: "date",
       sortValue: (row) => row.date,
       render: (value) => <span className="whitespace-nowrap">{shortDate(value)}</span>,
     },
@@ -201,6 +202,8 @@ export default function VatPage() {
       header: "Type",
       width: "11%",
       exportValue: (row) => row.direction + " VAT",
+      sort: "text",
+      sortValue: (row) => row.direction,
       render: (value) => (
         <span
           className={cn(
@@ -212,13 +215,16 @@ export default function VatPage() {
         </span>
       ),
     },
-    { key: "source", header: "Source", width: "13%" },
+    { key: "source", header: "Source", width: "13%", sort: "text" },
     {
       key: "reference",
       header: "Reference",
       subHeader: "Party",
       width: "26%",
       exportValue: (row) => row.reference + " - " + row.party,
+      // By the reference in natural order; the party under it qualifies it.
+      sort: "text",
+      sortValue: (row) => row.reference,
       render: (value, row) => (
         <div>
           <p className="font-semibold text-primary">{value}</p>
@@ -233,6 +239,7 @@ export default function VatPage() {
       className: "text-end",
       cellClassName: "text-end",
       exportValue: (row) => omr(row.net),
+      sort: "money",
       sortValue: (row) => row.net,
       render: money,
     },
@@ -243,6 +250,7 @@ export default function VatPage() {
       className: "text-end",
       cellClassName: "text-end font-semibold text-primary",
       exportValue: (row) => omr(row.vat),
+      sort: "money",
       sortValue: (row) => row.vat,
       render: money,
     },
@@ -253,6 +261,7 @@ export default function VatPage() {
       className: "text-end",
       cellClassName: "text-end",
       exportValue: (row) => omr(row.total),
+      sort: "money",
       sortValue: (row) => row.total,
       render: money,
     },
@@ -439,11 +448,11 @@ export default function VatPage() {
           />
           <DataTable
             columns={columns}
+            itemLabel="VAT records"
             data={shown}
             searchPlaceholder="Ask about VAT records..."
             exportFileName={"vat-records-" + year + ".csv"}
             enableColumnSearch={false}
-            enableSorting
             currentPage={currentPage}
             totalPages={Math.ceil(shown.length / pageSize)}
             pageSize={pageSize}

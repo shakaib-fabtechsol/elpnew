@@ -18,10 +18,13 @@ import {
   SelectValue,
   } from "@/components/ui/select";
 import { EmptyState } from "@/components/shared/panels";
+import { RecordTable, HeadRow, Th, EmptyRow, SkeletonRows, ErrorRow } from "@/components/shared/RecordTable";
+import useDataset from "@/lib/api/useDataset";
 import {
   Plus,
   Lock,
-  Search,  Ban,
+  Search,
+  Ban,
   FileCheck,
   FileText,
   Megaphone,
@@ -98,6 +101,10 @@ export default function CircularsSection({ canEdit }) {
   const { circulars, audit, issueCircular, reviseCircular, cancelCircular } =
     useCirculars();
   const { branches } = useFirm();
+  // The circulars and their audit trail are loaded at sign-in; read here,
+  // where the rows are drawn, so the tables show them coming, or that they
+  // could not be fetched.
+  const dataset = useDataset(["circulars"]);
 
   // The circular being corrected, if any. Null while nothing is open.
   const [editing, setEditing] = useState(null);
@@ -489,148 +496,141 @@ export default function CircularsSection({ canEdit }) {
 
       <div>
         <p className="mb-2 text-lg font-bold text-primary">Issued Circulars</p>
-        <Card>
-          <CardContent className="overflow-x-auto p-0">
-            {listed.length === 0 ? (
-              <div className="p-6">
-                <EmptyState>No circulars match that search.</EmptyState>
-              </div>
-            ) : (
-              <table className="w-full min-w-[1000px] border text-sm">
-                <thead>
-                  <tr className="border-b bg-secondary/60 text-start text-primary">
-                    <th className="p-3 font-semibold" style={{ width: "10%" }}>
-                      Circular No.
-                    </th>
-                    <th className="p-3 font-semibold" style={{ width: "20%" }}>
-                      Subject / Content (Preview)
-                    </th>
-                    <th className="p-3 font-semibold" style={{ width: "9%" }}>
-                      Date
-                    </th>
-                    <th className="p-3 font-semibold" style={{ width: "16%" }}>
-                      Target Audience
-                    </th>
-                    <th className="p-3 font-semibold" style={{ width: "14%" }}>
-                      Issued By
-                    </th>
-                    <th className="p-3 font-semibold" style={{ width: "14%" }}>
-                      Acknowledgement
-                    </th>
-                    <th className="p-3 font-semibold" style={{ width: "13%" }}>
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shown.map((circular) => (
-                    <tr
-                      key={circular.id}
-                      className="border-b align-top transition-colors last:border-0 hover:bg-primary/10"
-                    >
-                      {/* The number opens the circular for correction - but
-                          only while it is in force. A superseded or withdrawn
-                          circular is history, and history is read only. */}
-                      <td className="whitespace-nowrap p-3">
-                        {canEdit && circular.status === ACTIVE ? (
-                          <button
-                            type="button"
-                            onClick={() => startEdit(circular)}
-                            className="rounded font-semibold text-primary focus:outline-none focus:ring-2 focus:ring-ring"
-                          >
-                            {circular.circularNo}
-                          </button>
-                        ) : (
-                          <span
-                            className="font-semibold text-muted-foreground"
-                            title="Read only"
-                          >
-                            {circular.circularNo}
-                          </span>
-                        )}
-                      </td>
-                      {/* Enough of the circular to tell it apart, no more */}
-                      <td className="p-3 text-muted-foreground">
-                        {preview(circular.content)}
-                      </td>
-                      <td className="whitespace-nowrap p-3">
-                        {formatDate(circular.date)}
-                      </td>
-                      {/* Who it is for, and at which office - one answer
-                          in two parts, so they read together. */}
-                      <td className="p-3">
-                        <span className="block">{circular.targetGroup}</span>
-                        <span className="block text-xs text-muted-foreground">
-                          {branchLabelFor(circular, branches)}
-                        </span>
-                      </td>
-                      <td className="p-3">{shortName(circular.issuedBy)}</td>
-                      {/* Counted, never typed */}
-                      <td className="p-3">
-                        <span className="block font-semibold text-primary">
-                          {acknowledgementCount(circular)} Acknowledged
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setDetailsFor(circular)}
-                          className="rounded text-xs text-primary focus:outline-none focus:ring-2 focus:ring-ring"
-                        >
-                          View Details
-                        </button>
-                      </td>
-                      <td className="p-3">
-                        {/* A circular still in force says nothing: only one
-                            that has been superseded or cancelled does. */}
-                        {circular.status !== ACTIVE && (
-                          <span
-                            className={cn(
-                              "inline-block rounded-md px-2 py-0.5 text-xs font-semibold",
-                              STATUS_TONE[circular.status]
-                            )}
-                          >
-                            {STATUS_LABEL[circular.status]}
-                          </span>
-                        )}
-                        {canEdit && circular.status === ACTIVE && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              send(() => cancelCircular(circular.id))
-                            }
-                            className="mt-1 flex items-center gap-1 rounded text-xs text-muted-foreground hover:text-destructive focus:outline-none focus:ring-2 focus:ring-ring"
-                          >
-                            <Ban className="h-3 w-3 shrink-0" />
-                            Cancel circular
-                          </button>
-                        )}
-
-                        {/* The written circular, where the row's other
-                            actions are. Shown only when there is one. */}
-                        {circular.fileUrl && (
-                          <button
-                            type="button"
-                            title={"View " + circular.fileName}
-                            onClick={() =>
-                              window.open(
-                                circular.fileUrl,
-                                "_blank",
-                                "noopener,noreferrer"
-                              )
-                            }
-                            className="mt-1 flex items-center gap-1 rounded text-xs text-primary focus:outline-none focus:ring-2 focus:ring-ring"
-                          >
-                            <FileText className="h-3 w-3 shrink-0" />
-                            View document
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* On the shared table, so its heading stays in sight while a long
+            list scrolls under it. */}
+        <RecordTable minWidth={1000}>
+          <HeadRow>
+            <Th width="10%">Circular No.</Th>
+            <Th width="20%">Subject / Content (Preview)</Th>
+            <Th width="9%">Date</Th>
+            <Th width="16%">Target Audience</Th>
+            <Th width="14%">Issued By</Th>
+            <Th width="14%">Acknowledgement</Th>
+            <Th width="13%">Status</Th>
+          </HeadRow>
+          <tbody>
+            {dataset.status === "loading" && (
+              <SkeletonRows columns={7} rows={5} shapes={[null, "lines"]} />
             )}
-          </CardContent>
-        </Card>
+            {dataset.status === "failed" && (
+              <ErrorRow colSpan={7} label="circulars" onRetry={dataset.retry} />
+            )}
+            {dataset.status === "ready" && listed.length === 0 && (
+              <EmptyRow
+                colSpan={7}
+                label="circulars"
+                searching={query.trim() !== ""}
+                onClearSearch={() => {
+                  setQuery("");
+                  setPage(1);
+                }}
+              />
+            )}
+            {dataset.status === "ready" && shown.map((circular) => (
+              <tr
+                key={circular.id}
+                className="border-b align-top transition-colors last:border-0 hover:bg-primary/10"
+              >
+                {/* The number opens the circular for correction - but
+                    only while it is in force. A superseded or withdrawn
+                    circular is history, and history is read only. */}
+                <td className="whitespace-nowrap p-3">
+                  {canEdit && circular.status === ACTIVE ? (
+                    <button
+                      type="button"
+                      onClick={() => startEdit(circular)}
+                      className="rounded font-semibold text-primary focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      {circular.circularNo}
+                    </button>
+                  ) : (
+                    <span
+                      className="font-semibold text-muted-foreground"
+                      title="Read only"
+                    >
+                      {circular.circularNo}
+                    </span>
+                  )}
+                </td>
+                {/* Enough of the circular to tell it apart, no more */}
+                <td className="p-3 text-muted-foreground">
+                  {preview(circular.content)}
+                </td>
+                <td className="whitespace-nowrap p-3">
+                  {formatDate(circular.date)}
+                </td>
+                {/* Who it is for, and at which office - one answer
+                    in two parts, so they read together. */}
+                <td className="p-3">
+                  <span className="block">{circular.targetGroup}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {branchLabelFor(circular, branches)}
+                  </span>
+                </td>
+                <td className="p-3">{shortName(circular.issuedBy)}</td>
+                {/* Counted, never typed */}
+                <td className="p-3">
+                  <span className="block font-semibold text-primary">
+                    {acknowledgementCount(circular)} Acknowledged
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setDetailsFor(circular)}
+                    className="rounded text-xs text-primary focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    View Details
+                  </button>
+                </td>
+                <td className="p-3">
+                  {/* A circular still in force says nothing: only one
+                      that has been superseded or cancelled does. */}
+                  {circular.status !== ACTIVE && (
+                    <span
+                      className={cn(
+                        "inline-block rounded-md px-2 py-0.5 text-xs font-semibold",
+                        STATUS_TONE[circular.status]
+                      )}
+                    >
+                      {STATUS_LABEL[circular.status]}
+                    </span>
+                  )}
+                  {canEdit && circular.status === ACTIVE && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        send(() => cancelCircular(circular.id))
+                      }
+                      className="mt-1 flex items-center gap-1 rounded text-xs text-muted-foreground hover:text-destructive focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <Ban className="h-3 w-3 shrink-0" />
+                      Cancel circular
+                    </button>
+                  )}
+
+                  {/* The written circular, where the row's other
+                      actions are. Shown only when there is one. */}
+                  {circular.fileUrl && (
+                    <button
+                      type="button"
+                      title={"View " + circular.fileName}
+                      onClick={() =>
+                        window.open(
+                          circular.fileUrl,
+                          "_blank",
+                          "noopener,noreferrer"
+                        )
+                      }
+                      className="mt-1 flex items-center gap-1 rounded text-xs text-primary focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <FileText className="h-3 w-3 shrink-0" />
+                      View document
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </RecordTable>
 
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
           <span>
@@ -694,7 +694,11 @@ export default function CircularsSection({ canEdit }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...audit].reverse().map((entry) => (
+                  {dataset.status === "loading" && <SkeletonRows columns={5} rows={5} />}
+                  {dataset.status === "failed" && (
+                    <ErrorRow colSpan={5} label="audit entries" onRetry={dataset.retry} />
+                  )}
+                  {dataset.status === "ready" && [...audit].reverse().map((entry) => (
                     <tr key={entry.id} className="border-b last:border-0">
                       <td className="whitespace-nowrap p-3 text-muted-foreground">
                         {entry.at}

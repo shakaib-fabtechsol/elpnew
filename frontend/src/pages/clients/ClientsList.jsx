@@ -125,6 +125,11 @@ export default function ClientsList() {
       header: "Client No.",
       width: "14%",
       exportValue: (row) => row.clientNo + " (" + row.status + ")",
+      // By the number itself, not the export's "number (status)".
+      // An ID in natural order: each run of digits compares as a number, so
+      // A010 follows A009 and INV-2024-011 follows INV-2024-002.
+      sort: "text",
+      sortValue: (row) => row.clientNo,
       // Standing sits with the number rather than in a column of its own:
       // it belongs to the client, not to a separate fact about them.
       render: (value, row) => (
@@ -147,19 +152,23 @@ export default function ClientsList() {
     {
       key: "type",
       header: "Client Type",
-      width: "13%"
+      width: "13%",
+      sort: "text",
     },
     {
       key: "clientName",
       header: "Client Name",
       width: "25%",
       cellClassName: "font-medium",
+      sort: "text",
     },
     {
       // Number, expiry and the attached copy read as one block per record.
       key: "referenceNo",
       header: "Reference No.",
       width: "24%",
+      // Combined information: number, expiry and the copy in one cell.
+      sort: false,
       render: (value, row) => (
         <div className="space-y-1">
           <p className="flex items-center gap-2">
@@ -177,6 +186,8 @@ export default function ClientsList() {
       key: "poaNo",
       header: "POA No.",
       width: "24%",
+      // Combined information: number, expiry and the copy in one cell.
+      sort: false,
       render: (value, row) => (
         <div className="space-y-1">
           <p className="flex items-center gap-2">

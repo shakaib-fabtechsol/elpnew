@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useReseed } from "@/lib/api/useDataset";
 import { SuppliersContext } from "./context";
 import { initialSuppliers } from "@/pages/suppliers/supplierData";
 import { loadSuppliers, suppliersApi } from "@/lib/api/modules/suppliers";
@@ -16,6 +17,8 @@ import { upserted } from "@/lib/api/store";
  */
 export default function SuppliersProvider({ children }) {
   const [suppliers, setSuppliers] = useState(initialSuppliers);
+  // A Retry on a table reloads "suppliers"; take the fresh records in.
+  useReseed("suppliers", () => setSuppliers([...initialSuppliers]));
 
   const value = useMemo(() => {
     const keep = (row) => {

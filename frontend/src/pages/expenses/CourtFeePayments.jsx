@@ -91,6 +91,9 @@ export default function CourtFeePayments() {
       header: "Expense No.",
       subHeader: "(Branch)",
       width: "12%",
+      // An ID in natural order: each run of digits compares as a number, so
+      // A010 follows A009 and INV-2024-011 follows INV-2024-002.
+      sort: "text",
       // The number opens the request it belongs to.
       render: (value, row) => (
         <div className="space-y-1">
@@ -111,6 +114,8 @@ export default function CourtFeePayments() {
       subHeader: "(Client / Opponent)",
       width: "14%",
       exportValue: (row) => row.client + " / " + row.opponent,
+      // Combined information: both sides of the case in one cell.
+      sort: false,
       render: (_, row) => (
         <div className="space-y-2 text-xs">
           <Line label="Client">
@@ -126,6 +131,8 @@ export default function CourtFeePayments() {
       subHeader: "(Court - Level)",
       width: "13%",
       exportValue: (row) => row.court + " - " + row.level,
+      // Combined information: court and level in one cell.
+      sort: false,
       render: (_, row) => (
         <div className="text-xs">
           <p className="font-medium">{row.court}</p>
@@ -140,6 +147,8 @@ export default function CourtFeePayments() {
       width: "17%",
       exportValue: (row) =>
         [row.expenseType, row.category, row.subcategory].join(" - "),
+      // Combined information: type, category, subcategory and the papers.
+      sort: false,
       render: (_, row) => (
         <div className="space-y-3 text-xs">
           <div>
@@ -168,6 +177,7 @@ export default function CourtFeePayments() {
         [row.amount, row.paymentMethod, row.bank, row.accountNo].join(" - "),
       // Sorted on the figure, which is the only part of this column anybody
       // orders by.
+      sort: "money",
       sortValue: (row) => row.amount,
       render: (_, row) => (
         <div className="space-y-3">
@@ -198,6 +208,10 @@ export default function CourtFeePayments() {
           row.financeApprovedBy,
           row.status,
         ].join(" - "),
+      // By where the payment stands - still waiting, then approved - the
+      // one fact in this column a list is put in order by.
+      sort: "status",
+      sortValue: (row) => row.status,
       render: (_, row) => (
         <div className="space-y-2 text-xs">
           <Stamp
@@ -266,7 +280,6 @@ export default function CourtFeePayments() {
             searchPlaceholder="Ask anything..."
             exportFileName="judicial-authority-expenses.csv"
             enableColumnSearch={false}
-            enableSorting
             itemLabel="expenses"
             currentPage={currentPage}
             totalPages={Math.ceil(judicialExpenses.length / pageSize)}

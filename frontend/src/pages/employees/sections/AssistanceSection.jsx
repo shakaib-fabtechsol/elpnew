@@ -63,6 +63,7 @@ import {
 import DateField from "@/components/shared/DateField";
 import { assistanceApi } from "@/lib/api/modules/assistance";
 import { attempt } from "@/lib/api/notice";
+import useDataset, { useReseed } from "@/lib/api/useDataset";
 import { upsert, upserted } from "@/lib/api/store";
 import { shortName } from "@/lib/shortName";
 const NOTES_LIMIT = 300;
@@ -121,6 +122,11 @@ export default function AssistanceSection({
   canDecide = true,
 }) {
   const [records, setRecords] = useState(assistanceRecords);
+  // The requests are loaded at sign-in: the lists show skeleton rows until
+  // they land and Retry if they could not be read, and take them in when
+  // they arrive or come back after a Retry.
+  const dataset = useDataset(["assistance"]);
+  useReseed("assistance", () => setRecords([...assistanceRecords]));
   // While a call to the server is out, its button waits rather than sending twice.
   const [busy, setBusy] = useState(false);
   /**
@@ -369,6 +375,8 @@ export default function AssistanceSection({
       key: "no",
       header: "No.",
       width: "8%",
+      // A number in natural order: each run of digits compares as a number.
+      sort: "text",
       // Every number opens its request at the stage it has reached - one
       // sent back has to be answered, an approved one still has to be paid.
       render: (value, record) => (
@@ -385,6 +393,7 @@ export default function AssistanceSection({
       key: "requestDate",
       header: "Request Date",
       width: "12%",
+      sort: "date",
       render: (value) => <span className="whitespace-nowrap text-primary">{formatDate(value)}</span>,
     },
     {
@@ -392,6 +401,9 @@ export default function AssistanceSection({
       key: "subcategory",
       header: "Assistance Details",
       width: "22%",
+      skeleton: "lines",
+      // Combined information: what, why, and the paper it was made with.
+      sort: false,
       render: (value, record) => (
         <>
           <span className="flex flex-wrap items-center gap-2">
@@ -420,6 +432,8 @@ export default function AssistanceSection({
       key: "amount",
       header: "Amount (OMR)",
       width: "12%",
+      sort: "money",
+      sortValue: (record) => record.amount,
       render: (value) => <span className="whitespace-nowrap font-bold text-green-700">{amountValue(value)}</span>,
     },
     {
@@ -427,6 +441,9 @@ export default function AssistanceSection({
       key: "method",
       header: "Payment Details",
       width: "20%",
+      skeleton: "lines",
+      // Combined information: method, reference and date.
+      sort: false,
       render: (value, record) =>
         value ? (
           <>
@@ -448,12 +465,18 @@ export default function AssistanceSection({
       key: "notes",
       header: "Notes",
       width: "16%",
+      // Descriptive information.
+      sort: false,
       render: (value) => <span className="text-muted-foreground">{value || "-"}</span>,
     },
     {
       key: "status",
       header: "Status",
       width: "10%",
+      // Waiting on management, then sent back to be answered, then
+      // approved and still to pay, then paid; refused last.
+      sort: "status",
+      sortOrder: ["Pending", "Returned", "Approved", "Paid", "Rejected"],
       render: (value) => (
         <span className={cn("block w-fit rounded-md px-2.5 py-0.5 text-xs font-semibold", STATUS_CHIP[value])}>
           {value}
@@ -950,6 +973,7 @@ export default function AssistanceSection({
               <RequestTable
                 rows={rows}
                 columns={columns}
+                dataset={dataset}
                 searchPlaceholder="Search by request no., type or purpose..."
                 itemLabel="assistance requests"
                 exportFileName="assistance.csv"
@@ -987,6 +1011,7 @@ export default function AssistanceSection({
       <RequestTable
         rows={rows}
         columns={columns}
+        dataset={dataset}
         searchPlaceholder="Search by request no., type or purpose..."
         itemLabel="assistance requests"
         exportFileName="assistance.csv"
@@ -1006,6 +1031,7 @@ export default function AssistanceSection({
           <RequestTable
             rows={rows}
             columns={columns}
+            dataset={dataset}
             searchPlaceholder="Search by request no., type or purpose..."
             itemLabel="assistance requests"
             exportFileName="assistance.csv"

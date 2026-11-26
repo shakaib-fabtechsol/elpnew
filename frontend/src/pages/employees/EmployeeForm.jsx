@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,7 +84,16 @@ import {
   FileWarning,
   Sparkles,
   GraduationCap,
+  UserRound,
+  IdCard,
+  CreditCard,
+  TreePalm,
+  Bell,
+  Building2,
+  Laptop,
+  Settings,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -103,16 +112,16 @@ import {
   EMPLOYEE_CATEGORIES,
   JOB_LEVELS,
   DEPARTMENTS,
-  JOB_TITLES,
+  JUDICIAL,
+  ADMINISTRATIVE,
+  FINANCIAL,
+  jobTitlesFor,
   EMPLOYEE_STATUSES,
   DECISION_MAKERS,
   EMPLOYEE_POSITIONS,
-  EMPLOYMENT_CONTRACT_GROUPS,
-  CONTRACT_TERMS,
   PROBATION_PERIODS,
   DEFAULT_PROBATION,
   NOTICE_PERIODS,
-  DEPARTMENT_GROUPS,
   GRADE_GROUPS,
   LAWYER_GRADES,
   MANAGEMENT_DECISION_REASONS,
@@ -143,7 +152,23 @@ import SystemPermissionsSection from "./sections/SystemPermissionsSection";
 import { createdRequest } from "@/lib/api/modules/unified";
 import GeneralRequestSection from "./sections/GeneralRequestSection";
 import DocumentIntake, { IntakeReview } from "./sections/DocumentIntake";
-import { INTAKE_FIELDS, fieldElementId, fieldStep, intakeType } from "./documentIntake";
+import {
+  INTAKE_FIELDS,
+  fieldElementId,
+  fieldStep,
+  intakeType,
+  intakeTypesFor,
+  requiredIntakeTypes,
+} from "./documentIntake";
+import {
+  AddEmployeeBar,
+  EmployeeSummaryCard,
+  SetupQuestions,
+  RequiredProgress,
+} from "./sections/AddEmployeeChrome";
+import { CvField, EDUCATION_LEVELS, LanguagesField } from "./sections/PersonalExtras";
+import PermissionsStep, { savePermissionsDraft } from "./sections/PermissionsStep";
+import AssignedAssets, { fileDraftAssets } from "./sections/AssignedAssets";
 import { useDocumentIntake } from "./useDocumentIntake";
 import { CURRENT_USER } from "@/pages/dashboard/dashboardData";
 import {
@@ -152,7 +177,12 @@ import {
   Th,
   Row,
   Td,
+  EmptyRow,
+  SkeletonRows,
+  ErrorRow,
 } from "@/components/shared/RecordTable";
+import { useTableSort } from "@/lib/sorting";
+import useDataset, { useReseed } from "@/lib/api/useDataset";
 import { formatDate } from "@/pages/firm/firmData";
 import {
   employeeRecords,
@@ -171,7 +201,7 @@ import {
 import { checkRequired, clearRequiredCheck } from "@/components/shared/formFields";
 import { employeesApi } from "@/lib/api/modules/employees";
 import { documentsApi, viewDocument } from "@/lib/api/modules/documents";
-import { attempt, fieldLabel, notifyError } from "@/lib/api/notice";
+import { attempt, fieldLabel, notify, notifyError } from "@/lib/api/notice";
 import { upsert } from "@/lib/api/store";
 
 /**
@@ -493,44 +523,96 @@ const requestItemOf = (type) =>
  * begins; the ones not reached yet are shown but cannot be opened.
  */
 const ADD_STEPS = [
-  // First the papers: what is read from them fills in the steps after, which
-  // are then mostly checking. They are filed with the record when it is made.
-  { key: "intake", label: "Document Intake" },
-  { key: "personal", label: "Personal Information" },
-  // The job, then the terms it is held on, each saved before the next.
-  { key: "employment", label: "Employment Information" },
-  { key: "contract", label: "Contract Information" },
-  // After the job, because which papers apply follows from it: a lawyer's
-  // card only for a lawyer, a passport and visa only for a foreigner.
-  { key: "identity", label: "Identity & Immigration" },
-  // Pay once the person and the job are settled, then where it is paid to.
-  { key: "payroll", label: "Payroll Information" },
-  { key: "banking", label: "Banking Information" },
-  // Walked through only by somebody the firm registers with the Fund, which
-  // Contract Information has already asked; everybody else goes straight on
-  // to Documents.
+  // Each step gathers parts of the file (the boxes drawn for each part are
+  // unchanged); `note` is what the step holds, said under its name.
   {
-    key: "socialProtection",
-    label: "Social Protection Information",
-    when: (values) => values.socialProtection === "Yes",
+    key: "setup",
+    label: "Employee Setup & Documents",
+    note: "Initial details and required files",
+    icon: UserRound,
+    // First the papers: what is read from them fills in the steps after,
+    // which are then mostly checking. They are filed with the record.
+    parts: ["intake"],
   },
-  // Saving the last of these creates the record, with the papers from
-  // Document Intake filed on it, and opens it.
+  {
+    key: "personal",
+    label: "Personal Information",
+    note: "Personal, contact and identity details",
+    icon: IdCard,
+    parts: ["personal", "identity"],
+  },
+  {
+    key: "employment",
+    label: "Employment & Contract",
+    note: "Employment terms and contract history",
+    icon: FileText,
+    parts: ["employment", "contract"],
+  },
+  {
+    key: "payroll",
+    label: "Payroll & Banking",
+    note: "Salary, bank, and payment details",
+    icon: CreditCard,
+    // An unpaid employee - a trainee without a salary - has no pay or bank
+    // to set up: the step stays on the bar, Not Applicable.
+    applies: (values) => values.paid !== "No",
+    notApplicable: "Not paid: no salary or bank to set up.",
+    // Saving the last step creates the record, with the papers from the
+    // first step filed on it, and opens it.
+    parts: ["payroll", "banking", "socialProtection"],
+  },
+  {
+    key: "permissions",
+    label: "System Permissions",
+    note: "System access and role permissions",
+    icon: Settings,
+    // Set by somebody who may give access; anybody else passes it by, and
+    // the access is set later on the record's own System Permissions page.
+    applies: () => can("permissions.edit"),
+    notApplicable: "Access is set later, by somebody who may give it.",
+    parts: ["permissions"],
+  },
+  {
+    key: "assets",
+    label: "Assigned Assets",
+    note: "Company equipment and custody records",
+    icon: Laptop,
+    // Saving the last step creates the record - with its papers, access and
+    // assets filed on it - and opens it.
+    parts: ["assets"],
+  },
 ];
+
+/** The step a part of the file is filled in on. */
+const stepOfPart = (part) =>
+  ADD_STEPS.find((one) => one.parts.includes(part))?.key || ADD_STEPS[0].key;
+
+/**
+ * Whether a part of the file applies to this employee. Social Protection is
+ * asked only of somebody the firm registers with the Fund.
+ */
+const partApplies = (part, values) =>
+  part !== "socialProtection" ||
+  (values.socialProtection === "Yes" && values.staffCategory !== "Intern / Trainee");
 
 /**
  * Employee Information's tabs on a record: the same steps, under the same
- * names, that Add Employee walks through - one part of the file each - so a
- * record reads back in the order it was built.
+ * names, that Add Employee walks through, so a record reads back in the order
+ * it was built. Where adding opens on the papers, the record's papers are its
+ * first tab.
  */
-// The record's tabs are the steps it was added in, in the same order: where
-// adding opens on Document Intake, the record's papers are its first tab.
-const PROFILE_TABS = ADD_STEPS.map((step) =>
-  step.key === "intake" ? { key: "documents", label: step.label } : step
-).map((step) => ({ ...step, parts: [step.key] }));
+const PROFILE_TABS = ADD_STEPS.filter((one) => one.key !== "permissions").map((one) =>
+  one.key === "setup"
+    ? { ...one, key: "documents", label: "Documents", note: "Papers on file", parts: ["documents"] }
+    : one
+);
 
-/** The steps a record with these values is added through, in order. */
-const flowFor = (values) => ADD_STEPS.filter((s) => !s.when || s.when(values));
+/**
+ * The steps an employee is added through, in order. A step that does not
+ * apply (`applies` false) stays on the bar, marked Not Applicable, but is
+ * passed over rather than holding anybody up.
+ */
+const flowFor = (values) => ADD_STEPS.filter((one) => !one.applies || one.applies(values));
 
 /** Said under the tabs while the draft is being built, where no step says more. */
 const DRAFT_NOTE = "Draft employee · sections are saved one at a time";
@@ -546,16 +628,23 @@ const DRAFT_NOTE = "Draft employee · sections are saved one at a time";
 const SPF_EMPLOYEE_RATE = 0.07;
 const SPF_EMPLOYER_RATE = 0.115;
 
-/** The pay a new employee is taken on at, in the order it is asked for. */
-const PAY_FIELDS = [
-  { key: "salary", label: "Basic Salary", required: true },
-  { key: "special", label: "Special Allowance" },
+/**
+ * The allowances on top of basic pay, as the API keeps them. Compensation
+ * shows their total; each is typed under "Allowance breakdown", so the total
+ * can never disagree with the lines it adds up.
+ */
+const ALLOWANCE_FIELDS = [
   { key: "housing", label: "Housing Allowance" },
+  { key: "transport", label: "Transport Allowance" },
   // Not `phone`: that is the employee's own number.
   { key: "phoneAllowance", label: "Phone Allowance" },
+  { key: "special", label: "Special Allowance" },
   { key: "electricity", label: "Electricity Allowance" },
-  { key: "transport", label: "Transport Allowance" },
+  { key: "water", label: "Water Allowance" },
 ];
+
+/** The pay a new employee is taken on at: basic salary and the allowances. */
+const PAY_FIELDS = [{ key: "salary", label: "Basic Salary", required: true }, ...ALLOWANCE_FIELDS];
 
 /** What comes off each month's pay. */
 /**
@@ -575,7 +664,7 @@ const DEDUCTION_FIELDS = [
   },
   {
     key: "salaryAdvance",
-    label: "Salary Advance Deduction",
+    label: "Salary Advance",
     note: "Auto-calculated from active salary advance(s)",
   },
   {
@@ -596,92 +685,207 @@ const todayIso = () => {
 const sumOf = (fields, values) =>
   fields.reduce((total, field) => total + Number(values[field.key] || 0), 0);
 
+/** Each circle's mark, so the list is scanned rather than read. */
+const CIRCLE_ICONS = { [JUDICIAL]: Scale, [ADMINISTRATIVE]: Users, [FINANCIAL]: Coins };
+
+/** A job title's mark; anything not listed wears the briefcase. */
+const TITLE_ICONS = {
+  "Trainee Lawyer": GraduationCap,
+  "Legal Intern": Scale,
+  "Administrative Intern": UserRound,
+  "Accounting Intern": Calculator,
+  "Founding Partner": Award,
+  "Managing Partner": Award,
+  Partner: Award,
+  Lawyer: Gavel,
+  "Legal Consultant": Scale,
+  "Legal Associate": Scale,
+  Administrator: Building2,
+  "Administrative Assistant": UserRound,
+  "HR Officer": Users,
+  "IT Officer": Laptop,
+  Accountant: Calculator,
+  "Senior Accountant": Calculator,
+  "Finance Officer": Coins,
+};
+
 /**
- * Add Employee's steps as a numbered track: each step a circle on one line,
- * green with a check once saved, navy with its number while being filled in,
- * grey until reached; the line between two steps turns green once the first is
- * done. The step being filled in is named in bold with a bar under it.
+ * Contract Type as the step names it, each to the value the API keeps: a
+ * permanent contract runs until it is ended, a temporary one to a date.
  */
-function NumberedSteps({
+const CONTRACT_KINDS = [
+  { label: "Permanent Contract", value: "Indefinite-term" },
+  { label: "Temporary Contract", value: "Fixed-term" },
+];
+
+/** What the Gross Salary figure is, behind its (i). */
+const GROSS_NOTE = "Basic salary plus all allowances, worked out automatically.";
+
+/** Said beside Annual Leave Days, where it comes and goes. */
+const ANNUAL_LEAVE_NOTE = "This field appears automatically when the employment period exceeds 6 months.";
+
+const isTrainee = (values) => values.staffCategory === "Intern / Trainee";
+
+/** Whether a period runs past six months - the point annual leave is earned from. */
+const overSixMonths = (start, end) => {
+  if (!start || !end) return false;
+  const earned = new Date(start + "T00:00");
+  earned.setMonth(earned.getMonth() + 6);
+  return new Date(end + "T00:00") > earned;
+};
+
+/**
+ * Whether Annual Leave Days is asked. A permanent contract always earns
+ * leave; a trainee's training period, or a temporary contract, only once it
+ * runs past six months. Until the dates say so the field is not there (see
+ * forSaving for what is then sent).
+ */
+const leaveApplies = (values) => {
+  const period = leavePeriod(values);
+  return !period || overSixMonths(...period);
+};
+
+/** The period leave depends on, where one does: a trainee's, or a temporary contract's. */
+const leavePeriod = (values) =>
+  isTrainee(values)
+    ? [values.trainingStart, values.trainingEnd]
+    : values.contractType === "Fixed-term"
+      ? [values.contractStartDate, values.employmentEndDate]
+      : null;
+
+/**
+ * The record as it is sent: no leave figure where the period is known and
+ * too short to earn one. A period still missing a date says nothing yet, so
+ * an older record's figure is kept rather than wiped by an unrelated save.
+ */
+const forSaving = (values) => {
+  const period = leavePeriod(values);
+  return period && period[0] && period[1] && !overSixMonths(...period)
+    ? { ...values, annualLeaveDays: "" }
+    : values;
+};
+
+/** A start and an end date asked together, under a tag saying who they are for. */
+function PeriodFields({ title, tag, start, end, values, onChange, required }) {
+  const backwards = values[start.id] && values[end.id] && values[end.id] <= values[start.id];
+  return (
+    <section className="min-w-72 flex-1 rounded-lg border border-container-border p-4">
+      <h4 className="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-primary">
+        {title}
+        <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+          {tag}
+        </span>
+      </h4>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {[start, end].map((one) => (
+          <div key={one.id} className="form-field space-y-2">
+            <Label htmlFor={one.id}>
+              {one.label}
+              <Required show={required} />
+            </Label>
+            <DateField id={one.id} name={one.id} value={values[one.id]} onChange={onChange} required />
+          </div>
+        ))}
+      </div>
+      {/* Said as soon as it is typed, rather than left for the server. */}
+      {backwards && (
+        <p className="mt-2 text-xs text-destructive">The end date must be after the start date.</p>
+      )}
+    </section>
+  );
+}
+
+/** How each step's state is drawn: the circle, the badge on it, the words. */
+const STEP_STATE = {
+  complete: { circle: "bg-emerald-100 text-emerald-700", word: "Complete", ink: "text-emerald-700", detail: "All required information is complete." },
+  attention: { circle: "bg-slate-100 text-slate-600", word: "Needs Attention", ink: "text-orange-600" },
+  progress: { circle: "bg-blue-600 text-white ring-8 ring-blue-100", word: "In Progress", ink: "text-blue-700", detail: "Complete this step to continue." },
+  na: { circle: "bg-amber-100 text-amber-800", word: "Not Applicable", ink: "text-amber-700" },
+  todo: { circle: "bg-slate-100 text-slate-500", word: "", ink: "text-muted-foreground" },
+};
+
+/**
+ * Add Employee's steps - and a record's tabs - as a track of icons.
+ *
+ * Each step says where it stands: Complete (a green tick), Needs Attention
+ * (a red mark, and what needs doing), In Progress (the one being filled in),
+ * or Not Applicable (passed over, shown so the track stays the same shape -
+ * it does not hold anybody up). Steps not reached yet show what they hold.
+ * Only required, applicable information decides completion.
+ */
+function StepTracker({
   steps,
   active,
-  done = [],
+  // { [step]: "complete" | "attention" | "progress" | "na" | "todo" }
+  states = {},
+  // { [step]: "what needs doing" } for Needs Attention and Not Applicable
+  details = {},
   canOpen = () => true,
   onSelect,
   label = "Add employee steps",
-  // Steps still holding a missing field ("missing") or a value to review
-  // ("review"): a red or amber dot on the step's circle.
-  flags = {},
+  plain = false,
 }) {
   return (
     <nav
       aria-label={label}
-      className="overflow-x-auto rounded-xl border border-container-border bg-card px-4 py-4"
+      className="overflow-x-auto rounded-xl border border-container-border bg-card px-4 py-5"
     >
       <ol className="flex min-w-max">
-        {steps.map((step, index) => {
-          const isDone = done.includes(step.key);
-          const isActive = step.key === active;
-          const reachable = canOpen(step.key);
+        {steps.map((one, index) => {
+          const state = plain ? (one.key === active ? "progress" : "todo") : states[one.key] || "todo";
+          const look = STEP_STATE[state];
+          const Icon = one.icon;
+          const isActive = one.key === active;
+          const reachable = canOpen(one.key);
           const last = index === steps.length - 1;
+          const detail = details[one.key] || look.detail;
           return (
-            <li key={step.key} className="relative flex min-w-28 flex-1 flex-col items-center">
-              {/* The line on to the next step, from this circle's edge to
-                  the next one's. */}
+            <li key={one.key} className="relative flex min-w-40 flex-1 flex-col items-center">
+              {/* The line on to the next step, green once this one is done. */}
               {!last && (
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "absolute top-[18px] h-0.5 start-[calc(50%+24px)] end-[calc(-50%+24px)]",
-                    isDone ? "bg-green-600" : "bg-slate-200"
+                    "absolute top-7 h-1 rounded-full start-[calc(50%+34px)] end-[calc(-50%+34px)]",
+                    state === "complete" ? "bg-green-600" : "bg-slate-200"
                   )}
                 />
               )}
               <button
                 type="button"
                 disabled={!reachable}
-                onClick={() => onSelect(step.key)}
+                onClick={() => onSelect(one.key)}
                 aria-current={isActive ? "step" : undefined}
-                className="flex flex-col items-center gap-2 rounded-md px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
+                className="flex flex-col items-center gap-2 rounded-md px-2 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
               >
-                <span
-                  className={cn(
-                    "relative flex size-9 items-center justify-center rounded-full text-sm font-semibold",
-                    isDone && !isActive && "bg-green-600 text-white",
-                    isActive && "bg-primary text-primary-foreground",
-                    !isDone && !isActive && "bg-slate-200 text-slate-600"
+                <span className={cn("relative flex size-14 items-center justify-center rounded-full transition-colors", look.circle)}>
+                  {Icon && <Icon className="size-7" strokeWidth={1.6} aria-hidden="true" />}
+                  {state === "complete" && (
+                    <span className="absolute -end-1 -top-1 flex size-6 items-center justify-center rounded-full bg-green-600 text-white ring-2 ring-white">
+                      <Check className="size-4" strokeWidth={3} aria-hidden="true" />
+                    </span>
                   )}
-                >
-                  {isDone && !isActive ? (
-                    <Check className="size-5" strokeWidth={3} aria-hidden="true" />
-                  ) : (
-                    index + 1
-                  )}
-                  {flags[step.key] && (
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        "absolute -end-0.5 -top-0.5 size-3 rounded-full ring-2 ring-white",
-                        flags[step.key] === "missing" ? "bg-red-600" : "bg-amber-500"
-                      )}
-                    />
+                  {state === "attention" && (
+                    <span className="absolute -end-1 -top-1 flex size-6 items-center justify-center rounded-full bg-red-600 text-sm font-bold text-white ring-2 ring-white">
+                      !
+                    </span>
                   )}
                 </span>
-                {flags[step.key] && (
-                  <span className="sr-only">
-                    {flags[step.key] === "missing" ? "(required information missing)" : "(review required)"}
-                  </span>
+                <span className={cn("max-w-44 text-sm font-semibold leading-tight", isActive ? "text-blue-700" : "text-primary")}>
+                  {one.label}
+                </span>
+                {look.word ? (
+                  <>
+                    <span className={cn("text-sm font-semibold leading-tight", look.ink)}>{look.word}</span>
+                    {detail && (
+                      <span className="max-w-44 text-xs leading-snug text-muted-foreground">{detail}</span>
+                    )}
+                  </>
+                ) : (
+                  one.note && (
+                    <span className="max-w-44 text-xs leading-snug text-muted-foreground">{one.note}</span>
+                  )
                 )}
-                <span
-                  className={cn(
-                    "max-w-32 text-center text-sm leading-tight",
-                    isActive ? "font-bold text-primary" : reachable ? "text-primary" : "text-muted-foreground"
-                  )}
-                >
-                  {step.label}
-                </span>
-                {/* No bar under the open step: its circle and bold name say it. */}
-                {isDone && <span className="sr-only">(completed)</span>}
               </button>
             </li>
           );
@@ -1010,39 +1214,12 @@ function AccessNotice({ hold, graceDays }) {
   );
 }
 
-/** How each figure of the coming payroll is coloured, by what it is. */
-const PAY_TILE_TONES = {
-  earnings: { box: "bg-blue-50", badge: "bg-blue-100 text-blue-700", value: "text-primary" },
-  deductions: { box: "bg-red-50", badge: "bg-red-100 text-red-600", value: "text-red-700" },
-  net: { box: "bg-violet-50", badge: "bg-violet-100 text-violet-700", value: "text-primary" },
-  payable: { box: "bg-emerald-50", badge: "bg-emerald-100 text-emerald-700", value: "text-emerald-700" },
-};
-
-/** One figure of the coming payroll: its icon, what it is, then the amount. */
-function PayTile({ label, value, icon, tone }) {
-  const Icon = icon;
-  const colors = PAY_TILE_TONES[tone];
-  return (
-    <div className={cn("flex items-center gap-4 rounded-lg px-5 py-4", colors.box)}>
-      <span
-        aria-hidden="true"
-        className={cn("flex size-14 shrink-0 items-center justify-center rounded-full", colors.badge)}
-      >
-        <Icon className="size-7" strokeWidth={1.75} />
-      </span>
-      <div className="min-w-0">
-        <p className={cn("text-sm font-semibold", colors.value)}>{label}</p>
-        <p className={cn("text-2xl font-bold", value < 0 ? "text-destructive" : colors.value)}>
-          {amountValue(value)}{" "}
-          <Rial className="text-sm font-medium text-muted-foreground" />
-        </p>
-      </div>
-    </div>
-  );
-}
-
 /** A paper's number and the day it runs out, side by side on the grid. */
-function PaperFields({ label, numberName, expiryName, values, onChange, required = true }) {
+function PaperFields({ label, numberName, expiryName, values, onChange, required = true, tag }) {
+  // Who the paper is asked of, said beside its name ("For Lawyers Only").
+  const tagMark = tag ? (
+    <span className="ms-2 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">{tag}</span>
+  ) : null;
   // A paper that must be on the record is marked so; one that may be left out
   // - a passport, a visa, a work permit - carries no mark and is not demanded.
   return (
@@ -1051,6 +1228,7 @@ function PaperFields({ label, numberName, expiryName, values, onChange, required
         <Label htmlFor={numberName}>
           {label} No.
           <Required show={required} />
+          {tagMark}
         </Label>
         <Input
           id={numberName}
@@ -1067,6 +1245,7 @@ function PaperFields({ label, numberName, expiryName, values, onChange, required
         <Label htmlFor={expiryName}>
           {label} Expiry Date
           <Required show={required} />
+          {tagMark}
         </Label>
         <DateField
           id={expiryName}
@@ -1237,11 +1416,25 @@ const emptyFormData = {
   // The contract: its kind, and the days it runs from and - if fixed - to.
   contractType: "",
   contractStartDate: "",
+  // A trainee's training period, apart from any contract.
+  trainingStart: "",
+  trainingEnd: "",
   // The one leave figure kept on the record; leave taken is recorded on the
   // leave page, not here. Thirty days is the statutory annual entitlement.
   annualLeaveDays: "30",
   // Registered with the Social Protection Fund unless somebody says not.
   socialProtection: "Yes",
+  // The setup questions Add Employee opens with: Lawyer or not, permanent or
+  // a trainee, paid or not. Paid unless somebody says not.
+  professionalClassification: "",
+  staffCategory: "",
+  paid: "Yes",
+  highestEducation: "",
+  languages: [],
+  cvSummary: "",
+  // Set on the last two steps of adding, and filed once the record is made.
+  permissionsDraft: null,
+  assetsDraft: [],
 
   // Pay, from the day it takes effect. Basic pay is `salary`, as on every
   // record; the allowances and deductions use the keys the net is worked from.
@@ -1251,6 +1444,7 @@ const emptyFormData = {
   phoneAllowance: "",
   electricity: "",
   transport: "",
+  water: "",
   loan: "",
   salaryAdvance: "",
   disciplinary: "",
@@ -1318,6 +1512,11 @@ export default function EmployeeForm({ self }) {
   // there is no record yet for those pages to belong to.
   const isAdding = !isEditMode && !self;
   const [step, setStep] = useState(ADD_STEPS[0].key);
+  // Compensation's allowance breakdown: open or shut by hand, otherwise open
+  // only where an allowance has been filled in.
+  const [allowancesOpen, setAllowancesOpen] = useState(null);
+  // Deductions ticked on or off by hand; otherwise ticked where there is one.
+  const [deductionPicks, setDeductionPicks] = useState({});
   const [savedSteps, setSavedSteps] = useState([]);
   // The record as it stood at its last save. Whose it is and which papers it
   // calls for are read from here, not from a step gone back to and being
@@ -1376,10 +1575,109 @@ export default function EmployeeForm({ self }) {
   // Papers are a list of their own, kept beside the fields rather than in them.
   // This person's papers, not every paper in the firm.
   const [documents, setDocuments] = useState(() => documentsFor(record?.id));
+  // The papers are loaded at sign-in with everyone else's: the table shows
+  // them coming or that they could not be fetched, and takes them again when
+  // they arrive afresh (still on their way when this opened, or a Retry).
+  const documentData = useDataset(["employee documents"]);
+  useReseed("employee documents", () => setDocuments(documentsFor(record?.id)));
   const [docDraft, setDocDraft] = useState(emptyDocument);
   // The papers uploaded on Document Intake while a new employee is added, and
   // every value they filled with its source, confidence and review status.
   const intake = useDocumentIntake(formData, setFormData);
+
+  /*
+   * The draft of a new employee, kept in this browser as it is filled in, so
+   * leaving the page - or the browser closing - loses nothing typed. Read
+   * back when Add Employee is opened again; Cancel and Create Employee clear
+   * it. Uploaded files are not kept in it: a browser cannot hold them.
+   */
+  const DRAFT_KEY = "sadeed:add-employee-draft";
+  const [draftSavedAt, setDraftSavedAt] = useState(null);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const writeDraft = () => {
+    try {
+      localStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ formData, saved, savedSteps, step, at: Date.now() })
+      );
+      setDraftSavedAt(new Date());
+    } catch {
+      // Storage full or blocked: the page still works, only unkept.
+    }
+  };
+  const clearDraft = () => localStorage.removeItem(DRAFT_KEY);
+  // Read back once, on opening Add Employee.
+  useEffect(() => {
+    if (!isAdding) return;
+    try {
+      const kept = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+      if (!kept?.formData) return;
+      setFormData((now) => ({ ...now, ...kept.formData }));
+      setSaved(kept.saved || {});
+      setSavedSteps(kept.savedSteps || []);
+      if (ADD_STEPS.some((one) => one.key === kept.step)) setStep(kept.step);
+      setDraftSavedAt(new Date(kept.at));
+      setDraftRestored(true);
+    } catch {
+      clearDraft();
+    }
+  }, [isAdding]);
+  // Kept a moment after each change, not on every key.
+  useEffect(() => {
+    if (!isAdding) return undefined;
+    const timer = setTimeout(writeDraft, 800);
+    return () => clearTimeout(timer);
+    // writeDraft reads exactly these.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdding, formData, saved, savedSteps, step]);
+
+  /*
+   * The setup answers. Nationality is Omani or not: Omani fills the field
+   * itself, Non-Omani leaves the country to be chosen on Personal
+   * Information. A trainee is not registered with the Fund.
+   */
+  const nonOmani = formData.nationality
+    ? formData.nationality !== "Omani"
+    : formData.nonOmani === "Yes";
+  const answerSetup = (key, value) =>
+    setFormData((now) => {
+      if (key === "nationality") {
+        return value === "Omani"
+          ? { ...now, nationality: "Omani", nonOmani: "No" }
+          : { ...now, nationality: now.nationality === "Omani" ? "" : now.nationality, nonOmani: "Yes" };
+      }
+      if (key === "staffCategory" && value === "Intern / Trainee") {
+        return { ...now, staffCategory: value, socialProtection: "No" };
+      }
+      return { ...now, [key]: value };
+    });
+  // What the CV is written from: what is on file, and what the papers said.
+  const readQualification = intake.docs.find((doc) => doc.qualification)?.qualification;
+  const cvFacts = {
+    name: formData.employeeName || undefined,
+    occupation: formData.occupation || formData.designation || undefined,
+    practiceLevel: formData.practiceLevel || undefined,
+    department: formData.department || undefined,
+    highestEducation: formData.highestEducation || undefined,
+    qualification: readQualification?.degree,
+    institution: readQualification?.institution,
+    graduationYear: readQualification?.year,
+    specialisations: readQualification?.specialization ? [readQualification.specialization] : undefined,
+    languages: Array.isArray(formData.languages) && formData.languages.length ? formData.languages : undefined,
+  };
+
+  // The cards offered and the papers required, from those answers.
+  const intakeCards = intakeTypesFor(formData, nonOmani);
+  const requiredCards = requiredIntakeTypes(formData, nonOmani);
+  const cardsIn = requiredCards.filter((key) =>
+    intake.docs.some((doc) => doc.typeKey === key && doc.status !== "failed")
+  ).length;
+  // The photo chosen for the new employee, shown on the summary card.
+  const photoDoc = intake.docs.find((doc) => doc.typeKey === "photo" && doc.file);
+  const photoUrl = useMemo(
+    () => (photoDoc?.file ? URL.createObjectURL(photoDoc.file) : ""),
+    [photoDoc?.file]
+  );
   // Set once the last step's Save has been tried with fields still missing:
   // from then on the gaps are marked even without papers to read.
   const [finalTried, setFinalTried] = useState(false);
@@ -1505,6 +1803,19 @@ export default function EmployeeForm({ self }) {
     (a, b) => String(b.uploadedAt).localeCompare(String(a.uploadedAt)) || b.id - a.id
   );
 
+  // The papers held now are what the list is sorted over; a paper's older
+  // versions stay under it whichever way the list is turned. Notes are free
+  // text, so they are not something to put in order.
+  const { rows: currentDocuments, sortProps: documentSortProps } = useTableSort(
+    orderedDocuments.filter((document) => documentStatus(document, documents) !== "Archived"),
+    {
+      category: { sort: "text", sortValue: (document) => documentCategory(document.type) },
+      type: { sort: "text" },
+      uploadedAt: { sort: "date" },
+      expiry: { sort: "date" },
+    }
+  );
+
   // Whether this person's access is held for a lapsed critical paper, under
   // the grace period and action set on System Settings.
   const documentControl = readDocumentControl();
@@ -1600,7 +1911,7 @@ export default function EmployeeForm({ self }) {
   // The details a paper stands for, as saved: on a record, the record; while
   // adding, Identity & Immigration once that step has been saved.
   const filedDetails = isAdding
-    ? savedSteps.includes("identity")
+    ? savedSteps.includes(stepOfPart("identity"))
       ? saved
       : {}
     : record || {};
@@ -1704,9 +2015,21 @@ export default function EmployeeForm({ self }) {
   // The parts a record's tab shows: Employment & Contract shows both halves of
   // the job, Salary & Banking both pay and bank; adding shows one part a step.
   const profileParts = PROFILE_TABS.find((t) => t.key === profileTab)?.parts || [];
-  /** Whether a part of the file is on screen while going tab by tab. */
+  const stepParts = ADD_STEPS.find((one) => one.key === step)?.parts || [];
+  /** Whether a part of the file is on screen while going step by step or tab by tab. */
   const shows = (part) =>
-    isAdding ? step === part : isProfile ? profileParts.includes(part) : false;
+    (isAdding ? stepParts.includes(part) : isProfile ? profileParts.includes(part) : false) &&
+    partApplies(part, formData);
+  /**
+   * The step's (or tab's) Save and Cancel, at the foot of its last box only:
+   * a step that gathers several parts of the file is saved as one, so one
+   * row of actions closes it rather than one under every box.
+   */
+  const actionsAfter = (part) => {
+    const parts = (isAdding ? stepParts : profileParts).filter((one) => partApplies(one, formData));
+    if (parts[parts.length - 1] !== part) return null;
+    return isAdding ? stepActions : profileActions;
+  };
   /** Whether a box belongs on screen: all of them on Employee Data, one tab's otherwise. */
   const onStep = (key) => !isTabbed || shows(key);
   // The request chosen on Requests, and the section on screen: the sidebar's
@@ -1728,8 +2051,14 @@ export default function EmployeeForm({ self }) {
   // Which papers apply: while adding, from what was saved on the steps before;
   // on a record, from the record. Older records say a lawyer by role.
   const paperFacts = isProfile ? formData : saved;
-  const paperOmani = String(paperFacts.nationality || "").trim().toLowerCase() === "omani";
-  const paperLawyer = paperFacts.occupation === "Lawyer" || paperFacts.role === "Lawyer";
+  // The setup answers decide first; the saved nationality and occupation
+  // where those were not given.
+  const paperOmani = paperFacts.nationality
+    ? String(paperFacts.nationality).trim().toLowerCase() === "omani"
+    : formData.nonOmani === "No";
+  const paperLawyer = formData.professionalClassification
+    ? formData.professionalClassification === "Lawyer"
+    : paperFacts.occupation === "Lawyer" || paperFacts.role === "Lawyer";
 
   /**
    * Whether the record can be changed on this page.
@@ -1777,7 +2106,7 @@ export default function EmployeeForm({ self }) {
   const finishEmployee = async () => {
     let created;
     try {
-      created = await employeesApi.create(formData);
+      created = await employeesApi.create(forSaving(formData));
     } catch (error) {
       const fields = Object.keys(error?.errors || {});
       // Each refused field named with the step it is on, so it can be found.
@@ -1785,7 +2114,7 @@ export default function EmployeeForm({ self }) {
         fields.map((key) => [
           key,
           (INTAKE_FIELDS[key]?.label || fieldLabel(key)) +
-            " (" + (ADD_STEPS.find((s) => s.key === fieldStep(key))?.label || "") + ")",
+            " (" + (ADD_STEPS.find((s) => s.key === stepOfPart(fieldStep(key)))?.label || "") + ")",
         ])
       );
       notifyError(error, labels);
@@ -1795,17 +2124,36 @@ export default function EmployeeForm({ self }) {
             fields.map((key) => [key, { message: [].concat(error.errors[key])[0], value: formData[key] }])
           )
         );
-        setStep(fieldStep(fields[0]));
+        setStep(stepOfPart(fieldStep(fields[0])));
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
       return;
     }
     setServerErrors({});
+    clearDraft();
     upsert(employeeRecords, created);
     await fileIntakePapers(
       created.id,
       intake.docs.filter((doc) => doc.status !== "failed")
     );
+    // The access and the equipment set on the last two steps, filed against
+    // the record just made. What could not be filed is said, and can be done
+    // again on the record's own pages.
+    if (formData.permissionsDraft?.grants && can("permissions.edit")) {
+      const set = await attempt(() => savePermissionsDraft(created.id, formData.permissionsDraft));
+      if (!set) notify("The employee was created, but their permissions were not saved. Set them on System Permissions.");
+    }
+    if (formData.assetsDraft?.length) {
+      const { failed } = await fileDraftAssets(created.id, formData.assetsDraft);
+      if (failed.length) {
+        notify(
+          "The employee was created, but " + failed.length + " asset" + (failed.length === 1 ? " was" : "s were") +
+            " not recorded. Add " + (failed.length === 1 ? "it" : "them") + " on Assigned Assets.",
+          "error",
+          { lines: failed.map((one) => one.item.assetNumber + ": " + one.message) }
+        );
+      }
+    }
     // Opened on Documents: the details are in, and the papers are next.
     navigate("/employees/" + created.id, { state: { section: "profile", tab: "documents" } });
   };
@@ -1861,7 +2209,7 @@ export default function EmployeeForm({ self }) {
     if (!next) {
       if (intake.missingKeys.length) {
         setFinalTried(true);
-        setStep(fieldStep(intake.missingKeys[0]));
+        setStep(stepOfPart(fieldStep(intake.missingKeys[0])));
         window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
@@ -1875,9 +2223,34 @@ export default function EmployeeForm({ self }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  /**
+   * Create Employee, from the bar: every required field is asked for now. If
+   * any is missing the first step with a gap opens, and each step with one
+   * is marked; otherwise the record is made, with its papers, and opened.
+   */
+  const createEmployee = async () => {
+    if (saving || !fieldsOnScreenValid({ requireAll: false })) return;
+    setSaved(formData);
+    if (intake.missingKeys.length) {
+      setFinalTried(true);
+      setStep(stepOfPart(fieldStep(intake.missingKeys[0])));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    setSaving(true);
+    await finishEmployee();
+    setSaving(false);
+  };
+
+  /** Cancel, from the bar: the draft is let go, and the list opens. */
+  const cancelAdding = () => {
+    clearDraft();
+    navigate("/employees");
+  };
+
   /** Document Intake asks nothing that must be filled: it moves straight on. */
   const continueFromIntake = () => {
-    setSavedSteps((prev) => (prev.includes("intake") ? prev : [...prev, "intake"]));
+    setSavedSteps((prev) => (prev.includes("setup") ? prev : [...prev, "setup"]));
     setStep("personal");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -1886,8 +2259,9 @@ export default function EmployeeForm({ self }) {
   // Until Contract Information is saved, the form's own answer decides - so
   // Social Protection is on the track from the start for a registered
   // employee, as it is by default - and the saved answer after that.
-  const stepFacts = savedSteps.includes("contract") ? saved : formData;
-  const shownSteps = ADD_STEPS.filter((s) => !s.when || s.when(stepFacts));
+  const stepFacts = savedSteps.includes(stepOfPart("contract")) ? saved : formData;
+  // Every step stays on the bar; one that does not apply is marked so.
+  const shownSteps = ADD_STEPS;
   const savedFlow = flowFor(saved);
   // The section before this one, to go back to without losing anything.
   const previousStep = savedFlow[savedFlow.findIndex((s) => s.key === step) - 1];
@@ -1901,8 +2275,20 @@ export default function EmployeeForm({ self }) {
   const reviewMarks = marking ? intake.reviewKeys.filter((key) => !missingMarks.includes(key)) : [];
   // Which steps still hold a gap, or a value to review - shown on the bar.
   const stepFlags = {};
-  reviewMarks.forEach((key) => (stepFlags[fieldStep(key)] = "review"));
-  missingMarks.forEach((key) => (stepFlags[fieldStep(key)] = "missing"));
+  // What needs doing on each step, said under it on the bar.
+  const stepNeeds = {};
+  const need = (key, what) => {
+    const at = stepOfPart(fieldStep(key));
+    (stepNeeds[at] = stepNeeds[at] || { missing: 0, review: 0, refused: "" })[what] += what === "refused" ? "" : 1;
+  };
+  reviewMarks.forEach((key) => {
+    stepFlags[stepOfPart(fieldStep(key))] = "review";
+    need(key, "review");
+  });
+  missingMarks.forEach((key) => {
+    stepFlags[stepOfPart(fieldStep(key))] = "missing";
+    need(key, "missing");
+  });
   // The fields themselves: a red border and "Required information missing",
   // or an amber one and "Review required". A stylesheet keyed to the fields'
   // ids, so every kind of control on every step is marked the same way.
@@ -1920,7 +2306,42 @@ export default function EmployeeForm({ self }) {
   const refusedKeys = Object.keys(serverErrors).filter(
     (key) => formData[key] === serverErrors[key].value
   );
-  refusedKeys.forEach((key) => (stepFlags[fieldStep(key)] = "missing"));
+  refusedKeys.forEach((key) => {
+    const at = stepOfPart(fieldStep(key));
+    stepFlags[at] = "missing";
+    stepNeeds[at] = { ...(stepNeeds[at] || { missing: 0, review: 0 }), refused: serverErrors[key].message };
+  });
+  // Where each step stands, for the bar.
+  const stepStates = {};
+  const stepDetails = {};
+  const applying = flowFor(stepFacts).map((one) => one.key);
+  for (const one of ADD_STEPS) {
+    const needs = stepNeeds[one.key];
+    if (!applying.includes(one.key)) {
+      stepStates[one.key] = "na";
+      stepDetails[one.key] = one.notApplicable || "Does not apply to this employee.";
+    } else if (one.key === step) {
+      stepStates[one.key] = "progress";
+    } else if (stepFlags[one.key]) {
+      stepStates[one.key] = "attention";
+      stepDetails[one.key] =
+        needs?.refused ||
+        [
+          needs?.missing ? needs.missing + " required field" + (needs.missing === 1 ? "" : "s") + " missing" : "",
+          needs?.review ? needs.review + " value" + (needs.review === 1 ? "" : "s") + " to review" : "",
+        ]
+          .filter(Boolean)
+          .join(" · ") + ".";
+    } else if (savedSteps.includes(one.key)) {
+      // Saved is not the same as complete: a draft step can be saved with
+      // gaps, and then it needs attention rather than a green tick.
+      const gaps = intake.missingKeys.filter((key) => stepOfPart(fieldStep(key)) === one.key).length;
+      stepStates[one.key] = gaps ? "attention" : "complete";
+      if (gaps) {
+        stepDetails[one.key] = gaps + " required field" + (gaps === 1 ? "" : "s") + " missing.";
+      }
+    }
+  }
   const fieldMarkCss =
     markRule(missingMarks, "#dc2626", "Required information missing") +
     markRule(reviewMarks, "#d97706", "Review required") +
@@ -1930,13 +2351,23 @@ export default function EmployeeForm({ self }) {
   // The values on the open step that still wait on a person.
   const reviewHere = marking
     ? reviewMarks
-        .filter((key) => fieldStep(key) === step)
+        .filter((key) => stepOfPart(fieldStep(key)) === step)
         .map((key) => ({ key, label: INTAKE_FIELDS[key]?.label || key, entry: intake.meta[key] }))
     : [];
 
   // The month's pay, worked out from its parts rather than typed, so the
   // totals can never disagree with the lines they add up.
   const gross = sumOf(PAY_FIELDS, formData);
+  const allowances = sumOf(ALLOWANCE_FIELDS, formData);
+  // The breakdown opens by itself where an allowance is filled in - or is
+  // marked for review - unless somebody has opened or shut it by hand.
+  const breakdownOpen =
+    allowancesOpen ??
+    ALLOWANCE_FIELDS.some(
+      (field) => Number(formData[field.key]) > 0 || missingMarks.includes(field.key) || reviewMarks.includes(field.key)
+    );
+  /** Whether a deduction is ticked: by hand, else where there is one. */
+  const deductionOn = (key) => deductionPicks[key] ?? Number(formData[key]) > 0;
   const held = sumOf(DEDUCTION_FIELDS, formData);
   const net = gross - held;
   // What can actually be sent to the bank: nothing, if deductions outrun pay.
@@ -1963,7 +2394,7 @@ export default function EmployeeForm({ self }) {
    * refusal (an IBAN in the wrong shape) is shown, and what was typed stays.
    */
   const saveRecord = async () => {
-    const updated = await attempt(() => employeesApi.update(record.id, formData));
+    const updated = await attempt(() => employeesApi.update(record.id, forSaving(formData)));
     if (!updated) return null;
     upsert(employeeRecords, updated);
     setFormData(toFormData(updated));
@@ -2094,7 +2525,7 @@ export default function EmployeeForm({ self }) {
     if (isDocuments || isProfile || isRequests) return;
     if (isAdding) {
       // Document Intake moves on with its own button; Enter there saves nothing.
-      if (step !== "intake") saveStep();
+      if (step !== "setup") saveStep();
       return;
     }
     // Saved onto the record itself, the one My Profile reads, so a change
@@ -2118,23 +2549,12 @@ export default function EmployeeForm({ self }) {
       {/* Adding has no sidebar, so the way back to the list sits beside the
           title instead. */}
       {isAdding ? (
-        <PageHeader
-          icon={UserPlus}
-          title="Add Employee"
-          note="Create a new employee profile"
-          crumb="Add Employee"
-          backTo="/employees"
-          className="px-0 sm:px-0"
-          // Whose record this is, from the moment there is somebody: shown
-          // once Personal Details is saved, with the number they will carry.
-          action={
-            saved.employeeName && (
-              <div className="text-end">
-                <p className="text-lg font-bold text-primary">{saved.shortName || saved.employeeName}</p>
-                <p className="text-sm text-primary/75">Employee No. {employeeNo}</p>
-              </div>
-            )
-          }
+        <AddEmployeeBar
+          savedAt={draftSavedAt}
+          onSaveDraft={writeDraft}
+          onCancel={cancelAdding}
+          onCreate={createEmployee}
+          creating={saving}
         />
       ) : (
       /* Page Header.
@@ -2272,13 +2692,11 @@ export default function EmployeeForm({ self }) {
             <div className="space-y-3">
               {/* The record's sections as a numbered track: the ones before
                   the open section are ticked off, the rest still ahead. */}
-              <NumberedSteps
+              <StepTracker
                 label="Employee information"
                 steps={profileSteps}
                 active={profileTab}
-                done={profileSteps
-                  .slice(0, profileSteps.findIndex((s) => s.key === profileTab))
-                  .map((s) => s.key)}
+                plain
                 onSelect={openProfileTab}
               />
               {profileSaved && (
@@ -2446,14 +2864,33 @@ export default function EmployeeForm({ self }) {
 
           {isAdding && (
             <div className="space-y-2">
-              <NumberedSteps
+              <StepTracker
                 steps={shownSteps}
                 active={step}
-                done={savedSteps.filter((key) => !stepFlags[key])}
+                states={stepStates}
+                details={stepDetails}
                 canOpen={canOpen}
                 onSelect={setStep}
-                flags={stepFlags}
               />
+              {draftRestored && (
+                <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-900">
+                  Your saved draft was restored. Uploaded files are not kept in a draft - upload them again if needed.
+                </p>
+              )}
+              {/* Who is being added, from step two on: display only, redrawn
+                  as the details change. */}
+              {step !== "setup" && (
+                <EmployeeSummaryCard
+                  values={formData}
+                  nonOmani={nonOmani}
+                  employeeNo={employeeNo}
+                  photoUrl={photoUrl}
+                  onEditSetup={() => {
+                    setStep("setup");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                />
+              )}
               {/* What the step asks for, where the step says it; otherwise,
                   once there is a draft, that it is saved a section at a time. */}
               {(currentStep.hint || savedSteps.length > 0) && (
@@ -2524,7 +2961,12 @@ export default function EmployeeForm({ self }) {
                   <DocumentIntake
                     intake={intake}
                     onContinue={continueFromIntake}
-                    onCancel={() => navigate("/employees")}
+                    onCancel={cancelAdding}
+                    title="Documents & Photo"
+                    note="Upload employee documents and photo. The required documents are determined by your selections below."
+                    types={intakeCards}
+                    setup={<SetupQuestions values={formData} nonOmani={nonOmani} onAnswer={answerSetup} />}
+                    progress={<RequiredProgress done={cardsIn} total={requiredCards.length} />}
                   />
                 )}
 
@@ -2539,7 +2981,7 @@ export default function EmployeeForm({ self }) {
                         ? "View the employee's personal information."
                         : undefined
                   }
-                  footer={isAdding ? stepActions : profileActions}
+                  footer={actionsAfter("personal")}
                 >
                   {/* Four to a row, in the order the person is described:
                       name, birth and sex; then nationality and the papers it
@@ -2830,6 +3272,40 @@ export default function EmployeeForm({ self }) {
                       required={isTabbed}
                     />
 
+                    {/* Asked since the redesign: the highest level of study
+                        and the languages spoken. */}
+                    <div className="form-field space-y-2">
+                      <Label htmlFor="highestEducation">Highest Education Level</Label>
+                      <Select
+                        value={formData.highestEducation || ""}
+                        onValueChange={(value) => set("highestEducation", value)}
+                      >
+                        <SelectTrigger id="highestEducation">
+                          <SelectValue placeholder="Select education level" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {EDUCATION_LEVELS.map((level) => (
+                            <SelectItem key={level} value={level}>
+                              {level}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <LanguagesField
+                      value={Array.isArray(formData.languages) ? formData.languages : []}
+                      onChange={(list) => set("languages", list)}
+                    />
+                  </div>
+
+                  {/* The CV, as one professional paragraph - written by AI
+                      from the papers and what is on file, or by hand. */}
+                  <div className="mt-6">
+                    <CvField
+                      value={formData.cvSummary}
+                      onChange={(text) => set("cvSummary", text)}
+                      facts={cvFacts}
+                    />
                   </div>
                 </SectionCard>
                 )}
@@ -3060,7 +3536,7 @@ export default function EmployeeForm({ self }) {
                             />
                           </SelectTrigger>
                           <SelectContent>
-                            {(JOB_TITLES[formData.department] || []).map((option) => (
+                            {jobTitlesFor(formData.department, formData.staffCategory).map((option) => (
                               <SelectItem key={option} value={option}>
                                 {option}
                               </SelectItem>
@@ -3161,13 +3637,94 @@ export default function EmployeeForm({ self }) {
                             Organizational Information
                           </h3>
                         )}
+                        {/* Where they work, the circle the job sits in and the
+                            title held there - the order the work is decided
+                            in. Left out once somebody has left: an inactive
+                            record asks only what the leaving needs. */}
+                        {formData.status !== "Inactive" && (
+                          <div className="form-grid form-grid-3 mb-6 gap-y-6 border-b pb-6">
+                            <ChoiceField
+                              id="branch"
+                              label={<>Branch / Work Location<Required show={asksFor} /></>}
+                              icon={MapPin}
+                              placeholder="Select branch / location"
+                              value={formData.branch}
+                              onChange={(value) => set("branch", value)}
+                              // Sohar is not a place employees are posted to.
+                              options={initialBranches
+                                .map((branch) => branch.name)
+                                .filter((name) => name !== "Sohar")}
+                              required
+                            />
+                            {/* The circle decides which titles there are, and
+                                whether there is a grade: changing it drops a
+                                title or grade the new circle does not have. */}
+                            <ChoiceField
+                              id="department"
+                              label={<>Department (Circle)<Required show={asksFor} /></>}
+                              icon={Network}
+                              placeholder="Select department (circle)"
+                              value={formData.department}
+                              onChange={(value) =>
+                                setFormData((prev) => {
+                                  const judicial = value === JUDICIAL;
+                                  return {
+                                    ...prev,
+                                    department: value,
+                                    occupation: jobTitlesFor(value, prev.staffCategory).includes(prev.occupation)
+                                      ? prev.occupation
+                                      : "",
+                                    grade: judicial ? prev.grade : "",
+                                    practiceLevel: judicial ? prev.practiceLevel : "",
+                                  };
+                                })
+                              }
+                              options={DEPARTMENTS}
+                              iconFor={(option) => CIRCLE_ICONS[option]}
+                              required
+                            />
+                            {/* A trainee is offered the trainee titles, anybody
+                                else the circle's permanent ones. A title the
+                                list no longer has stays readable on an older
+                                record rather than vanishing. */}
+                            <ChoiceField
+                              id="occupation"
+                              label={<>Job Title<Required show={asksFor} /></>}
+                              icon={Briefcase}
+                              placeholder={
+                                formData.department ? "Select job title" : "Select a department first"
+                              }
+                              value={formData.occupation}
+                              disabled={!formData.department}
+                              onChange={(value) =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  occupation: value,
+                                  // A trainee lawyer's grade is that already.
+                                  ...(value === "Trainee Lawyer" && !prev.grade
+                                    ? { grade: value, practiceLevel: value }
+                                    : {}),
+                                }))
+                              }
+                              options={[
+                                ...jobTitlesFor(formData.department, formData.staffCategory),
+                                ...(formData.occupation &&
+                                !jobTitlesFor(formData.department, formData.staffCategory).includes(formData.occupation)
+                                  ? [formData.occupation]
+                                  : []),
+                              ]}
+                              iconFor={(option) => TITLE_ICONS[option] || Briefcase}
+                              required
+                            />
+                          </div>
+                        )}
                         <div className="form-grid gap-y-6">
                           {/* Inactive asks for the last day, who decided it,
                               and - unless it was the employee's own decision -
-                              the firm's decision, on the row under this one.
-                              Each answer is dropped when the one above it
-                              changes, so a record cannot keep a reason for an
-                              ending that is no longer there. */}
+                              the firm's decision, beside it. Each answer is
+                              dropped when the one above it changes, so a
+                              record cannot keep a reason for an ending that is
+                              no longer there. */}
                           <ChoiceField
                             id="status"
                             label="Employee Status"
@@ -3188,9 +3745,6 @@ export default function EmployeeForm({ self }) {
                             options={["Active", "Inactive"]}
                             required
                           />
-                          {/* Inactive asks only what the leaving needs - the
-                              last day, who decided it and the firm's decision -
-                              beside the status, and nothing else on the step. */}
                           {formData.status === "Inactive" ? (
                             <>
                             <div className="form-field space-y-2">
@@ -3239,21 +3793,8 @@ export default function EmployeeForm({ self }) {
                           ) : (
                             <>
                               <ChoiceField
-                                id="branch"
-                                label="Branch / Work Location"
-                                icon={MapPin}
-                                placeholder="Select Branch"
-                                value={formData.branch}
-                                onChange={(value) => set("branch", value)}
-                                // Sohar is not a place employees are posted to.
-                                options={initialBranches
-                                  .map((branch) => branch.name)
-                                  .filter((name) => name !== "Sohar")}
-                                required
-                              />
-                              <ChoiceField
                                 id="position"
-                                label="Position"
+                                label={<>Position<Required show={asksFor} /></>}
                                 icon={Briefcase}
                                 placeholder="Select position"
                                 value={formData.position}
@@ -3261,78 +3802,61 @@ export default function EmployeeForm({ self }) {
                                 options={EMPLOYEE_POSITIONS}
                                 required
                               />
-                              <ChoiceField
-                                id="department"
-                                label="Department"
-                                icon={Network}
-                                placeholder="Select department"
-                                value={formData.department}
-                                onChange={(value) => set("department", value)}
-                                options={DEPARTMENT_GROUPS}
-                                required
+                              {/* The grade: a consultant's seniority, or a
+                                  lawyer's practice level - so only the
+                                  Judicial circle has one. A lawyer's grade is
+                                  asked once: choosing one sets the practice
+                                  level, which is what makes the employee a
+                                  lawyer for everything that follows (the
+                                  lawyer's card among their papers, the level
+                                  on the employees list). The title is the Job
+                                  Title's to set, and is filled in only where
+                                  none was chosen. */}
+                              {(formData.department === JUDICIAL || formData.grade) && (
+                                <ChoiceField
+                                  id="grade"
+                                  label={<>Select Grade<Required show={asksFor && formData.department === JUDICIAL} /></>}
+                                  icon={Scale}
+                                  info="A consultant's grade, or a lawyer's practice level."
+                                  placeholder="Select grade"
+                                  value={formData.grade}
+                                  onChange={(value) => {
+                                    const lawyer = LAWYER_GRADES.includes(value);
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      grade: value,
+                                      practiceLevel: lawyer ? value : "",
+                                      occupation: prev.occupation || (lawyer ? "Lawyer" : ""),
+                                    }));
+                                  }}
+                                  options={GRADE_GROUPS}
+                                  required={formData.department === JUDICIAL}
+                                />
+                              )}
+                              {/* How the firm reaches them at work. */}
+                              <PhoneField
+                                id="workPhone"
+                                label="Work Phone Number"
+                                placeholder="Enter work phone number"
+                                dialCode={formData.workDialCode}
+                                onDialCode={(value) => set("workDialCode", value)}
+                                value={formData.workPhone}
+                                onChange={(e) => set("workPhone", e.target.value)}
+                              />
+                              <IconField
+                                icon={Mail}
+                                id="workEmail"
+                                name="workEmail"
+                                type="email"
+                                label={<>Work Email<Required show={asksFor} /></>}
+                                placeholder="name@firm.com"
+                                value={formData.workEmail}
+                                onChange={onChange}
+                                required={isAdding}
                               />
                             </>
                           )}
                         </div>
-
-                        {formData.status !== "Inactive" && (
-                          <>
-                            {/* The grade, on a row of its own. A lawyer's grade is
-                                their practice level, so it is asked once: choosing
-                                one makes the employee a lawyer for everything that
-                                follows - the lawyer's card among their papers, the
-                                level on the employees list. */}
-                            <div className="form-grid mt-6 gap-y-6 border-t pt-6">
-                              <ChoiceField
-                                id="grade"
-                                label="Select Grade"
-                                icon={Scale}
-                                info="A consultant's grade, or a lawyer's practice level."
-                                placeholder="Select grade"
-                                value={formData.grade}
-                                onChange={(value) => {
-                                  const lawyer = LAWYER_GRADES.includes(value);
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    grade: value,
-                                    practiceLevel: lawyer ? value : "",
-                                    occupation: lawyer ? "Lawyer" : value,
-                                  }));
-                                }}
-                                options={GRADE_GROUPS}
-                                required
-                              />
-
-                            {/* How the firm reaches them at work, beside the
-                                grade once one is chosen. */}
-                            {formData.grade && (
-                              <>
-                                <PhoneField
-                                  id="workPhone"
-                                  label="Work Phone Number"
-                                  placeholder="Enter work phone number"
-                                  dialCode={formData.workDialCode}
-                                  onDialCode={(value) => set("workDialCode", value)}
-                                  value={formData.workPhone}
-                                  onChange={(e) => set("workPhone", e.target.value)}
-                                />
-                                <IconField
-                                  icon={Mail}
-                                  id="workEmail"
-                                  name="workEmail"
-                                  type="email"
-                                  label={<>Work Email<Required show={asksFor} /></>}
-                                  placeholder="name@firm.com"
-                                  value={formData.workEmail}
-                                  onChange={onChange}
-                                  required={isAdding}
-                                />
-                              </>
-                            )}
-                            </div>
-
-                          </>
-                        )}
                       </section>
                       )}
 
@@ -3344,37 +3868,87 @@ export default function EmployeeForm({ self }) {
                             Contract &amp; Timeline
                           </h3>
                         )}
-                        <div className="form-grid gap-y-6">
-                          {/* How they are engaged and on what term, chosen
-                              together and kept as the two answers it is. A term
-                              without an end drops the end date it no longer has. */}
-                          <ChoiceField
-                            id="employmentContract"
-                            label={<>Employment Type &amp; Contract Type<Required show={asksFor} /></>}
-                            placeholder="Select"
-                            value={
-                              formData.employmentType && formData.contractType
-                                ? formData.employmentType +
-                                  " - " +
-                                  (Object.keys(CONTRACT_TERMS).find(
-                                    (term) => CONTRACT_TERMS[term] === formData.contractType
-                                  ) || "")
-                                : ""
-                            }
-                            onChange={(value) => {
-                              const [type, term] = value.split(" - ");
-                              const contractType = CONTRACT_TERMS[term];
-                              setFormData((prev) => ({
-                                ...prev,
-                                employmentType: type,
-                                contractType,
-                                employmentEndDate:
-                                  contractType === "Fixed-term" ? prev.employmentEndDate : "",
-                              }));
-                            }}
-                            options={EMPLOYMENT_CONTRACT_GROUPS}
-                            required
-                          />
+                        {/* The contract's kind, then - beside it - the periods
+                            that apply: a temporary contract's term, and a
+                            trainee's training. Each appears only for whom it
+                            is for, and is then asked for. */}
+                        <div className="flex flex-wrap gap-4">
+                          <div className="form-field flex min-w-60 items-start gap-4 rounded-lg bg-blue-50/60 p-4">
+                            <FileText strokeWidth={1.5} aria-hidden="true" className="mt-0.5 size-8 shrink-0 text-primary" />
+                            <div>
+                              <p id="contractTypeLabel" className="text-sm font-semibold text-primary">
+                                Contract Type
+                                <Required show={asksFor} />
+                              </p>
+                              {/* A permanent contract has no end, so moving to
+                                  one drops the end date it no longer has. */}
+                              <div
+                                id="contractType"
+                                role="radiogroup"
+                                aria-labelledby="contractTypeLabel"
+                                className="rounded-field mt-3 space-y-3 rounded-md border border-transparent"
+                              >
+                                {CONTRACT_KINDS.map((kind) => {
+                                  const on = formData.contractType === kind.value;
+                                  return (
+                                    <button
+                                      key={kind.value}
+                                      type="button"
+                                      role="radio"
+                                      aria-checked={on}
+                                      disabled={readOnly}
+                                      onClick={() =>
+                                        setFormData((prev) => ({
+                                          ...prev,
+                                          contractType: kind.value,
+                                          employmentEndDate:
+                                            kind.value === "Fixed-term" ? prev.employmentEndDate : "",
+                                        }))
+                                      }
+                                      className="flex items-center gap-3 rounded-md text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+                                    >
+                                      <span
+                                        aria-hidden="true"
+                                        className={cn(
+                                          "flex size-5 items-center justify-center rounded-full border-2 bg-white",
+                                          on ? "border-blue-600" : "border-slate-300"
+                                        )}
+                                      >
+                                        {on && <span className="size-2.5 rounded-full bg-blue-600" />}
+                                      </span>
+                                      {kind.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                          {formData.contractType === "Fixed-term" && (
+                            <PeriodFields
+                              title="Temporary Contract Period"
+                              tag="For Temporary Contract Only"
+                              start={{ id: "contractStartDate", label: "Contract Start Date" }}
+                              end={{ id: "employmentEndDate", label: "Contract End Date" }}
+                              values={formData}
+                              onChange={onChange}
+                              required={asksFor}
+                            />
+                          )}
+                          {isTrainee(formData) && (
+                            <PeriodFields
+                              title="Training Period"
+                              tag="For Trainee Only"
+                              start={{ id: "trainingStart", label: "Training Start Date" }}
+                              end={{ id: "trainingEnd", label: "Training End Date" }}
+                              values={formData}
+                              onChange={onChange}
+                              required={asksFor}
+                            />
+                          )}
+                        </div>
+
+                        {/* When they start and how they are engaged. */}
+                        <div className="form-grid mt-6 gap-y-6">
                           <div className="form-field space-y-2">
                             <Label htmlFor="dateOfJoining">Date of Joining<Required show={asksFor} /></Label>
                             <DateField
@@ -3385,35 +3959,14 @@ export default function EmployeeForm({ self }) {
                               required
                             />
                           </div>
-                          <div className="form-field space-y-2">
-                            <Label htmlFor="contractStartDate">Contract Start Date<Required show={asksFor} /></Label>
-                            <DateField
-                              id="contractStartDate"
-                              name="contractStartDate"
-                              value={formData.contractStartDate}
-                              onChange={onChange}
-                              required
-                            />
-                          </div>
-                          {/* A fixed-term contract is one with an end, so it
-                              is asked for, and only then; an open-ended one
-                              has none. */}
-                          {formData.contractType === "Fixed-term" && (
-                            <div className="form-field space-y-2">
-                              <Label htmlFor="employmentEndDate">Contract End Date</Label>
-                              <DateField
-                                id="employmentEndDate"
-                                name="employmentEndDate"
-                                value={formData.employmentEndDate}
-                                onChange={onChange}
-                                required
-                              />
-                            </div>
-                          )}
-                        </div>
-
-                        {/* The terms, on a row of their own. */}
-                        <div className="form-grid mt-6 gap-y-6">
+                          <ChoiceField
+                            id="employmentType"
+                            label="Employment Type"
+                            placeholder="Select"
+                            value={formData.employmentType}
+                            onChange={(value) => set("employmentType", value)}
+                            options={EMPLOYMENT_TYPES}
+                          />
                           <ChoiceField
                             id="probationPeriod"
                             label={<>Probation Period<Required show={asksFor} /></>}
@@ -3427,40 +3980,60 @@ export default function EmployeeForm({ self }) {
                             required
                           />
                           <ChoiceField
-                            id="noticePeriod"
-                            label={<>Notice Period<Required show={asksFor} /></>}
-                            placeholder="Select"
-                            value={formData.noticePeriod}
-                            onChange={(value) => set("noticePeriod", value)}
-                            options={NOTICE_PERIODS}
-                            required
-                          />
-                          {/* The one leave figure on the record. Leave taken
-                              is recorded on the leave page, not here. */}
-                          <div className="form-field space-y-2">
-                            <Label htmlFor="annualLeaveDays">
-                              Number of Vacation Days<Required show={asksFor} />
-                            </Label>
-                            <Input
-                              id="annualLeaveDays"
-                              name="annualLeaveDays"
-                              type="number"
-                              inputMode="numeric"
-                              min="0"
-                              step="1"
-                              placeholder="Enter number of days"
-                              value={formData.annualLeaveDays}
-                              onChange={onChange}
-                              required
-                            />
-                          </div>
-                          <ChoiceField
                             id="socialProtection"
                             label={<>Registration in Social Protection<Required show={asksFor} /></>}
                             placeholder="Select"
                             value={formData.socialProtection}
                             onChange={(value) => set("socialProtection", value)}
                             options={["Yes", "No"]}
+                            required
+                          />
+                        </div>
+
+                        {/* Leave and notice, side by side. Annual leave is
+                            earned only past six months, so on a short
+                            temporary contract or training period the field is
+                            not there. */}
+                        <div className="form-grid form-grid-2 mt-6 gap-y-6 border-t pt-6">
+                          <div className="form-field space-y-2">
+                            <Label htmlFor="annualLeaveDays" className="flex items-center gap-2 font-semibold">
+                              <TreePalm strokeWidth={1.5} aria-hidden="true" className="size-5 shrink-0" />
+                              Annual Leave Days
+                              <span title={ANNUAL_LEAVE_NOTE} className="inline-flex text-primary/70">
+                                <Info className="size-4" aria-hidden="true" />
+                                <span className="sr-only">{ANNUAL_LEAVE_NOTE}</span>
+                              </span>
+                            </Label>
+                            {leaveApplies(formData) && (
+                              <Input
+                                id="annualLeaveDays"
+                                name="annualLeaveDays"
+                                type="number"
+                                inputMode="numeric"
+                                min="0"
+                                step="1"
+                                placeholder="Enter number of days"
+                                value={formData.annualLeaveDays}
+                                onChange={onChange}
+                              />
+                            )}
+                            {/* Said where the field comes and goes, so its
+                                absence does not read as a fault. */}
+                            {(isTrainee(formData) || formData.contractType === "Fixed-term") && (
+                              <p className="flex items-start gap-2 rounded-md bg-blue-50 px-3 py-2 text-xs text-primary/80">
+                                <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                                {ANNUAL_LEAVE_NOTE}
+                              </p>
+                            )}
+                          </div>
+                          <ChoiceField
+                            id="noticePeriod"
+                            label={<>Notice Period<Required show={asksFor} /></>}
+                            icon={Bell}
+                            placeholder="Select notice period"
+                            value={formData.noticePeriod}
+                            onChange={(value) => set("noticePeriod", value)}
+                            options={NOTICE_PERIODS}
                             required
                           />
                         </div>
@@ -3480,7 +4053,7 @@ export default function EmployeeForm({ self }) {
                 {shows("identity") && (
                   <SectionCard
                     title="Identity & Immigration"
-                    footer={isAdding ? stepActions : profileActions}
+                    footer={actionsAfter("identity")}
                   >
                     <div className="form-grid gap-y-6">
                       <PaperFields
@@ -3497,6 +4070,7 @@ export default function EmployeeForm({ self }) {
                           expiryName="lawyerCardExpiry"
                           values={formData}
                           onChange={onChange}
+                          tag="For Lawyers Only"
                         />
                       )}
                       {!paperOmani && (
@@ -3511,6 +4085,7 @@ export default function EmployeeForm({ self }) {
                             values={formData}
                             onChange={onChange}
                             required={false}
+                            tag="For Non-Omani Only"
                           />
                           <PaperFields
                             label="Visa"
@@ -3538,47 +4113,92 @@ export default function EmployeeForm({ self }) {
                     sent, and what the first payroll will come to. */}
                 {(shows("payroll") || shows("banking")) && (
                   <>
-                    {/* Pay and what comes off it: Payroll Information. */}
+                    {/* Pay: basic salary, the allowances on top and what they
+                        come to, from the day it takes effect. */}
                     {shows("payroll") && (
                     <SectionCard
-                      title={isAdding ? "Payroll Information" : "Salary Information"}
-                      icon={Wallet}
-                      footer={isAdding ? stepActions : profileActions}
+                      title={isAdding ? "Compensation" : "Salary Information"}
+                      icon={Coins}
                     >
-                      {/* The first payroll this pay goes into, worked out from
-                          the lines below as they are typed. An estimate: the
-                          month's own absences and changes settle the final
-                          figure when payroll is run. */}
-                      <div className="mb-6 space-y-4">
-                        <div className="flex items-center gap-4 rounded-lg bg-blue-50/60 px-5 py-4">
-                          <span
-                            aria-hidden="true"
-                            className="flex size-14 shrink-0 items-center justify-center rounded-full border bg-white text-primary"
-                          >
-                            <CalendarDays className="size-7" strokeWidth={1.5} />
-                          </span>
-                          <div className="min-w-0">
-                            <h3 className="text-xl font-bold text-primary">
-                              Next Payroll <span aria-hidden="true">•</span>{" "}
-                              <span className="text-blue-700">{payrollMonth}</span>
-                            </h3>
-                            <p className="text-sm text-primary/75">
-                              This is the employee's salary for the next month that
-                              will be deposited into their bank account.
-                            </p>
+                      <div className="grid gap-x-5 gap-y-6 md:grid-cols-3">
+                        <MoneyField
+                          id="salary"
+                          label="Basic Salary"
+                          value={formData.salary}
+                          onChange={onChange}
+                          required
+                        />
+                        {/* The total only: each allowance is typed under the
+                            breakdown, which opens on its own once one is
+                            filled in. */}
+                        <div className="form-field space-y-2">
+                          <Label htmlFor="totalAllowances">Total Allowances</Label>
+                          <div className="relative">
+                            <Input
+                              id="totalAllowances"
+                              value={amountValue(allowances)}
+                              readOnly
+                              tabIndex={-1}
+                              className="bg-locked pe-14"
+                            />
+                            <Rial className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground" />
                           </div>
+                          <button
+                            type="button"
+                            aria-expanded={breakdownOpen}
+                            aria-controls="allowance-breakdown"
+                            onClick={() => setAllowancesOpen(!breakdownOpen)}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
+                          >
+                            {breakdownOpen ? (
+                              <ChevronUp className="size-4" aria-hidden="true" />
+                            ) : (
+                              <ChevronDown className="size-4" aria-hidden="true" />
+                            )}
+                            Allowance breakdown
+                          </button>
                         </div>
-                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                          <PayTile label="Total Earnings" value={gross} icon={Coins} tone="earnings" />
-                          <PayTile label="Total Deductions" value={held} icon={Wallet} tone="deductions" />
-                          <PayTile label="Net Salary" value={net} icon={Calculator} tone="net" />
-                          <PayTile label="Amount Payable" value={payable} icon={HandCoins} tone="payable" />
+                        {/* Worked out, never typed: basic salary plus every
+                            allowance. */}
+                        <div
+                          role="group"
+                          aria-labelledby="grossSalaryLabel"
+                          className="flex flex-col justify-center rounded-lg bg-blue-50 px-5 py-3"
+                        >
+                          <p id="grossSalaryLabel" className="flex items-center gap-2 text-sm font-semibold text-primary">
+                            Gross Salary (Auto)
+                            <span title={GROSS_NOTE} className="inline-flex text-primary/70">
+                              <Info className="size-4" aria-hidden="true" />
+                              <span className="sr-only">{GROSS_NOTE}</span>
+                            </span>
+                          </p>
+                          <p id="grossSalary" className="text-2xl font-bold text-primary">
+                            {amountValue(gross)}{" "}
+                            <Rial className="text-sm font-medium text-muted-foreground" />
+                          </p>
                         </div>
                       </div>
-                      <div className="form-grid gap-y-6">
+                      {breakdownOpen && (
+                        <div
+                          id="allowance-breakdown"
+                          className="form-grid mt-6 gap-y-6 rounded-lg border border-container-border p-4"
+                        >
+                          {ALLOWANCE_FIELDS.map((field) => (
+                            <MoneyField
+                              key={field.key}
+                              id={field.key}
+                              label={field.label}
+                              value={formData[field.key]}
+                              onChange={onChange}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {/* From when this pay applies; a later day schedules it. */}
+                      <div className="form-grid mt-6 gap-y-6 border-t pt-6">
                         <div className="form-field space-y-2" data-required="true">
                           <Label htmlFor="salaryEffectiveDate">
-                            Effective Date
+                            Salary Effective Date
                             <Required show />
                           </Label>
                           <div className="flex items-center gap-2">
@@ -3597,35 +4217,20 @@ export default function EmployeeForm({ self }) {
                             )}
                           </div>
                         </div>
-                        {PAY_FIELDS.map((field) => (
-                          <MoneyField
-                            key={field.key}
-                            id={field.key}
-                            label={field.label}
-                            value={formData[field.key]}
-                            onChange={onChange}
-                            required={field.required}
-                          />
-                        ))}
+                        {/* What the first payroll this pay goes into comes
+                            to. An estimate: the month's own absences and
+                            changes settle the final figure. */}
                         <MoneyField
-                          id="grossSalary"
-                          label="Gross Salary"
-                          value={gross}
+                          id="netSalary"
+                          label={"Net Salary · " + payrollMonth}
+                          value={net}
                           locked
-                          required
-                          note="Auto-calculated from salary components"
+                          note={
+                            "Gross less deductions; " +
+                            amountValue(payable) +
+                            " payable to the bank."
+                          }
                         />
-                        {DEDUCTION_FIELDS.map((field) => (
-                          <MoneyField
-                            key={field.key}
-                            id={field.key}
-                            label={field.label}
-                            value={formData[field.key]}
-                            onChange={onChange}
-                            note={field.note}
-                            locked={Boolean(field.note)}
-                          />
-                        ))}
                       </div>
                       {scheduled && (
                         <p className="mt-4 text-sm text-primary/75">
@@ -3636,25 +4241,103 @@ export default function EmployeeForm({ self }) {
                     </SectionCard>
                     )}
 
-                    {/* Where it is paid to: Banking Information. */}
+                    {/* What comes off it - none unless ticked. Three are
+                        worked out from the loans, advances and disciplinary
+                        records the firm already holds, so ticking one shows
+                        its figure rather than asking for it; one already
+                        running cannot be ticked off here. */}
+                    {shows("payroll") && (
+                    <SectionCard
+                      title={
+                        <>
+                          Deductions{" "}
+                          <span className="text-sm font-normal text-primary/70">(Optional)</span>
+                        </>
+                      }
+                      icon={Wallet}
+                      footer={actionsAfter("payroll")}
+                    >
+                      <div role="group" aria-label="Deductions" className="flex flex-wrap gap-x-10 gap-y-4">
+                        {DEDUCTION_FIELDS.map((field) => {
+                          const running = Boolean(field.note) && Number(formData[field.key]) > 0;
+                          return (
+                            <label
+                              key={field.key}
+                              htmlFor={"has-" + field.key}
+                              className="flex items-center gap-3 text-sm font-medium text-primary"
+                            >
+                              <Checkbox
+                                id={"has-" + field.key}
+                                checked={deductionOn(field.key)}
+                                disabled={running}
+                                onCheckedChange={(on) => {
+                                  setDeductionPicks((prev) => ({ ...prev, [field.key]: on === true }));
+                                  // A typed deduction ticked off is no longer taken.
+                                  if (on !== true && !field.note) set(field.key, "");
+                                }}
+                                className="size-5"
+                              />
+                              {field.label}
+                            </label>
+                          );
+                        })}
+                      </div>
+                      {DEDUCTION_FIELDS.some((field) => deductionOn(field.key)) && (
+                        <div className="form-grid mt-6 gap-y-6 border-t pt-6">
+                          {DEDUCTION_FIELDS.filter((field) => deductionOn(field.key)).map((field) => (
+                            <MoneyField
+                              key={field.key}
+                              id={field.key}
+                              label={field.label}
+                              value={formData[field.key]}
+                              onChange={onChange}
+                              note={field.note}
+                              locked={Boolean(field.note)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </SectionCard>
+                    )}
+
+                    {/* Where it is paid to. */}
                     {shows("banking") && (
                     <SectionCard
-                      title="Bank Information"
+                      title={
+                        <>
+                          Banking Details{" "}
+                          <span className="text-sm font-normal text-primary/70">(For Payroll)</span>
+                        </>
+                      }
                       icon={Landmark}
-                      footer={isAdding ? stepActions : profileActions}
+                      footer={actionsAfter("banking")}
                     >
-                      {/* Four to a row, all asked for. No account holder's
-                          name: the account is the employee's own. */}
-                      <div className="form-grid gap-y-6">
+                      {/* The account a local transfer is made to; IBAN and
+                          SWIFT are taken when there are, but not demanded. */}
+                      <div className="grid gap-x-[19px] gap-y-6 sm:grid-cols-2 xl:grid-cols-5">
                         <ChoiceField
                           id="bankName"
-                          label="Bank Name"
+                          label={<>Bank Name<Required show={asksFor} /></>}
                           placeholder="Select Bank"
                           value={formData.bankName}
                           onChange={(value) => set("bankName", value)}
                           options={RECEIVING_BANKS}
                           required
                         />
+                        <div className="form-field space-y-2">
+                          <Label htmlFor="accountHolder">
+                            Account Name
+                            <Required show={asksFor} />
+                          </Label>
+                          <Input
+                            id="accountHolder"
+                            name="accountHolder"
+                            value={formData.accountHolder}
+                            onChange={onChange}
+                            placeholder="Enter account name"
+                            required
+                          />
+                        </div>
                         <div className="form-field space-y-2">
                           <Label htmlFor="accountNumber">
                             Account Number
@@ -3674,8 +4357,7 @@ export default function EmployeeForm({ self }) {
                         </div>
                         <div className="form-field space-y-2">
                           <Label htmlFor="iban">
-                            IBAN
-                            <Required show={asksFor} />
+                            IBAN <span className="font-normal text-muted-foreground">(Optional)</span>
                           </Label>
                           <Input
                             id="iban"
@@ -3684,14 +4366,12 @@ export default function EmployeeForm({ self }) {
                             onChange={onChange}
                             placeholder="Enter IBAN"
                             aria-invalid={ruleBroken("iban", formData.iban, shapeChecked) || undefined}
-                            required
                           />
                           <RuleNote name="iban" value={formData.iban} whole={shapeChecked} />
                         </div>
                         <div className="form-field space-y-2">
                           <Label htmlFor="swiftCode">
-                            SWIFT Code
-                            <Required show={asksFor} />
+                            SWIFT Code <span className="font-normal text-muted-foreground">(Optional)</span>
                           </Label>
                           <Input
                             id="swiftCode"
@@ -3700,7 +4380,6 @@ export default function EmployeeForm({ self }) {
                             onChange={onChange}
                             placeholder="Enter SWIFT code"
                             aria-invalid={ruleBroken("swiftCode", formData.swiftCode, shapeChecked) || undefined}
-                            required
                           />
                           <RuleNote name="swiftCode" value={formData.swiftCode} whole={shapeChecked} />
                         </div>
@@ -3710,18 +4389,21 @@ export default function EmployeeForm({ self }) {
                   </>
                 )}
 
-                {/* The Fund's number and date are asked for; what is paid into
-                    it is worked out from the basic pay saved on Salary &
-                    Banking, and payroll is where those figures come from. */}
+                {/* The Fund's number and date are asked for, on one row with
+                    what is paid into it - worked out from the basic pay above,
+                    and payroll is where those figures come from. */}
                 {shows("socialProtection") && (
                   <SectionCard
-                    title={isAdding ? "Social Protection Information" : "Social Protection Registration"}
+                    title={isAdding ? "Social Protection" : "Social Protection Registration"}
                     icon={ShieldCheck}
-                    footer={isAdding ? stepActions : profileActions}
+                    footer={actionsAfter("socialProtection")}
                   >
                     <div className="form-grid gap-y-6">
                       <div className="form-field space-y-2">
-                        <Label htmlFor="spRegistrationNo">Registration No.</Label>
+                        <Label htmlFor="spRegistrationNo">
+                          Registration No.
+                          <Required show={asksFor} />
+                        </Label>
                         <Input
                           id="spRegistrationNo"
                           name="spRegistrationNo"
@@ -3734,7 +4416,10 @@ export default function EmployeeForm({ self }) {
                         <RuleNote name="spRegistrationNo" value={formData.spRegistrationNo} />
                       </div>
                       <div className="form-field space-y-2">
-                        <Label htmlFor="spRegistrationDate">Registration Date</Label>
+                        <Label htmlFor="spRegistrationDate">
+                          Registration Date
+                          <Required show={asksFor} />
+                        </Label>
                         <DateField
                           id="spRegistrationDate"
                           name="spRegistrationDate"
@@ -3754,28 +4439,37 @@ export default function EmployeeForm({ self }) {
                         label="Employer Contribution"
                         value={spEmployer}
                         locked
+                        note={"Total " + amountValue(spEmployee + spEmployer) + " a month, from payroll."}
                       />
-                      <MoneyField
-                        id="spTotal"
-                        label="Total Contribution"
-                        value={spEmployee + spEmployer}
-                        locked
-                      />
-                      <div className="form-field space-y-2">
-                        <Label htmlFor="spSource">Data Source</Label>
-                        <Input id="spSource" value="Payroll" readOnly tabIndex={-1} className="bg-locked" />
-                      </div>
-                      <div className="form-field space-y-2">
-                        <Label htmlFor="spUpdated">Last Updated</Label>
-                        <Input
-                          id="spUpdated"
-                          value={formatDate(today)}
-                          readOnly
-                          tabIndex={-1}
-                          className="bg-locked"
-                        />
-                      </div>
                     </div>
+                  </SectionCard>
+                )}
+
+                {/* Who may see and do what, decided while the person is added. */}
+                {shows("permissions") && (
+                  <SectionCard title="System Permissions" icon={Settings} footer={actionsAfter("permissions")}>
+                    <PermissionsStep
+                      value={formData.permissionsDraft}
+                      onChange={(draft) => set("permissionsDraft", draft)}
+                    />
+                  </SectionCard>
+                )}
+
+                {/* The company's equipment in their hands: held as a draft while
+                    adding, recorded straight away on a saved record. */}
+                {shows("assets") && (
+                  <SectionCard
+                    title="Assigned Assets"
+                    icon={Laptop}
+                    // A record's register saves each change as it is made, so
+                    // it has no Save of its own.
+                    footer={isAdding ? actionsAfter("assets") : null}
+                  >
+                    <AssignedAssets
+                      employeeId={isAdding ? undefined : record?.id}
+                      draft={formData.assetsDraft || []}
+                      onDraftChange={(list) => set("assetsDraft", list)}
+                    />
                   </SectionCard>
                 )}
 
@@ -4022,24 +4716,30 @@ export default function EmployeeForm({ self }) {
                             </Button>
                           </div>
                         </div>
-                      ) : orderedDocuments.length === 0 ? (
-                        <EmptyState>No documents uploaded yet.</EmptyState>
                       ) : (
                         <RecordTable minWidth={860}>
                           <HeadRow>
-                            <Th width="20%">Document Category</Th>
-                            <Th width="26%">Document Type</Th>
-                            <Th width="14%">Upload Date</Th>
-                            <Th width="18%">Expiry</Th>
+                            <Th width="20%" {...documentSortProps("category")}>Document Category</Th>
+                            <Th width="26%" {...documentSortProps("type")}>Document Type</Th>
+                            <Th width="14%" {...documentSortProps("uploadedAt")}>Upload Date</Th>
+                            <Th width="18%" {...documentSortProps("expiry")}>Expiry</Th>
                             <Th width="22%">Notes</Th>
                           </HeadRow>
                           <tbody>
+                            {documentData.status === "loading" && (
+                              <SkeletonRows columns={5} rows={5} />
+                            )}
+                            {documentData.status === "failed" && (
+                              <ErrorRow colSpan={5} label="documents" onRetry={documentData.retry} />
+                            )}
+                            {documentData.status === "ready" && currentDocuments.length === 0 && (
+                              <EmptyRow colSpan={5} label="documents" />
+                            )}
                             {/* One row for each paper held now - the current
                                 version of a versioned paper stands for all of
                                 its versions, and the older ones open under it. */}
-                            {orderedDocuments
-                              .filter((document) => documentStatus(document, documents) !== "Archived")
-                              .map((document) => {
+                            {documentData.status === "ready" &&
+                              currentDocuments.map((document) => {
                                 const versions = isVersioned(document.type)
                                   ? documentVersions(document.type, documents)
                                   : [];

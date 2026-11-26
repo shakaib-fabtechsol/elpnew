@@ -30,10 +30,10 @@ class Employee extends Model
         $dates = array_fill_keys([
             'date_of_birth', 'id_expiry', 'passport_expiry', 'visa_expiry', 'work_permit_expiry',
             'lawyer_card_expiry', 'date_of_joining', 'employment_end_date', 'last_working_date',
-            'contract_start_date', 'salary_effective_date', 'sp_registration_date',
+            'contract_start_date', 'training_start', 'training_end', 'salary_effective_date', 'sp_registration_date',
         ], 'date:Y-m-d');
 
-        return [...$money, ...$dates, 'social_protection' => 'boolean', 'annual_leave_days' => 'integer'];
+        return [...$money, ...$dates, 'social_protection' => 'boolean', 'paid' => 'boolean', 'languages' => 'array', 'annual_leave_days' => 'integer'];
     }
 
     protected static function booted(): void

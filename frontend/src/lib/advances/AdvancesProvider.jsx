@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useReseed } from "@/lib/api/useDataset";
 import { AdvancesContext } from "./context";
 import { initialAdvances } from "@/pages/employees/advanceSalaryData";
 import { advancesApi } from "@/lib/api/modules/advances";
@@ -16,6 +17,8 @@ import { upserted } from "@/lib/api/store";
  */
 export default function AdvancesProvider({ children }) {
   const [advances, setAdvances] = useState(initialAdvances);
+  // A Retry on a table reloads "salary advances"; take the fresh records in.
+  useReseed("salary advances", () => setAdvances([...initialAdvances]));
 
   const value = useMemo(() => {
     const keep = (record) => {

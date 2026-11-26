@@ -118,6 +118,7 @@ export default function ClientContractsSection() {
       key: "serial",
       header: "Serial No.",
       width: "12%",
+      sort: "number",
       render: (value, row) => (
         <div>
           <button
@@ -143,6 +144,7 @@ export default function ClientContractsSection() {
       header: "Contract Type",
       width: "14%",
       cellClassName: "font-medium",
+      sort: "text",
       render: (value, row) => (
         <div>
           <span className="block">{value}</span>
@@ -158,12 +160,15 @@ export default function ClientContractsSection() {
       key: "startDate",
       header: "Start Date",
       width: "12%",
+      sort: "date",
       render: (value) => formatDate(value) || "-",
     },
     {
       key: "endDate",
       header: "Contract End Date",
       width: "13%",
+      // An open-ended contract has no end date and sorts last.
+      sort: "date",
       render: (value) =>
         value ? (
           formatDate(value)
@@ -175,6 +180,8 @@ export default function ClientContractsSection() {
       key: "fileName",
       header: "Contract Document",
       width: "25%",
+      // A link to the file, not something to put in order.
+      sort: false,
       render: (value, row) => (
         <button
           type="button"
@@ -192,6 +199,8 @@ export default function ClientContractsSection() {
       key: "notes",
       header: "Notes",
       width: "24%",
+      // Descriptive information.
+      sort: false,
       render: (value, row) => (
         <span className="text-muted-foreground">
           {row.title ? row.title + ". " : ""}
@@ -361,6 +370,7 @@ export default function ClientContractsSection() {
           new record is judged against the ones already there. */}
       <DataTable
         columns={columns}
+        itemLabel="contracts"
         data={rows}
         // Already newest first by start date, with spent contracts under them.
         keepOrder

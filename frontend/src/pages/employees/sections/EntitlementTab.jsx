@@ -18,7 +18,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EmptyState } from "@/components/shared/panels";
 import {
   Settled,
   Choice,
@@ -34,7 +33,12 @@ import {
   Row,
   Td,
   RecordLink,
+  EmptyRow,
+  SkeletonRows,
+  ErrorRow,
 } from "@/components/shared/RecordTable";
+import { useTableSort } from "@/lib/sorting";
+import useDataset from "@/lib/api/useDataset";
 import { RequestSteps, DecisionChoice } from "@/components/shared/RequestSteps";
 import { AdvanceSteps, longDate } from "./AdvanceSalarySection";
 import MonthPicker from "@/components/shared/MonthPicker";
@@ -323,6 +327,70 @@ function Worked({ id, label, value }) {
 }
 
 /**
+ * What has happened to one request, line by line. The comment is free text,
+ * so it is the one column not sorted; statuses sort in the system's status
+ * order, and the amount by its value.
+ */
+function HistoryTable({ events }) {
+  // Read off the entitlements loaded at sign-in: a Retry elsewhere puts the
+  // list back to loading, and this table shows that too.
+  const dataset = useDataset(["entitlements"]);
+  const { rows, sortProps } = useTableSort(events, {
+    at: { sort: "date" },
+    action: { sort: "text" },
+    from: { sort: "status" },
+    to: { sort: "status" },
+    by: { sort: "text", sortValue: (event) => shortName(event.by) },
+    amount: { sort: "money", sortValue: (event) => Number(event.amount || 0) },
+    reference: { sort: "text" },
+  });
+
+  return (
+    <RecordTable minWidth={980}>
+      <HeadRow>
+        <Th width="14%" {...sortProps("at")}>Date &amp; Time</Th>
+        <Th width="14%" {...sortProps("action")}>Action</Th>
+        <Th width="11%" {...sortProps("from")}>Previous Status</Th>
+        <Th width="11%" {...sortProps("to")}>New Status</Th>
+        <Th width="14%" {...sortProps("by")}>Performed By</Th>
+        <Th width="10%" className="text-end" {...sortProps("amount")}>
+          Amount
+        </Th>
+        <Th width="16%">Comment</Th>
+        <Th width="10%" {...sortProps("reference")}>Reference</Th>
+      </HeadRow>
+      <tbody>
+        {dataset.status === "loading" && <SkeletonRows columns={8} rows={5} />}
+        {dataset.status === "failed" && (
+          <ErrorRow colSpan={8} label="history entries" onRetry={dataset.retry} />
+        )}
+        {dataset.status === "ready" && rows.length === 0 && (
+          <EmptyRow colSpan={8} label="history entries" />
+        )}
+        {dataset.status === "ready" && rows.map((event, index) => (
+          <Row key={index}>
+            <Td className="whitespace-nowrap text-primary">
+              {formatDate(event.at)}
+            </Td>
+            <Td className="text-primary">{event.action}</Td>
+            <Td className="text-muted-foreground">{event.from}</Td>
+            <Td className="text-primary">{event.to}</Td>
+            <Td className="text-primary">{shortName(event.by)}</Td>
+            <Td className="whitespace-nowrap text-end font-semibold text-green-700">
+              {amountValue(event.amount)}
+            </Td>
+            <Td className="text-start text-muted-foreground">
+              {event.comment || "-"}
+            </Td>
+            <Td className="text-primary">{event.reference || "-"}</Td>
+          </Row>
+        ))}
+      </tbody>
+    </RecordTable>
+  );
+}
+
+/**
  * One entitlement, asked for and decided.
  *
  * Every tab in the section works this way, and differs only in what it counts:
@@ -345,6 +413,9 @@ export default function EntitlementTab({
   canDecide = true,
 }) {
   const { leaves, recordEncashment } = useLeaves();
+  // The entitlements are loaded at sign-in: skeleton rows until they land,
+  // and Retry if they could not be read.
+  const dataset = useDataset(["entitlements"]);
   const [draft, setDraft] = useState(() => emptyDraft(kind));
   const [payment, setPayment] = useState(emptyPayment);
   // A request made on an invoice starts with the invoice itself.
@@ -912,6 +983,8 @@ export default function EntitlementTab({
       key: "no",
       header: "No.",
       width: "12%",
+      // A number in natural order: each run of digits compares as a number.
+      sort: "text",
       render: (value, record) =>
         record.entitlementNo ? (
           <span className="font-medium text-primary">{value}</span>
@@ -929,12 +1002,16 @@ export default function EntitlementTab({
       key: "requestDate",
       header: "Request Date",
       width: "14%",
+      sort: "date",
       render: (value) => <span className="whitespace-nowrap">{formatDate(value)}</span>,
     },
     {
       key: "detail",
       header: "Request Details",
       width: "28%",
+      skeleton: "lines",
+      // Combined information: what was asked for, why, and any risk found.
+      sort: false,
       render: (value, record) => (
         <>
           <span className="block font-semibold text-primary">{value}</span>
@@ -960,17 +1037,35 @@ export default function EntitlementTab({
       width: "12%",
       render: (_, record) => <span className="whitespace-nowrap">{measure(record)}</span>,
       exportValue: (record) => measure(record),
+      // By the days or hours asked for; a request with neither sorts last.
+      sort: "number",
+      sortValue: (record) =>
+        modeOf(record.kind) === "leaveDays"
+          ? record.days
+          : modeOf(record.kind) === "hours"
+            ? record.hours
+            : null,
     },
     {
       key: "amount",
       header: "Amount (OMR)",
       width: "16%",
+      sort: "money",
+      sortValue: (record) => record.amount,
       render: (value) => <span className="whitespace-nowrap font-bold text-green-700">{amountValue(value)}</span>,
     },
     {
       key: "status",
       header: "Status",
       width: "12%",
+      // Waiting on a decision, then on payment, then settled; refused last.
+      sort: "status",
+      sortOrder: [
+        ENTITLEMENT_PENDING,
+        ENTITLEMENT_AWAITING,
+        ENTITLEMENT_APPROVED,
+        ENTITLEMENT_REJECTED,
+      ],
       render: (value) => (
         <span
           className={cn(
@@ -2726,43 +2821,8 @@ export default function EntitlementTab({
             </DialogTitle>
           </DialogHeader>
 
-          {sheet?.shared && !open ? null : entitlementHistory(open).length === 0 ? (
-            <EmptyState>Nothing has happened to this request yet.</EmptyState>
-          ) : (
-            <RecordTable minWidth={980}>
-              <HeadRow>
-                <Th width="14%">Date &amp; Time</Th>
-                <Th width="14%">Action</Th>
-                <Th width="11%">Previous Status</Th>
-                <Th width="11%">New Status</Th>
-                <Th width="14%">Performed By</Th>
-                <Th width="10%" className="text-end">
-                  Amount
-                </Th>
-                <Th width="16%">Comment</Th>
-                <Th width="10%">Reference</Th>
-              </HeadRow>
-              <tbody>
-                {entitlementHistory(open).map((event, index) => (
-                  <Row key={index}>
-                    <Td className="whitespace-nowrap text-primary">
-                      {formatDate(event.at)}
-                    </Td>
-                    <Td className="text-primary">{event.action}</Td>
-                    <Td className="text-muted-foreground">{event.from}</Td>
-                    <Td className="text-primary">{event.to}</Td>
-                    <Td className="text-primary">{shortName(event.by)}</Td>
-                    <Td className="whitespace-nowrap text-end font-semibold text-green-700">
-                      {amountValue(event.amount)}
-                    </Td>
-                    <Td className="text-start text-muted-foreground">
-                      {event.comment || "-"}
-                    </Td>
-                    <Td className="text-primary">{event.reference || "-"}</Td>
-                  </Row>
-                ))}
-              </tbody>
-            </RecordTable>
+          {sheet?.shared && !open ? null : (
+            <HistoryTable events={entitlementHistory(open)} />
           )}
 
           {/* What this employee has asked for of this kind before. */}
@@ -2770,6 +2830,7 @@ export default function EntitlementTab({
             <RequestTable
               rows={mine}
               columns={columns}
+              dataset={dataset}
               searchPlaceholder={"Search " + label.toLowerCase() + " requests..."}
               itemLabel={label.toLowerCase() + " requests"}
               exportFileName={kind + ".csv"}
@@ -2813,6 +2874,7 @@ export default function EntitlementTab({
           <RequestTable
             rows={mine}
             columns={columns}
+            dataset={dataset}
             searchPlaceholder={"Search " + label.toLowerCase() + " requests..."}
             itemLabel={label.toLowerCase() + " requests"}
             exportFileName={kind + ".csv"}
@@ -2823,6 +2885,7 @@ export default function EntitlementTab({
       <RequestTable
         rows={mine}
         columns={columns}
+        dataset={dataset}
         searchPlaceholder={"Search " + label.toLowerCase() + " requests..."}
         itemLabel={label.toLowerCase() + " requests"}
         exportFileName={kind + ".csv"}

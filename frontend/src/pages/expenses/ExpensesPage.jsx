@@ -9,6 +9,7 @@ import PageHeader from "@/components/shared/PageHeader";
 import { Wallet } from "lucide-react";
 import { useExpenses } from "@/lib/expenses/context";
 import { useSuppliers } from "@/lib/suppliers/context";
+import useDataset from "@/lib/api/useDataset";
 import { expenseColumns } from "./expenseColumns";
 import { expenseRecords, money } from "./expenseData";
 
@@ -89,6 +90,12 @@ export default function ExpensesPage() {
   const navigate = useNavigate();
   const { expenses, invoices } = useExpenses();
   const { suppliers } = useSuppliers();
+  // The expenses are kept in the browser, but each row's account is read off
+  // the supplier directory loaded at sign-in: skeletons until it lands.
+  // The rows live in the browser; only one column reads "suppliers" from the
+  // API. Followed so that column refreshes when it loads, but not passed to
+  // the table: a failed load must not hide records that are all here.
+  useDataset(["suppliers"]);
 
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);

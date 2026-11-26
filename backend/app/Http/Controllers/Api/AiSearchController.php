@@ -80,7 +80,7 @@ class AiSearchController extends Controller
         The query syntax (terms are separated by spaces and ALL must match):
         - word                 the word appears somewhere on the row (matched at the start of a word, any letter case)
         - "two words"          the phrase, as written
-        - key:value            only in that column. Quote a value with spaces: key:"Legal Services"
+        - key:value            only in that column. Quote a value with spaces: key:"Financial / Accounting"
         - -term or -key:value  rows that do NOT match
         - key>value, key>=value, key<value, key<=value   for number and date columns. Dates are YYYY-MM-DD.
         - expired              any date on the row has passed

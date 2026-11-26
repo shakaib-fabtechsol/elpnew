@@ -16,6 +16,16 @@ export const aiApi = {
     return json.data;
   },
 
+  /**
+   * An employee's CV as one professional paragraph, from what the form holds
+   * and what the papers said. Worded by the AI where one is connected, and by
+   * rule otherwise - either way there is a paragraph to edit.
+   */
+  async cv(facts) {
+    const json = await api("ai/cv", { method: "POST", body: facts });
+    return json.data;
+  },
+
   /** A question in plain words, as a query in the search box's own syntax. */
   async search(question, fields) {
     const json = await api("ai/search", { method: "POST", body: { question, fields } });

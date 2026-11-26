@@ -11,10 +11,16 @@ import { employeeRecords } from "@/pages/employees/employeeData";
 /** What the screens call a person's role, from what they do. */
 const ROLE_OF = {
   Partner: "Partner",
+  "Founding Partner": "Partner",
+  "Managing Partner": "Partner",
   Lawyer: "Lawyer",
+  "Trainee Lawyer": "Lawyer",
   "Legal Consultant": "Advisor",
   Accountant: "Accountant",
+  "Senior Accountant": "Accountant",
+  "Accounting Intern": "Accountant",
   "Administrative Assistant": "Administrative",
+  "Administrative Intern": "Administrative",
 };
 
 export function employeeFromApi(e) {
@@ -27,6 +33,10 @@ export function employeeFromApi(e) {
     role: ROLE_OF[e.occupation] || e.occupation || "",
     email: e.workEmail || "",
     socialProtection: e.socialProtection === false ? "No" : "Yes",
+    // Paid unless the record says otherwise.
+    paid: e.paid === false ? "No" : "Yes",
+    // A list, not a field of text: kept as the array it is.
+    languages: Array.isArray(e.languages) ? e.languages : [],
     annualLeaveDays: e.annualLeaveDays == null ? "" : String(e.annualLeaveDays),
   };
 }
@@ -41,11 +51,13 @@ const FIELDS = [
   "status", "branch", "dateOfJoining", "employmentType", "employmentEndDate", "category",
   "jobLevel", "department", "occupation", "practiceLevel", "position", "grade",
   "lastWorkingDate", "decisionMaker", "reasonForLeaving", "managementReason",
-  "contractType", "contractStartDate", "probationPeriod", "noticePeriod", "annualLeaveDays",
+  "contractType", "contractStartDate", "trainingStart", "trainingEnd", "probationPeriod", "noticePeriod", "annualLeaveDays",
   "salary", "special", "housing", "phoneAllowance", "transport", "electricity", "water",
   "loan", "salaryAdvance", "disciplinary", "otherDeduction", "administrative", "salaryEffectiveDate",
   "bankName", "accountHolder", "accountNumber", "iban", "swiftCode",
   "socialProtection", "spRegistrationNo", "spRegistrationDate",
+  "professionalClassification", "staffCategory", "paid",
+  "highestEducation", "languages", "cvSummary",
 ];
 
 /** What a record cannot be without: left out of a change rather than emptied. */
@@ -61,9 +73,11 @@ function employeeBody(form, { change = false } = {}) {
   FIELDS.forEach((key) => {
     if (!(key in form)) return;
     const value = form[key];
-    body[key] = value === "" || value === undefined ? null : value;
+    body[key] =
+      value === "" || value === undefined || (Array.isArray(value) && !value.length) ? null : value;
   });
   if ("socialProtection" in form) body.socialProtection = form.socialProtection !== "No";
+  if ("paid" in form) body.paid = form.paid !== "No";
   if (body.annualLeaveDays !== null && body.annualLeaveDays !== undefined) {
     body.annualLeaveDays = Number(body.annualLeaveDays);
   }

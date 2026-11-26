@@ -121,7 +121,8 @@ export default function FilterPanel({
           <SlidersHorizontal strokeWidth={1.5} />
           {label}
           {chips.length > 0 && (
-            <span className="rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+            // How many filters are on, in the approved search layout's round badge.
+            <span className="inline-flex size-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
               {chips.length}
             </span>
           )}

@@ -1,7 +1,6 @@
 import { Fragment, useState } from "react";
 import ExcelIcon from "@/components/shared/ExcelIcon";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -9,7 +8,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EmptyState } from "@/components/shared/panels";
+import {
+  RecordTable,
+  HeadRow,
+  Th,
+  EmptyRow,
+  SkeletonRows,
+  ErrorRow,
+} from "@/components/shared/RecordTable";
+import useDataset from "@/lib/api/useDataset";
 import AiSearch from "@/components/shared/AiSearch";
 import { Check, Sparkles } from "lucide-react";
 import CircularBrief from "@/components/shared/CircularBrief";
@@ -38,6 +45,9 @@ import { shortName } from "@/lib/shortName";
  */
 export default function EmployeeCircularsSection({ employee, self = false }) {
   const { circulars, acknowledge } = useCirculars();
+  // The circulars are loaded at sign-in; read here, where the rows are drawn,
+  // so the table shows them coming, or that they could not be fetched.
+  const dataset = useDataset(["circulars"]);
 
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -163,139 +173,126 @@ export default function EmployeeCircularsSection({ employee, self = false }) {
         </div>
       </div>
 
-      <Card>
-        <CardContent className="overflow-x-auto p-0">
-          {listed.length === 0 ? (
-            <div className="p-6">
-              <EmptyState>
-                {mine.length === 0
-                  ? "No circulars have been addressed to this employee."
-                  : "No circulars match that search."}
-              </EmptyState>
-            </div>
-          ) : (
-            <table className="w-full min-w-[880px] border text-sm">
-              <thead>
-                <tr className="border-b bg-secondary/60 text-start text-primary">
-                  <th className="p-3 font-semibold" style={{ width: "12%" }}>
-                    Circular No.
-                  </th>
-                  <th className="p-3 font-semibold" style={{ width: "20%" }}>
-                    Subject / Content
-                  </th>
-                  <th className="p-3 font-semibold" style={{ width: "11%" }}>
-                    Date
-                  </th>
-                  <th className="p-3 font-semibold" style={{ width: "13%" }}>
-                    Target Group
-                  </th>
-                  <th className="p-3 font-semibold" style={{ width: "14%" }}>
-                    Issued By
-                  </th>
-                  <th className="p-3 font-semibold" style={{ width: "18%" }}>
-                    Acknowledgement
-                  </th>
-                  {/* Where a circular stands in the register is the firm's
-                      own tracking, so it is kept off the employee's own
-                      page along with everything else about how the circular
-                      is being managed. */}
-                  {!self && (
-                    <th className="p-3 font-semibold" style={{ width: "12%" }}>
-                      Status
-                    </th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((circular) => {
-                  const mineAck = acknowledgementBy(circular, employee.name);
-                  return (
-                    <Fragment key={circular.id}>
-                    <tr className="border-b align-top transition-colors last:border-0 hover:bg-primary/10">
-                      <td className="whitespace-nowrap p-3 font-semibold text-primary">
-                        {circular.circularNo}
-                      </td>
-                      <td className="p-3">
-                        <p>{circular.content}</p>
-                        {/* What it says in short, what to do and by when -
-                            and any question about it, answered. */}
-                        <button
-                          type="button"
-                          aria-expanded={briefOf === circular.id}
-                          onClick={() => setBriefOf(briefOf === circular.id ? null : circular.id)}
-                          className="mt-2 inline-flex items-center gap-1.5 rounded text-xs font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          <Sparkles className="size-3.5" aria-hidden="true" />
-                          {briefOf === circular.id ? "Hide AI Brief" : "AI Brief"}
-                        </button>
-                      </td>
-                      <td className="whitespace-nowrap p-3">
-                        {formatDate(circular.date)}
-                      </td>
-                      <td className="p-3">{circular.targetGroup}</td>
-                      <td className="p-3">{shortName(circular.issuedBy)}</td>
-                      {/* Their own acknowledgement, and nobody else's */}
-                      <td className="p-3">
-                        {mineAck ? (
-                          <span className="flex items-start gap-1.5 text-green-700">
-                            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                            <span>
-                              <span className="block font-medium">
-                                Acknowledged
-                              </span>
-                              <span className="block text-xs text-muted-foreground">
-                                {mineAck.at}
-                              </span>
-                            </span>
-                          </span>
-                        ) : circular.status === ACTIVE && own ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => acknowledge(circular.id)}
-                          >
-                            I Acknowledge
-                          </Button>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            Not acknowledged
-                          </span>
-                        )}
-                      </td>
-                      {/* A circular still in force says nothing: only one
-                          that has been superseded or cancelled does. */}
-                      {!self && (
-                        <td className="p-3">
-                          {circular.status !== ACTIVE && (
-                            <span
-                              className={cn(
-                                "inline-block whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold",
-                                STATUS_TONE[circular.status]
-                              )}
-                            >
-                              {STATUS_LABEL[circular.status]}
-                            </span>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                    {briefOf === circular.id && (
-                      <tr className="border-b last:border-0">
-                        <td colSpan={self ? 6 : 7} className="bg-muted/30 p-4">
-                          <CircularBrief circular={circular} own={own} canRefresh={Boolean(CURRENT_USER.permissions?.manage)} />
-                        </td>
-                      </tr>
-                    )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+      {/* On the shared table, so its heading stays in sight while a long
+          list scrolls under it. */}
+      <RecordTable minWidth={880}>
+        <HeadRow>
+          <Th width="12%">Circular No.</Th>
+          <Th width="20%">Subject / Content</Th>
+          <Th width="11%">Date</Th>
+          <Th width="13%">Target Group</Th>
+          <Th width="14%">Issued By</Th>
+          <Th width="18%">Acknowledgement</Th>
+          {/* Where a circular stands in the register is the firm's
+              own tracking, so it is kept off the employee's own
+              page along with everything else about how the circular
+              is being managed. */}
+          {!self && <Th width="12%">Status</Th>}
+        </HeadRow>
+        <tbody>
+          {dataset.status === "loading" && (
+            <SkeletonRows columns={self ? 6 : 7} rows={5} shapes={[null, "lines"]} />
           )}
-        </CardContent>
-      </Card>
+          {dataset.status === "failed" && (
+            <ErrorRow colSpan={self ? 6 : 7} label="circulars" onRetry={dataset.retry} />
+          )}
+          {dataset.status === "ready" && listed.length === 0 && (
+            <EmptyRow
+              colSpan={self ? 6 : 7}
+              label="circulars"
+              searching={search !== ""}
+              onClearSearch={() => {
+                setQuery("");
+                setPage(1);
+              }}
+            />
+          )}
+          {dataset.status === "ready" && shown.map((circular) => {
+            const mineAck = acknowledgementBy(circular, employee.name);
+            return (
+              <Fragment key={circular.id}>
+              <tr className="border-b align-top transition-colors last:border-0 hover:bg-primary/10">
+                <td className="whitespace-nowrap p-3 font-semibold text-primary">
+                  {circular.circularNo}
+                </td>
+                <td className="p-3">
+                  <p>{circular.content}</p>
+                  {/* What it says in short, what to do and by when -
+                      and any question about it, answered. */}
+                  <button
+                    type="button"
+                    aria-expanded={briefOf === circular.id}
+                    onClick={() => setBriefOf(briefOf === circular.id ? null : circular.id)}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded text-xs font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Sparkles className="size-3.5" aria-hidden="true" />
+                    {briefOf === circular.id ? "Hide AI Brief" : "AI Brief"}
+                  </button>
+                </td>
+                <td className="whitespace-nowrap p-3">
+                  {formatDate(circular.date)}
+                </td>
+                <td className="p-3">{circular.targetGroup}</td>
+                <td className="p-3">{shortName(circular.issuedBy)}</td>
+                {/* Their own acknowledgement, and nobody else's */}
+                <td className="p-3">
+                  {mineAck ? (
+                    <span className="flex items-start gap-1.5 text-green-700">
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        <span className="block font-medium">
+                          Acknowledged
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {mineAck.at}
+                        </span>
+                      </span>
+                    </span>
+                  ) : circular.status === ACTIVE && own ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => acknowledge(circular.id)}
+                    >
+                      I Acknowledge
+                    </Button>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Not acknowledged
+                    </span>
+                  )}
+                </td>
+                {/* A circular still in force says nothing: only one
+                    that has been superseded or cancelled does. */}
+                {!self && (
+                  <td className="p-3">
+                    {circular.status !== ACTIVE && (
+                      <span
+                        className={cn(
+                          "inline-block whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold",
+                          STATUS_TONE[circular.status]
+                        )}
+                      >
+                        {STATUS_LABEL[circular.status]}
+                      </span>
+                    )}
+                  </td>
+                )}
+              </tr>
+              {briefOf === circular.id && (
+                <tr className="border-b last:border-0">
+                  <td colSpan={self ? 6 : 7} className="bg-muted/30 p-4">
+                    <CircularBrief circular={circular} own={own} canRefresh={Boolean(CURRENT_USER.permissions?.manage)} />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </RecordTable>
 
-      {listed.length > 0 && (
+      {dataset.status === "ready" && listed.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
           <span>
             Showing {start + 1} to {Math.min(start + pageSize, listed.length)}{" "}

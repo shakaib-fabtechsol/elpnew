@@ -9,11 +9,11 @@ use Illuminate\Support\Facades\Http;
 /** System Permissions: what an employee may see and do, and that it is enforced. */
 class PermissionTest extends ApiTestCase
 {
-    private const AHMED = 3;   // lawyer, Legal Services
+    private const AHMED = 3;   // lawyer, Judicial
 
-    private const AISHA = 7;   // lawyer, Legal Services
+    private const AISHA = 7;   // lawyer, Judicial
 
-    private const SARAH = 4;   // Administration
+    private const SARAH = 4;   // Administrative
 
     private function state(array $over = []): array
     {
@@ -64,7 +64,7 @@ class PermissionTest extends ApiTestCase
         $grants = [...PermissionCatalog::template('lawyer')['grants'], 'leaveRequests.approve', 'not.a.permission'];
 
         $page = $this->as('admin')->putJson($this->api('employees/'.self::AISHA.'/permissions'), $this->state([
-            'grants' => $grants, 'scope' => 'department', 'departments' => ['Legal Services'], 'approvalLimit' => 250,
+            'grants' => $grants, 'scope' => 'department', 'departments' => ['Judicial'], 'approvalLimit' => 250,
         ]))->assertOk()
             ->assertJsonPath('data.settings.custom', true)
             ->assertJsonPath('data.settings.scope', 'department')
@@ -78,7 +78,7 @@ class PermissionTest extends ApiTestCase
 
         // Saving the same again writes nothing new.
         $this->as('admin')->putJson($this->api('employees/'.self::AISHA.'/permissions'), $this->state([
-            'grants' => $grants, 'scope' => 'department', 'departments' => ['Legal Services'], 'approvalLimit' => 250,
+            'grants' => $grants, 'scope' => 'department', 'departments' => ['Judicial'], 'approvalLimit' => 250,
         ]))->assertJsonCount(1, 'data.history');
 
         $this->as('admin')->putJson($this->api('employees/'.self::AISHA.'/permissions'), $this->state(['scope' => 'department']))
@@ -89,13 +89,13 @@ class PermissionTest extends ApiTestCase
     {
         $this->as('aisha')->getJson($this->api('employees/'.self::AHMED))->assertForbidden();
 
-        $this->grant(self::AISHA, ['scope' => 'department', 'departments' => ['Legal Services']]);
+        $this->grant(self::AISHA, ['scope' => 'department', 'departments' => ['Judicial']]);
 
         $this->as('aisha')->getJson($this->api('employees/'.self::AHMED))->assertOk();
         $this->as('aisha')->getJson($this->api('employees/'.self::SARAH))->assertForbidden();
 
         $ids = array_column($this->as('aisha')->getJson($this->api('employees').'?perPage=100')->json('data'), 'department');
-        $this->assertSame(['Legal Services'], array_values(array_unique($ids)));
+        $this->assertSame(['Judicial'], array_values(array_unique($ids)));
     }
 
     public function test_approving_follows_the_permission_and_the_approval_limit(): void
@@ -107,7 +107,7 @@ class PermissionTest extends ApiTestCase
         $this->as('aisha')->postJson($this->api("salary-advances/$id/decision"), $approve)->assertForbidden();
 
         // Given approval over her department, up to 100 OMR: this one is above it.
-        $over = ['grants' => [...PermissionCatalog::template('lawyer')['grants'], 'financingRequests.approve', 'financingRequests.reject'], 'scope' => 'department', 'departments' => ['Legal Services']];
+        $over = ['grants' => [...PermissionCatalog::template('lawyer')['grants'], 'financingRequests.approve', 'financingRequests.reject'], 'scope' => 'department', 'departments' => ['Judicial']];
         $this->grant(self::AISHA, [...$over, 'approvalLimit' => 100]);
         $this->as('aisha')->postJson($this->api("salary-advances/$id/decision"), $approve)
             ->assertForbidden()->assertJsonPath('message', 'This is above your approval limit of 100.000 OMR. It needs somebody with higher authority.');
@@ -153,19 +153,19 @@ class PermissionTest extends ApiTestCase
     public function test_confidential_parts_of_a_record_need_their_own_permission(): void
     {
         // Reaching the record is not seeing its salary, bank details or papers.
-        $this->grant(self::AISHA, ['grants' => [...PermissionCatalog::template('lawyer')['grants'], 'employees.view'], 'scope' => 'department', 'departments' => ['Legal Services']]);
+        $this->grant(self::AISHA, ['grants' => [...PermissionCatalog::template('lawyer')['grants'], 'employees.view'], 'scope' => 'department', 'departments' => ['Judicial']]);
         $this->as('aisha')->getJson($this->api('employees/'.self::AHMED))->assertOk()
             ->assertJsonPath('data.salary', null)->assertJsonPath('data.netSalary', null)
             ->assertJsonPath('data.iban', null)->assertJsonPath('data.civilId', null)
             ->assertJsonPath('data.restricted', ['payroll', 'bankDetails', 'identity'])
             ->assertJsonPath('data.name', 'Ahmed Al Balushi');
 
-        $this->grant(self::AISHA, ['grants' => [...PermissionCatalog::template('lawyer')['grants'], 'payroll.view'], 'scope' => 'department', 'departments' => ['Legal Services']]);
+        $this->grant(self::AISHA, ['grants' => [...PermissionCatalog::template('lawyer')['grants'], 'payroll.view'], 'scope' => 'department', 'departments' => ['Judicial']]);
         $this->as('aisha')->getJson($this->api('employees/'.self::AHMED))
             ->assertJsonPath('data.salary', 800)->assertJsonPath('data.restricted', ['bankDetails', 'identity']);
 
         // Somebody who pays requests sees the bank details the payment goes to, whatever else is held back.
-        $this->grant(self::AISHA, ['grants' => [...PermissionCatalog::template('lawyer')['grants'], 'financingRequests.pay'], 'scope' => 'department', 'departments' => ['Legal Services']]);
+        $this->grant(self::AISHA, ['grants' => [...PermissionCatalog::template('lawyer')['grants'], 'financingRequests.pay'], 'scope' => 'department', 'departments' => ['Judicial']]);
         $this->as('aisha')->getJson($this->api('employees/'.self::AHMED))
             ->assertJsonPath('data.restricted', ['payroll', 'identity'])
             ->assertJsonPath('data.bankName', fn ($bank) => filled($bank))
@@ -182,13 +182,13 @@ class PermissionTest extends ApiTestCase
         $this->as('aisha')->patchJson($this->api('employees/'.self::AHMED), ['position' => 'Senior Associate'])->assertForbidden();
         $this->as('aisha')->postJson($this->api('circulars'), $circular)->assertForbidden();
 
-        $this->grant(self::AISHA, ['grants' => [...PermissionCatalog::template('lawyer')['grants'], 'employees.edit', 'circulars.create'], 'scope' => 'department', 'departments' => ['Legal Services']]);
+        $this->grant(self::AISHA, ['grants' => [...PermissionCatalog::template('lawyer')['grants'], 'employees.edit', 'circulars.create'], 'scope' => 'department', 'departments' => ['Judicial']]);
 
         $this->as('aisha')->patchJson($this->api('employees/'.self::AHMED), ['position' => 'Senior Associate'])->assertOk()->assertJsonPath('data.position', 'Senior Associate');
         // Editing reaches only as far as her record access does.
         $this->as('aisha')->patchJson($this->api('employees/'.self::SARAH), ['position' => 'x'])->assertForbidden();
         // Editing is not adding.
-        $this->as('aisha')->postJson($this->api('employees'), ['employeeName' => 'New Person', 'salary' => 500, 'dateOfJoining' => '2026-01-05', 'department' => 'Legal Services', 'occupation' => 'Lawyer'])->assertForbidden();
+        $this->as('aisha')->postJson($this->api('employees'), ['employeeName' => 'New Person', 'salary' => 500, 'dateOfJoining' => '2026-01-05', 'department' => 'Judicial', 'occupation' => 'Lawyer'])->assertForbidden();
         $this->as('aisha')->postJson($this->api('circulars'), $circular)->assertCreated();
     }
 
@@ -268,7 +268,7 @@ class PermissionTest extends ApiTestCase
             'explanation' => 'Adds approval of leave for her department.',
             'grant' => ['leaveRequests.approve', 'made.up', 'cases.view'], // one invented, one she already holds
             'revoke' => ['clients.delete'],                                   // not held: nothing to remove
-            'scope' => 'department', 'departments' => ['Legal Services', 'Nowhere'],
+            'scope' => 'department', 'departments' => ['Judicial', 'Nowhere'],
             'approvalLimit' => 400, 'paymentLimit' => 999, 'setLimits' => ['approvalLimit'],
         ])]]]]]])]);
 
@@ -278,8 +278,19 @@ class PermissionTest extends ApiTestCase
             ->assertJsonPath('data.grant', ['leaveRequests.approve'])
             ->assertJsonPath('data.revoke', [])
             ->assertJsonPath('data.scope', 'department')
-            ->assertJsonPath('data.departments', ['Legal Services'])
+            ->assertJsonPath('data.departments', ['Judicial'])
             ->assertJsonPath('data.approvalLimit', 400)
             ->assertJsonPath('data.paymentLimit', null);
+    }
+
+    public function test_add_employee_reads_the_catalogue_without_an_employee_and_never_offers_admin(): void
+    {
+        $json = $this->as('admin')->getJson($this->api('permissions/catalog'))->assertOk()->json('data');
+
+        $this->assertNotEmpty($json['catalog']);
+        $this->assertNotContains('admin', array_column($json['templates'], 'value'));
+        $this->assertContains('lawyer', array_column($json['templates'], 'value'));
+
+        $this->as('ahmed')->getJson($this->api('permissions/catalog'))->assertForbidden();
     }
 }

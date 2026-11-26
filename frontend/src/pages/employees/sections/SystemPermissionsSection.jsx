@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/select";
 import DateField from "@/components/shared/DateField";
 import { EmptyState } from "@/components/shared/panels";
-import { RecordTable, HeadRow, Th, Row, Td } from "@/components/shared/RecordTable";
+import { RecordTable, HeadRow, Th, Row, Td, EmptyRow } from "@/components/shared/RecordTable";
+import { useTableSort } from "@/lib/sorting";
 import { cn } from "@/lib/utils";
 import { shortName } from "@/lib/shortName";
 import { permissionsApi } from "@/lib/api/modules/permissions";
@@ -676,79 +677,113 @@ export default function SystemPermissionsSection({ employee }) {
           />
         )}
 
-        {page.delegations.length === 0 ? (
-          !lending && <EmptyState>No temporary or delegated access.</EmptyState>
-        ) : (
-          <RecordTable minWidth={900}>
-            <HeadRow>
-              <Th width="30%">Permissions</Th>
-              <Th>From</Th>
-              <Th>Period</Th>
-              <Th width="22%">Reason</Th>
-              <Th>Status</Th>
-              <Th className="text-end">Action</Th>
-            </HeadRow>
-            <tbody>
-              {page.delegations.map((one) => (
-                <Row key={one.id}>
-                  <Td>{one.labels.join(", ")}</Td>
-                  <Td>{one.from ? one.from.name : "Management"}</Td>
-                  <Td className="whitespace-nowrap">
-                    {formatDate(one.startsOn)} – {formatDate(one.endsOn)}
-                  </Td>
-                  <Td>{one.reason}</Td>
-                  <Td>
-                    <span className={cn("rounded-md px-2 py-0.5 text-xs font-semibold", STATE_TONE[one.state])}>{one.state}</span>
-                  </Td>
-                  <Td className="text-end">
-                    {canEdit && (one.state === "Active" || one.state === "Scheduled") ? (
-                      <Button type="button" variant="outline" size="sm" onClick={() => revoke(one.id)} disabled={Boolean(busy)}>
-                        Revoke
-                      </Button>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </Td>
-                </Row>
-              ))}
-            </tbody>
-          </RecordTable>
+        {(page.delegations.length > 0 || !lending) && (
+          <DelegationsTable
+            delegations={page.delegations}
+            canRevoke={canEdit}
+            busy={Boolean(busy)}
+            onRevoke={revoke}
+          />
         )}
       </Panel>
 
       {/* ------------------------------------------------------- history */}
       <Panel title="Permission History" icon={History} note="Every change to this employee's access, who made it and when">
-        {page.history.length === 0 ? (
-          <EmptyState>No changes yet. The permissions are those of the starting point.</EmptyState>
-        ) : (
-          <RecordTable minWidth={860}>
-            <HeadRow>
-              <Th width="16%">Date</Th>
-              <Th width="34%">Change</Th>
-              <Th>Details</Th>
-              <Th width="16%">Changed By</Th>
-            </HeadRow>
-            <tbody>
-              {page.history.map((event) => (
-                <Row key={event.id}>
-                  <Td className="whitespace-nowrap">{stamp(event.at)}</Td>
-                  <Td>{event.summary}</Td>
-                  <Td>
-                    {event.granted.length > 0 && <p className="text-green-800">+ {event.granted.join(", ")}</p>}
-                    {event.revoked.length > 0 && <p className="text-red-800">− {event.revoked.join(", ")}</p>}
-                    {event.reason && <p className="text-muted-foreground">{event.reason}</p>}
-                    {!event.granted.length && !event.revoked.length && !event.reason && (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </Td>
-                  <Td>{shortName(event.by)}</Td>
-                </Row>
-              ))}
-            </tbody>
-          </RecordTable>
-        )}
+        <PermissionHistoryTable history={page.history} />
       </Panel>
     </div>
+  );
+}
+
+/**
+ * The temporary and delegated access, sortable. Its own component because the
+ * section returns early while it loads, and a hook cannot sit after that. The
+ * permissions and the reason are lists and free text, so they are not sorted;
+ * the period sorts by the day it starts.
+ */
+function DelegationsTable({ delegations, canRevoke, busy, onRevoke }) {
+  const { rows, sortProps } = useTableSort(delegations, {
+    from: { sort: "text", sortValue: (one) => (one.from ? one.from.name : "Management") },
+    startsOn: { sort: "date" },
+    state: { sort: "status", sortOrder: Object.keys(STATE_TONE) },
+  });
+
+  return (
+    <RecordTable minWidth={900}>
+      <HeadRow>
+        <Th width="30%">Permissions</Th>
+        <Th {...sortProps("from")}>From</Th>
+        <Th {...sortProps("startsOn")}>Period</Th>
+        <Th width="22%">Reason</Th>
+        <Th {...sortProps("state")}>Status</Th>
+        <Th className="text-end">Action</Th>
+      </HeadRow>
+      <tbody>
+        {rows.length === 0 && <EmptyRow colSpan={6} label="delegated permissions" />}
+        {rows.map((one) => (
+          <Row key={one.id}>
+            <Td>{one.labels.join(", ")}</Td>
+            <Td>{one.from ? one.from.name : "Management"}</Td>
+            <Td className="whitespace-nowrap">
+              {formatDate(one.startsOn)} – {formatDate(one.endsOn)}
+            </Td>
+            <Td>{one.reason}</Td>
+            <Td>
+              <span className={cn("rounded-md px-2 py-0.5 text-xs font-semibold", STATE_TONE[one.state])}>{one.state}</span>
+            </Td>
+            <Td className="text-end">
+              {canRevoke && (one.state === "Active" || one.state === "Scheduled") ? (
+                <Button type="button" variant="outline" size="sm" onClick={() => onRevoke(one.id)} disabled={busy}>
+                  Revoke
+                </Button>
+              ) : (
+                <span className="text-muted-foreground">-</span>
+              )}
+            </Td>
+          </Row>
+        ))}
+      </tbody>
+    </RecordTable>
+  );
+}
+
+/**
+ * Every change to the employee's access. The change and its details are
+ * descriptive, so only when it was made and who made it sort.
+ */
+function PermissionHistoryTable({ history }) {
+  const { rows, sortProps } = useTableSort(history, {
+    at: { sort: "date" },
+    by: { sort: "text", sortValue: (event) => shortName(event.by) },
+  });
+
+  return (
+    <RecordTable minWidth={860}>
+      <HeadRow>
+        <Th width="16%" {...sortProps("at")}>Date</Th>
+        <Th width="34%">Change</Th>
+        <Th>Details</Th>
+        <Th width="16%" {...sortProps("by")}>Changed By</Th>
+      </HeadRow>
+      <tbody>
+        {rows.length === 0 && <EmptyRow colSpan={4} label="permission changes" />}
+        {rows.map((event) => (
+          <Row key={event.id}>
+            <Td className="whitespace-nowrap">{stamp(event.at)}</Td>
+            <Td>{event.summary}</Td>
+            <Td>
+              {event.granted.length > 0 && <p className="text-green-800">+ {event.granted.join(", ")}</p>}
+              {event.revoked.length > 0 && <p className="text-red-800">− {event.revoked.join(", ")}</p>}
+              {event.reason && <p className="text-muted-foreground">{event.reason}</p>}
+              {!event.granted.length && !event.revoked.length && !event.reason && (
+                <span className="text-muted-foreground">-</span>
+              )}
+            </Td>
+            <Td>{shortName(event.by)}</Td>
+          </Row>
+        ))}
+      </tbody>
+    </RecordTable>
   );
 }
 

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useReseed } from "@/lib/api/useDataset";
 import { BonusesContext } from "./context";
 import { initialBonuses } from "@/pages/employees/bonusData";
 import { bonusesApi } from "@/lib/api/modules/bonuses";
@@ -16,6 +17,8 @@ import { upserted } from "@/lib/api/store";
  */
 export default function BonusesProvider({ children }) {
   const [bonuses, setBonuses] = useState(initialBonuses);
+  // A Retry on a table reloads "bonuses"; take the fresh records in.
+  useReseed("bonuses", () => setBonuses([...initialBonuses]));
 
   const value = useMemo(() => {
     const keep = (record) => {
