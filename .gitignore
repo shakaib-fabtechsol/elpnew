@@ -28,3 +28,8 @@ dist-ssr
 
 # Design sheets and meeting notes: local only, never committed
 docs/
+
+# Voice notes and other media from the client: local only
+*.opus
+*.ogg
+*.m4a
