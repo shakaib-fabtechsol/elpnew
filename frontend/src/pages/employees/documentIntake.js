@@ -39,7 +39,10 @@ export const intakeType = (key) => INTAKE_TYPES.find((type) => type.key === key)
 export const intakeTypesFor = (values, nonOmani) =>
   INTAKE_TYPES.filter((type) => {
     if (type.key === "passport") return nonOmani;
-    if (type.key === "lawyerCard") return values.professionalClassification !== "Non-Lawyer";
+    // While adding, the card shows until "Non-Lawyer" is chosen; on a record,
+    // only for a lawyer.
+    if (type.key === "lawyerCard")
+      return values.professionalClassification ? isLawyer(values) : !values.id || isLawyer(values);
     return true;
   });
 
@@ -50,7 +53,7 @@ export const requiredIntakeTypes = (values, nonOmani) =>
     .filter((key) =>
       ["photo", "civilId", "contract"].includes(key) ||
       (key === "passport" && nonOmani) ||
-      (key === "lawyerCard" && values.professionalClassification === "Lawyer")
+      (key === "lawyerCard" && isLawyer(values))
     );
 
 /** What a paper may be uploaded as, and how large. */

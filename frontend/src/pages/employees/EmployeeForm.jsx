@@ -1791,8 +1791,23 @@ export default function EmployeeForm({ self }) {
   // The cards offered and the papers required, from those answers.
   const intakeCards = intakeTypesFor(formData, nonOmani);
   const requiredCards = requiredIntakeTypes(formData, nonOmani);
-  const cardsIn = requiredCards.filter((key) =>
-    intake.docs.some((doc) => doc.typeKey === key && doc.status !== "failed")
+  // A required paper is in once it is uploaded here or - on a saved record -
+  // already filed. The Civil ID is filed as a National ID or a Residence
+  // Card; papers the API files as "Other" carry their kind in the notes.
+  const filedAs = (key) => {
+    const kind = intakeType(key);
+    if (!kind) return false;
+    return documents.some((paper) =>
+      key === "civilId"
+        ? ["National ID", "Residence Card"].includes(paper.type)
+        : paper.type === kind.fileAs ||
+          (paper.type === "Other" && String(paper.notes || "").startsWith(kind.fileAs))
+    );
+  };
+  const cardsIn = requiredCards.filter(
+    (key) =>
+      intake.docs.some((doc) => doc.typeKey === key && doc.status !== "failed") ||
+      (!isAdding && filedAs(key))
   ).length;
   // The photo chosen for the new employee, shown on the summary card.
   const photoDoc = intake.docs.find((doc) => doc.typeKey === "photo" && doc.file);
@@ -5046,6 +5061,13 @@ export default function EmployeeForm({ self }) {
                 {isProfile && tab === "documents" && (
                   <DocumentIntake
                     intake={intake}
+                    // The same cards and count as when the employee was added,
+                    // decided by the record's own answers: a Passport only for
+                    // somebody who is not Omani, a Lawyer Card only for a lawyer.
+                    title="Documents & Photo"
+                    note="Upload employee documents and photo. The required documents are determined by the employee's details."
+                    types={intakeCards}
+                    progress={<RequiredProgress done={cardsIn} total={requiredCards.length} />}
                     filed={documents.map((paper) => ({
                       id: "filed-" + paper.id,
                       fileName: paper.fileName || paper.type,
