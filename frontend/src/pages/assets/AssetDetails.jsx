@@ -292,7 +292,7 @@ function AssetExpensesTable({ expenses }) {
 
   return (
     <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full min-w-200 border text-sm">
+      <table className="sheet-table w-full min-w-200 border text-sm">
         <thead>
           <tr className="border-b bg-secondary/60 text-start text-primary">
             <th className="p-3 font-semibold">No.</th>
@@ -669,7 +669,7 @@ export default function AssetDetails() {
                         <EmptyState>No documents have been uploaded for this asset.</EmptyState>
                       ) : (
                         <div className="overflow-x-auto rounded-lg border">
-                          <table className="w-full min-w-140 border text-sm">
+                          <table className="sheet-table w-full min-w-140 border text-sm">
                             <thead>
                               <tr className="border-b bg-secondary/60 text-start text-primary">
                                 <th className="p-3 font-semibold">No.</th>

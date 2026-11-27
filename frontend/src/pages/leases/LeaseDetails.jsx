@@ -92,7 +92,7 @@ const draftFrom = (lease) =>
 function InstallmentTable({ rows, byCheque, onCheque, editable }) {
   return (
     <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full min-w-[640px] border text-sm">
+      <table className="sheet-table w-full min-w-[640px] border text-sm">
         <thead>
           <tr className="border-b bg-secondary/60 text-start text-primary">
             <th className="p-3 font-semibold">No.</th>
@@ -165,7 +165,7 @@ function PaymentScheduleTable({ rows, lease, bankAccounts, openNo, onOpen }) {
   return (
     <div className="space-y-4">
       <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full min-w-250 border text-sm">
+        <table className="sheet-table w-full min-w-250 border text-sm">
           <thead>
             <tr className="border-b bg-secondary/60 text-start text-primary">
               <th className="p-3 font-semibold" style={{ width: "13%" }}>Installment No.</th>

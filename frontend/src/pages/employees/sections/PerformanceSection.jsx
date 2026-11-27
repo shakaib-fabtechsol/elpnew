@@ -306,7 +306,7 @@ export default function PerformanceSection() {
           Performance Summary
         </p>
         <div className="overflow-x-auto p-4">
-          <table className="w-full min-w-[860px] border text-sm">
+          <table className="sheet-table w-full min-w-[860px] border text-sm">
             <thead>
               <tr className="border-b bg-muted/50 text-start text-xs text-muted-foreground">
                 <th className="p-3 font-semibold">Metric</th>

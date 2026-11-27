@@ -538,7 +538,7 @@ export default function LoanLedger({
         {/* Capped in height and scrolled inside, so the heading row stays in
             sight over a long list, as on every table in the system. */}
         <div className="max-h-[min(70vh,720px)] overflow-auto">
-          <table className="w-full min-w-[1100px] text-sm">
+          <table className="sheet-table w-full min-w-[1100px] text-sm">
             <thead className="sticky top-0 z-10 bg-table-head text-xs font-semibold text-primary">
               <tr>
                 <th className="px-4 py-3 text-start">Loan No.</th>
@@ -664,7 +664,7 @@ export default function LoanLedger({
                             <p className="pb-1 text-sm font-semibold text-primary">
                               Installment Schedule ({paidCount} of {loan.installments.length} paid)
                             </p>
-                            <table className="w-full text-xs">
+                            <table className="sheet-table w-full text-xs">
                               <thead className="text-primary/70">
                                 <tr>
                                   <th className="w-20 px-2 py-1.5 text-start font-medium">Inst. No.</th>
@@ -772,7 +772,7 @@ export function ExistingLoans({ records }) {
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full min-w-[820px] text-sm">
+          <table className="sheet-table w-full min-w-[820px] text-sm">
             <thead className="bg-table-head text-xs font-semibold text-primary">
               <tr>
                 <th className="w-8 px-3 py-2.5" />

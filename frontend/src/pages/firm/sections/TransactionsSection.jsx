@@ -326,7 +326,7 @@ export default function TransactionsSection({
       {/* Everything that has moved through the account, and where it left it */}
       <Card>
         <CardContent className="overflow-x-auto p-0">
-          <table className="w-full min-w-[900px] border text-sm">
+          <table className="sheet-table w-full min-w-[900px] border text-sm">
             <thead>
               <tr className="border-b bg-secondary text-start text-sm font-bold text-primary">
                 <th className="p-3">Date</th>

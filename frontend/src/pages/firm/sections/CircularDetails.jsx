@@ -74,7 +74,7 @@ export default function CircularDetails({ circular, onOpenChange }) {
         </div>
 
         <div className="max-h-96 overflow-y-auto rounded-lg border">
-          <table className="w-full border text-sm">
+          <table className="sheet-table w-full border text-sm">
             <thead className="sticky top-0 bg-muted/90">
               <tr className="border-b text-start text-xs text-muted-foreground">
                 <th className="p-3 font-semibold">Employee</th>

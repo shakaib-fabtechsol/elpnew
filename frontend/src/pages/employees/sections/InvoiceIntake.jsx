@@ -141,7 +141,7 @@ export function InvoiceAnalysis({ invoice, risk, title = "AI Invoice Analysis", 
       </div>
 
       <div className="overflow-x-auto rounded-lg border bg-white">
-        <table className="w-full min-w-[520px] text-sm">
+        <table className="sheet-table w-full min-w-[520px] text-sm">
           <thead className="bg-table-head text-xs font-semibold text-primary">
             <tr>
               <th className="px-3 py-2 text-start">Item</th>

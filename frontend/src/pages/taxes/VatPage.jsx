@@ -340,7 +340,7 @@ export default function VatPage() {
             note="One return a quarter, due by the end of the month after it"
           />
           <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full min-w-240 border text-sm">
+            <table className="sheet-table w-full min-w-240 border text-sm">
               <thead>
                 <tr className="border-b bg-secondary/60 text-start text-primary">
                   <th className="p-3 font-semibold">Period</th>

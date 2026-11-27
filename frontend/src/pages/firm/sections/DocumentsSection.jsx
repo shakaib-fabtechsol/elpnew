@@ -297,7 +297,7 @@ export default function DocumentsSection({ canEdit }) {
               <EmptyState>No documents on file yet.</EmptyState>
             </div>
           ) : (
-            <table className="w-full min-w-[820px] border text-sm">
+            <table className="sheet-table w-full min-w-[820px] border text-sm">
               <thead>
                 <tr className="border-b bg-muted/50 text-start text-xs text-muted-foreground">
                   <th className="p-3 font-semibold">Document ID</th>

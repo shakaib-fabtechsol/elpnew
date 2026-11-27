@@ -352,7 +352,7 @@ export default function DocumentIntake({
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-190 text-sm">
+              <table className="sheet-table w-full min-w-190 text-sm">
                 <thead className="bg-table-head text-start text-xs font-semibold text-primary">
                   <tr>
                     <th className="px-4 py-2 text-start">Document Name</th>

@@ -872,6 +872,45 @@
   }
 }
 /*
+ * A table drawn by hand (not with DataTable or RecordTable) in the look every
+ * SADEED table has, the client's Employees sheet: centred bold headings on
+ * the heading tint, a thin rule between columns and under each row, plain
+ * white rows, content in the middle of each cell. The table opts in with the
+ * class "sheet-table". Unlayered, so it outranks whatever padding, weight or
+ * alignment each heading was written with; a cell keeps its own alignment, so
+ * money still reads from the end. Before the hover rule, so hover still wins.
+ */
+.sheet-table thead tr {
+  background-color: var(--table-head);
+  border-bottom: 1px solid var(--container-border);
+}
+.sheet-table th {
+  padding: 0.75rem 1rem;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--primary);
+  border-inline-end: 1px solid var(--container-border);
+}
+.sheet-table td {
+  padding: 0.75rem 1rem;
+  vertical-align: middle;
+  border-inline-end: 1px solid var(--container-border);
+}
+.sheet-table th:last-child,
+.sheet-table td:last-child {
+  border-inline-end: 0;
+}
+.sheet-table tbody tr {
+  background-color: var(--card);
+  border-bottom: 1px solid var(--container-border);
+}
+.sheet-table tbody tr:last-child {
+  border-bottom: 0;
+}
+
+/*
  * Every table row, on hover: the whole row turns light blue, and nothing else
  * changes - no shadow, no border, no change of size, text as it was. Set on
  * the row and on its cells, so a cell with a background of its own (a zebra

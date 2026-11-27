@@ -266,7 +266,7 @@ export default function BranchesSection({ canEdit }) {
           worth having in view while it is being filled in. */}
       <Card>
         <CardContent className="overflow-x-auto p-0">
-          <table className="w-full min-w-[720px] border text-sm">
+          <table className="sheet-table w-full min-w-[720px] border text-sm">
             <thead>
               <tr className="border-b bg-secondary/60 text-start text-primary">
                 <th className="p-3 font-semibold">Branch No.</th>

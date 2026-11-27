@@ -579,7 +579,7 @@ function SupplierHistoryDialog({ invoice, invoices, accountFor, onOpenChange }) 
           </EmptyState>
         ) : (
           <div className="max-h-[60vh] overflow-auto">
-            <table className="w-full min-w-[720px] border text-sm">
+            <table className="sheet-table w-full min-w-[720px] border text-sm">
               <thead>
                 <tr className="border-b text-start text-xs text-muted-foreground">
                   <th className="pb-2 font-medium">Id</th>
@@ -1077,7 +1077,7 @@ export default function GeneralInvoices({ partnersOnly = false }) {
                     Expenses ({invoice.lines.length})
                   </p>
                   <div className="overflow-x-auto">
-                  <table className="w-full min-w-[720px] border text-sm">
+                  <table className="sheet-table w-full min-w-[720px] border text-sm">
                     <thead>
                       <tr className="border-b bg-muted/40 text-start text-xs text-muted-foreground">
                         <th className="px-4 py-2 font-medium">#</th>

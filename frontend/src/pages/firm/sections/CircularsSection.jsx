@@ -683,7 +683,7 @@ export default function CircularsSection({ canEdit }) {
         {showAudit && (
           <Card className="mt-2">
             <CardContent className="overflow-x-auto p-0">
-              <table className="w-full min-w-[640px] border text-sm">
+              <table className="sheet-table w-full min-w-[640px] border text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50 text-start text-xs text-muted-foreground">
                     <th className="p-3 font-semibold">Date &amp; Time</th>

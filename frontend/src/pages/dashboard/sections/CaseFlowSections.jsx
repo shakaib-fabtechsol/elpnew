@@ -190,7 +190,7 @@ export function CasesReceivedByClient() {
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] border text-sm">
+        <table className="sheet-table w-full min-w-[640px] border text-sm">
           <thead>
             <tr className="border-b bg-secondary/60 text-start text-primary">
               <th className="p-3 font-semibold">Client</th>

@@ -67,7 +67,7 @@ export default function OverviewSection({ onNavigateSection }) {
       {/* Section 8: what each client and case has been invoiced, paid and owes */}
       <SectionCard title="Client and Case Balances" icon={Scale}>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] border text-sm">
+          <table className="sheet-table w-full min-w-[560px] border text-sm">
             <thead>
               <tr className="border-b text-start text-xs text-muted-foreground">
                 <th className="pb-2 font-medium">Client / Case</th>
