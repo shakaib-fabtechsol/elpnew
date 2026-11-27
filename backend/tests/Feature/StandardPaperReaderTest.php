@@ -229,6 +229,29 @@ class StandardPaperReaderTest extends ApiTestCase
         $this->assertSame('2018', $read['qualification']['year']);
     }
 
+    public function test_a_label_ocr_cut_short_still_finds_its_date(): void
+    {
+        // As Tesseract 5.3 reads a card whose photo box crowds the label.
+        $ocr = "SULTANATE OF OMAN - IDENTITY CARD\nCivil Number: 20481357\nName: HAMAD NASSER AL HABSI\nirth:\nPHOTO Date of Birt 07/06/1994\nSex: Male\nExpiry Date: 30/09/2030";
+
+        $read = $this->reader()->readText($ocr, '', 'civilId');
+
+        $this->assertSame('1994-06-07', $this->value($read, 'dateOfBirth'));
+        $this->assertSame('2030-09-30', $this->value($read, 'idExpiry'));
+    }
+
+    public function test_a_card_whose_labels_cannot_be_read_gives_its_dates_by_position_for_review(): void
+    {
+        $ocr = "IDENTITY CARD\n20481357\nHAMAD NASSER AL HABSI\n07/06/1994\n30/09/2030\n12/01/2020";
+
+        $read = $this->reader()->readText($ocr, '', 'civilId');
+
+        $this->assertSame('1994-06-07', $this->value($read, 'dateOfBirth'));
+        $this->assertSame('2030-09-30', $this->value($read, 'idExpiry'));
+        // Found without a label: below the review line, so it is checked.
+        $this->assertLessThan(80, $read['fields']['dateOfBirth']['confidence']);
+    }
+
     public function test_a_lawyers_cv_is_known_by_its_sections_and_not_taken_for_a_lawyer_card(): void
     {
         $cv = "Hamad Nasser Al Habsi\nLawyer\nPROFILE\nLawyer admitted before the Primary Courts.\nEXPERIENCE\nLawyer, Muscat - 2020 to present\nLegal Associate, Muscat - 2018 to 2020\nEDUCATION\nBachelor of Law, 2018";

@@ -27,6 +27,15 @@ final class StandardPaperReader
     /** The papers read by these rules (keys of documentIntake.js INTAKE_TYPES). */
     public const TYPES = ['civilId', 'passport', 'lawyerCard', 'contract', 'cv'];
 
+    /**
+     * The labels of a birth date and of an expiry. OCR cuts a word short
+     * where something is printed close beside it ("Date of Birt"), so the
+     * end of each word may be missing.
+     */
+    private const BIRTH = 'date\s*of\s*bi?rt?h?|birth\s*date|d\.?o\.?b|تاريخ الميلاد';
+
+    private const EXPIRY = 'expi?r?y?\s*date|date\s*of\s*expi?r?y?|expi?ry|expires|valid\s*(?:until|till|thru)|تاريخ الانتهاء|تاريخ الإنتهاء|صالحة? حتى';
+
     private const LABELLED = 90;
 
     private const KEYWORD = 75;
@@ -119,10 +128,11 @@ final class StandardPaperReader
         }
         $this->put($fields, 'employeeName', $this->name($this->labelled($text, '(?:full\s*)?name', '([A-Za-z][A-Za-z\' .-]{3,80})')));
         $this->put($fields, 'arabicName', $this->arabicName($text));
-        $this->put($fields, 'dateOfBirth', $this->dateAt($text, 'date\s*of\s*birth|birth\s*date|d\.?o\.?b|تاريخ الميلاد'));
-        $this->put($fields, 'idExpiry', $this->dateAt($text, 'expiry\s*date|date\s*of\s*expiry|expiry|valid\s*(?:until|till|thru)|تاريخ الانتهاء|تاريخ الإنتهاء'));
+        $this->put($fields, 'dateOfBirth', $this->dateAt($text, self::BIRTH));
+        $this->put($fields, 'idExpiry', $this->dateAt($text, self::EXPIRY));
         $this->put($fields, 'gender', $this->gender($text), self::KEYWORD);
         $this->put($fields, 'nationality', Nationality::inText($text), self::KEYWORD);
+        $this->datesByPosition($fields, $text, 'dateOfBirth', 'idExpiry');
 
         return $this->overlay($fields, $mrz['format'] ?? null ? $mrz['fields'] : []);
     }
@@ -139,8 +149,8 @@ final class StandardPaperReader
                 'confidence' => min($given['confidence'], $surname['confidence']),
             ]));
         }
-        $this->put($fields, 'dateOfBirth', $this->dateAt($text, 'date\s*of\s*birth|birth|تاريخ الميلاد'));
-        $this->put($fields, 'passportExpiry', $this->dateAt($text, 'date\s*of\s*expiry|expiry|valid\s*until|تاريخ الانتهاء'));
+        $this->put($fields, 'dateOfBirth', $this->dateAt($text, self::BIRTH));
+        $this->put($fields, 'passportExpiry', $this->dateAt($text, self::EXPIRY));
         $this->put($fields, 'gender', $this->gender($text), self::KEYWORD);
         $this->put($fields, 'nationality', Nationality::inText($text), self::KEYWORD);
 
@@ -163,7 +173,7 @@ final class StandardPaperReader
             '([A-Z0-9][A-Z0-9\/-]{2,19})'));
         $this->put($fields, 'employeeName', $this->name($this->labelled($text, '(?:lawyer\'?s?\s*)?name', '([A-Za-z][A-Za-z\' .-]{3,80})')));
         $this->put($fields, 'arabicName', $this->arabicName($text));
-        $this->put($fields, 'lawyerCardExpiry', $this->dateAt($text, 'expiry\s*date|date\s*of\s*expiry|expiry|valid\s*(?:until|till|thru)|expires|تاريخ الانتهاء|صالحة? حتى'));
+        $this->put($fields, 'lawyerCardExpiry', $this->dateAt($text, self::EXPIRY));
         $this->put($fields, 'civilId', $this->labelled($text, 'civil\s*(?:id\s*)?(?:no\.?|number)|الرقم المدني', '(\d{6,10})'));
         if ($grade = $this->courtLevel($text)) {
             $fields['practiceLevel'] = ['value' => $grade, 'confidence' => self::KEYWORD];
@@ -351,6 +361,32 @@ final class StandardPaperReader
         $value = $found ? self::date($found['value']) : null;
 
         return $value ? ['value' => $value, 'confidence' => $found['confidence']] : null;
+    }
+
+    /**
+     * Where a card's labels could not be read: of the dates printed on it,
+     * the earliest one at least 15 years back is the birth date and the
+     * latest one still to come is the expiry - marked as found by pattern,
+     * so the person adding the employee checks them.
+     */
+    private function datesByPosition(array &$fields, string $text, string $birthKey, string $expiryKey): void
+    {
+        if (isset($fields[$birthKey], $fields[$expiryKey])) {
+            return;
+        }
+        preg_match_all('/\b(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}|\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2})\b/', $text, $m);
+        $dates = array_values(array_unique(array_filter(array_map([self::class, 'date'], $m[1]))));
+        sort($dates);
+        $today = date('Y-m-d');
+        $adult = date('Y-m-d', strtotime('-15 years'));
+        $born = array_values(array_filter($dates, fn ($d) => $d <= $adult));
+        $ahead = array_values(array_filter($dates, fn ($d) => $d > $today));
+        if (! isset($fields[$birthKey]) && $born) {
+            $fields[$birthKey] = ['value' => $born[0], 'confidence' => self::PATTERN];
+        }
+        if (! isset($fields[$expiryKey]) && $ahead) {
+            $fields[$expiryKey] = ['value' => end($ahead), 'confidence' => self::PATTERN];
+        }
     }
 
     /** "12/03/2026", "2026-03-12", "12 March 2026", "March 12, 2026" as 2026-03-12. */

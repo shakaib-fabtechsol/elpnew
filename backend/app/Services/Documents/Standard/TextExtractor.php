@@ -92,7 +92,7 @@ class TextExtractor
     private function prepare(string $image): string
     {
         if (! class_exists(\Imagick::class)) {
-            return $image;
+            return $this->prepareWithGd($image);
         }
         try {
             $picture = new \Imagick($image);
@@ -107,6 +107,37 @@ class TextExtractor
             $out = tempnam(sys_get_temp_dir(), 'sadeed-ocr-').'.png';
             $picture->writeImage($out);
             $picture->clear();
+
+            return $out;
+        } catch (\Throwable) {
+            return $image;
+        }
+    }
+
+    /** The same clean-up with PHP's GD, where Imagick is not installed. */
+    private function prepareWithGd(string $image): string
+    {
+        if (! function_exists('imagecreatefromstring')) {
+            return $image;
+        }
+        try {
+            $picture = @imagecreatefromstring((string) file_get_contents($image));
+            if (! $picture) {
+                return $image;
+            }
+            $width = imagesx($picture);
+            if ($width < 2000) {
+                $scaled = imagescale($picture, 2000, (int) round(imagesy($picture) * 2000 / max(1, $width)), IMG_BICUBIC);
+                if ($scaled) {
+                    imagedestroy($picture);
+                    $picture = $scaled;
+                }
+            }
+            imagefilter($picture, IMG_FILTER_GRAYSCALE);
+            imagefilter($picture, IMG_FILTER_CONTRAST, -20);
+            $out = tempnam(sys_get_temp_dir(), 'sadeed-ocr-').'.png';
+            imagepng($picture, $out);
+            imagedestroy($picture);
 
             return $out;
         } catch (\Throwable) {
