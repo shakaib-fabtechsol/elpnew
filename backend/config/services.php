@@ -41,6 +41,15 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
     ],
 
+    // The programs that read an employee's papers without AI (Add Employee's
+    // Civil ID, passport, lawyer card, contract and CV). On the server:
+    //   apt install tesseract-ocr tesseract-ocr-ara poppler-utils
+    'ocr' => [
+        'tesseract' => env('OCR_TESSERACT', 'tesseract'),
+        'pdftotext' => env('OCR_PDFTOTEXT', 'pdftotext'),
+        'pdftoppm' => env('OCR_PDFTOPPM', 'pdftoppm'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

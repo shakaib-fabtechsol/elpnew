@@ -567,7 +567,10 @@ export function IntakeReview({ items, onConfirm }) {
                   onClick={() => onConfirm(key, candidate.value, candidate.source)}
                   className="rounded-md border px-3 py-1.5 text-start text-sm transition-colors hover:border-blue-600 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <span className="block font-semibold text-primary">{String(candidate.value)}</span>
+                  <span className="block font-semibold text-primary">
+                    {/* A list (Languages) read as words, not "Arabic,English". */}
+                    {Array.isArray(candidate.value) ? candidate.value.join(", ") : String(candidate.value)}
+                  </span>
                   <span className="block text-xs text-primary/75">
                     {candidate.source} · {candidate.confidence}%
                     {entry.status === "Conflict" ? " · Use this" : " · Confirm"}

@@ -5,12 +5,16 @@ namespace Tests\Feature;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 
-/** Document Intake: a new employee's paper read by AI into the fields of the record. */
+/**
+ * Document Intake: a new employee's paper read into the fields of the record.
+ * The five papers read the standard way are in StandardPaperReaderTest; these
+ * are the others (a degree, a bank letter), read by AI where one is connected.
+ */
 class EmployeePaperTest extends ApiTestCase
 {
     private function paper(): array
     {
-        return ['file' => UploadedFile::fake()->create('passport.pdf', 120, 'application/pdf')];
+        return ['file' => UploadedFile::fake()->create('degree.pdf', 120, 'application/pdf'), 'typeKey' => 'education'];
     }
 
     private function gemini(array $answer, int $status = 200): void
@@ -19,19 +23,23 @@ class EmployeePaperTest extends ApiTestCase
         Http::fake(['generativelanguage.googleapis.com/*' => Http::response(['candidates' => [['content' => ['parts' => [['text' => json_encode($answer)]]]]]], $status)]);
     }
 
-    public function test_with_no_ai_connected_the_screen_is_told_to_use_its_sample(): void
+    public function test_with_no_ai_connected_the_paper_is_filed_with_nothing_filled_in(): void
     {
         Http::fake();
 
         $this->as('admin')->post($this->api('employees/papers/read'), $this->paper(), ['Accept' => 'application/json'])
-            ->assertOk()->assertJsonPath('data.available', false);
+            ->assertOk()
+            ->assertJsonPath('data.available', true)
+            ->assertJsonPath('data.typeKey', 'education')
+            ->assertJsonPath('data.engine', 'none')
+            ->assertJsonPath('data.fields', []);
         Http::assertNothingSent();
     }
 
     public function test_a_paper_is_read_into_the_records_fields_and_only_sound_values_are_kept(): void
     {
         $this->gemini([
-            'typeKey' => 'passport',
+            'typeKey' => 'education',
             'fields' => [
                 ['key' => 'employeeName', 'value' => 'SALMA KHALFAN SAID AL HARTHY', 'confidence' => 97],
                 ['key' => 'dateOfBirth', 'value' => '1994-03-12', 'confidence' => 96],
@@ -41,18 +49,18 @@ class EmployeePaperTest extends ApiTestCase
                 ['key' => 'salary', 'value' => '1,200', 'confidence' => 80],
                 ['key' => 'favouriteColour', 'value' => 'blue', 'confidence' => 99],          // not a field of the record
             ],
-            'qualification' => ['degree' => 'LLB', 'specialization' => 'Law', 'institution' => 'SQU', 'year' => '2016'], // not a certificate: ignored
+            'qualification' => ['degree' => 'LLB', 'specialization' => 'Law', 'institution' => 'SQU', 'year' => '2016'],
         ]);
 
         $read = $this->as('admin')->post($this->api('employees/papers/read'), $this->paper(), ['Accept' => 'application/json'])
             ->assertOk()
             ->assertJsonPath('data.available', true)
-            ->assertJsonPath('data.typeKey', 'passport')
+            ->assertJsonPath('data.typeKey', 'education')
             ->assertJsonPath('data.engine', 'gemini')
             ->assertJsonPath('data.fields.gender.value', 'Female')
             ->assertJsonPath('data.fields.passportNumber.confidence', 100)
             ->assertJsonPath('data.fields.salary.value', '1200.000')
-            ->assertJsonPath('data.qualification', null)
+            ->assertJsonPath('data.qualification.degree', 'LLB')
             ->assertJsonPath('data.duplicateOf', null)
             ->json('data');
 

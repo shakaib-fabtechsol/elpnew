@@ -90,6 +90,10 @@ export const INTAKE_FIELDS = {
   occupation: { label: "Job Title", step: "employment" },
   grade: { label: "Grade", step: "employment" },
   practiceLevel: { label: "Lawyer Grade / Practice Level", step: "personal" },
+  // Read off a CV.
+  highestEducation: { label: "Highest Education Level", step: "personal" },
+  languages: { label: "Languages", step: "personal" },
+  cvSummary: { label: "Curriculum Vitae (CV)", step: "personal" },
   employmentType: { label: "Employment Type", step: "contract" },
   contractType: { label: "Contract Type", step: "contract" },
   dateOfJoining: { label: "Date of Joining", step: "contract" },
@@ -338,7 +342,8 @@ export function mapExtraction(docs, current, previous) {
     const before = previous[key];
     const now = current[key];
     // Typed by the user - over nothing, or over what a paper had filled.
-    if (now && (!before || String(now) !== String(before.value))) {
+    // An empty list (Languages starts as []) is nothing typed, as "" is.
+    if (!isEmptyValue(now) && (!before || String(now) !== String(before.value))) {
       meta[key] = { value: now, source: "Entered manually", confidence: 100, status: "Confirmed", candidates: list };
       return;
     }
