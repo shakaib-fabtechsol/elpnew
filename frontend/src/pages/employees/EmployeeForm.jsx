@@ -1750,14 +1750,8 @@ export default function EmployeeForm({ self }) {
       clearDraft();
     }
   }, [isAdding]);
-  // Kept a moment after each change, not on every key.
-  useEffect(() => {
-    if (!isAdding) return undefined;
-    const timer = setTimeout(writeDraft, 800);
-    return () => clearTimeout(timer);
-    // writeDraft reads exactly these.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdding, formData, saved, savedSteps, step]);
+  // The draft is kept when Save Draft is pressed - the client's sheet has
+  // that button and no automatic saving.
 
   /*
    * The setup answers. Nationality is Omani or not: Omani fills the field
@@ -2375,25 +2369,6 @@ export default function EmployeeForm({ self }) {
     scrollToTop();
   };
 
-  /**
-   * Create Employee, from the bar: every required field is asked for now. If
-   * any is missing the first step with a gap opens, and each step with one
-   * is marked; otherwise the record is made, with its papers, and opened.
-   */
-  const createEmployee = async () => {
-    if (saving || !fieldsOnScreenValid({ requireAll: false })) return;
-    setSaved(formData);
-    if (intake.missingKeys.length) {
-      setFinalTried(true);
-      setStep(stepOfPart(fieldStep(intake.missingKeys[0])));
-      scrollToTop();
-      return;
-    }
-    setSaving(true);
-    await finishEmployee();
-    setSaving(false);
-  };
-
   /** Cancel, from the bar: the draft is let go, and the list opens. */
   const cancelAdding = () => {
     clearDraft();
@@ -2752,9 +2727,7 @@ export default function EmployeeForm({ self }) {
         <AddEmployeeBar
           savedAt={draftSavedAt}
           onSaveDraft={writeDraft}
-          onCancel={cancelAdding}
-          onCreate={createEmployee}
-          creating={saving}
+          note={currentStep.note}
         />
       ) : (
       /* Page Header.
@@ -4636,9 +4609,45 @@ export default function EmployeeForm({ self }) {
                   <>
                     {/* Pay: basic salary, the allowances on top and what they
                         come to, from the day it takes effect. */}
-                    {shows("payroll") && (
+                    {/* Add Employee: the client's sheet - one grid of eight, in
+                        its order: Effective Date, Basic Salary, the five
+                        allowances, and Gross Salary worked out from them. */}
+                    {shows("payroll") && isAdding && (
+                    <SectionCard title="Payroll Information" icon={Coins}>
+                      <div className="form-grid gap-y-6">
+                        <div className="form-field space-y-2">
+                          <Label htmlFor="salaryEffectiveDate">
+                            Effective Date
+                            <Required show />
+                          </Label>
+                          <DateField
+                            id="salaryEffectiveDate"
+                            name="salaryEffectiveDate"
+                            value={formData.salaryEffectiveDate}
+                            onChange={onChange}
+                            required
+                          />
+                        </div>
+                        <MoneyField id="salary" label="Basic Salary" value={formData.salary} onChange={onChange} required />
+                        <MoneyField id="special" label="Special Allowance" value={formData.special} onChange={onChange} />
+                        <MoneyField id="housing" label="Housing Allowance" value={formData.housing} onChange={onChange} />
+                        <MoneyField id="phoneAllowance" label="Phone Allowance" value={formData.phoneAllowance} onChange={onChange} />
+                        <MoneyField id="electricity" label="Electricity Allowance" value={formData.electricity} onChange={onChange} />
+                        <MoneyField id="transport" label="Transport Allowance" value={formData.transport} onChange={onChange} />
+                        <MoneyField
+                          id="grossSalary"
+                          label={<>Gross Salary<Required show /></>}
+                          value={gross}
+                          locked
+                          note="Auto-calculated from salary components"
+                        />
+                      </div>
+                    </SectionCard>
+                    )}
+
+                    {shows("payroll") && !isAdding && (
                     <SectionCard
-                      title={isAdding ? "Compensation" : "Salary Information"}
+                      title="Salary Information"
                       icon={Coins}
                     >
                       <div className="grid gap-x-5 gap-y-6 md:grid-cols-3">
@@ -4809,9 +4818,9 @@ export default function EmployeeForm({ self }) {
                         records the firm already holds, so ticking one shows
                         its figure rather than asking for it; one already
                         running cannot be ticked off here. */}
-                    {/* On Add Employee as on a record: the four boxes of the
-                        client's sheet, in one row. */}
-                    {shows("payroll") && (
+                    {/* Not on Add Employee: the client's sheet has no
+                        deductions there (loans and advances come later). */}
+                    {shows("payroll") && !isAdding && (
                     <SectionCard
                       title={
                         <>
@@ -4859,7 +4868,7 @@ export default function EmployeeForm({ self }) {
                     >
                       {/* The account a local transfer is made to; IBAN and
                           SWIFT are taken when there are, but not demanded. */}
-                      <div className="grid gap-x-[19px] gap-y-6 sm:grid-cols-2 xl:grid-cols-5">
+                      <div className={cn("grid gap-x-[19px] gap-y-6 sm:grid-cols-2", isAdding ? "xl:grid-cols-4" : "xl:grid-cols-5")}>
                         <ChoiceField
                           id="bankName"
                           label={<>Bank Name<Required show={asksFor} /></>}
@@ -4914,6 +4923,8 @@ export default function EmployeeForm({ self }) {
                           />
                           <RuleNote name="iban" value={formData.iban} whole={shapeChecked} />
                         </div>
+                        {/* Not on Add Employee: the client's sheet stops at IBAN. */}
+                        {!isAdding && (
                         <div className="form-field space-y-2">
                           <Label htmlFor="swiftCode">
                             SWIFT Code <span className="font-normal text-muted-foreground">(Optional)</span>
@@ -4928,6 +4939,7 @@ export default function EmployeeForm({ self }) {
                           />
                           <RuleNote name="swiftCode" value={formData.swiftCode} whole={shapeChecked} />
                         </div>
+                        )}
                       </div>
                     </SectionCard>
                     )}

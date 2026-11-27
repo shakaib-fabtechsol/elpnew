@@ -1,4 +1,4 @@
-import { CheckCircle2, Pencil, Save, UserPlus, X, Check } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -14,39 +14,28 @@ const clock = (date) =>
   date ? date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "";
 
 /**
- * The navy bar across the top of Add Employee: what this is, that it is a
- * draft and when it was last kept, and the three ways out - keep the draft,
- * leave it, or create the employee.
+ * The head of Add Employee, as the client's sheets draw it: a small
+ * "EMPLOYEE ONBOARDING" label, "Add New Employee", what the open step is for,
+ * and Save Draft on the right. Cancel and Save are at the foot of each step,
+ * and the last step's Save & Continue creates the employee.
  */
-export function AddEmployeeBar({ savedAt, onSaveDraft, onCancel, onCreate, creating }) {
+export function AddEmployeeBar({ savedAt, onSaveDraft, note }) {
   return (
-    <header className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-xl bg-[#0b2447] px-5 py-3.5 text-white">
-      <span className="text-xl font-extrabold tracking-wide">SADEED</span>
-      <span aria-hidden="true" className="hidden h-7 w-px bg-white/30 sm:block" />
-      <h1 className="flex items-center gap-2.5 text-xl font-semibold">
-        <UserPlus className="size-6" strokeWidth={1.75} aria-hidden="true" />
-        Add Employee
-      </h1>
-      <div className="ms-auto flex flex-wrap items-center gap-3">
-        <span className="rounded-full bg-white/20 px-3 py-1 text-sm font-semibold">Draft</span>
-        {savedAt && (
-          <span className="flex items-center gap-1.5 text-sm" role="status">
-            <CheckCircle2 className="size-4 fill-emerald-500 text-[#0b2447]" aria-hidden="true" />
-            Auto-saved at {clock(savedAt)}
-          </span>
-        )}
-        <Button type="button" variant="outline" className="bg-white text-primary hover:bg-white/90" onClick={onSaveDraft}>
-          <Save className="me-2 size-4" aria-hidden="true" />
+    <header className="flex flex-wrap items-start justify-between gap-4 px-1">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Employee Onboarding</p>
+        <h1 className="mt-1 text-3xl font-bold text-primary">Add New Employee</h1>
+        {note && <p className="mt-1 text-sm text-primary/70">{note}</p>}
+      </div>
+      <div className="flex flex-col items-end gap-1">
+        <Button type="button" variant="outline" className="bg-white px-6 font-semibold text-primary" onClick={onSaveDraft}>
           Save Draft
         </Button>
-        <Button type="button" variant="outline" className="bg-white text-primary hover:bg-white/90" onClick={onCancel}>
-          <X className="me-2 size-4" aria-hidden="true" />
-          Cancel
-        </Button>
-        <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" onClick={onCreate} disabled={creating}>
-          Create Employee
-          <Check className="ms-2 size-4" aria-hidden="true" />
-        </Button>
+        {savedAt && (
+          <span className="text-xs text-muted-foreground" role="status">
+            Draft saved at {clock(savedAt)}
+          </span>
+        )}
       </div>
     </header>
   );

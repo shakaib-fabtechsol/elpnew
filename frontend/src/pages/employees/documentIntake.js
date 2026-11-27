@@ -171,7 +171,7 @@ export const requiredFields = (values) => [
   "noticePeriod",
   // Payroll & Banking - only for somebody who is paid: an unpaid trainee has
   // neither, and the step does not apply. IBAN and SWIFT are optional.
-  ...(values.paid === "No" ? [] : ["salary", "bankName", "accountHolder", "accountNumber"]),
+  ...(values.paid === "No" ? [] : ["salaryEffectiveDate", "salary", "bankName", "accountHolder", "accountNumber"]),
 ];
 
 /** Whether a required field is still empty: a list (Languages) with nothing in it is. */
@@ -186,6 +186,7 @@ const REQUIRED_STEP = {
   employmentEndDate: "contract",
   trainingStart: "contract",
   trainingEnd: "contract",
+  salaryEffectiveDate: "payroll",
 };
 export const fieldStep = (key) => INTAKE_FIELDS[key]?.step || REQUIRED_STEP[key] || "personal";
 
