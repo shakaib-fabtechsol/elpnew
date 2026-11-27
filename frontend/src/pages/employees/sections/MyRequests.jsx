@@ -6,17 +6,20 @@ import { reloadDataset } from "@/lib/api/session";
 import { REQUEST_TYPES } from "../requestsHub";
 import RequestsHub, { useRequestRows } from "./RequestsHub";
 import AddRequestDialog from "./AddRequestDialog";
+import RequestWorkflowDialog from "./RequestWorkflowDialog";
 
 /**
  * An employee's own Requests page: every request they have made, of every
  * kind, in one list - and one button to make another.
  *
- * The detailed screens each kind has (deciding, paying, the full workflow)
- * are management's, and are opened from the firm's Requests list in Company
- * Profile; here the employee asks, follows and reads.
+ * The same page is an employee's Requests on their record, for management
+ * (manage): there View Details opens the request in the detailed screen its
+ * kind has (deciding, paying, the full workflow), as Company Profile's
+ * Requests does. On My Profile the employee asks, follows and reads.
  */
-export default function MyRequests({ employee, onBack, backLabel }) {
+export default function MyRequests({ employee, onBack, backLabel, manage = false }) {
   const [adding, setAdding] = useState(false);
+  const [open, setOpen] = useState(null);
   // The same rows the list shows, for the history of a kind in Add Request.
   const { rows } = useRequestRows(employee);
 
@@ -52,9 +55,11 @@ export default function MyRequests({ employee, onBack, backLabel }) {
 
       <Card>
         <CardContent className="p-4 sm:p-6">
-          <RequestsHub employee={employee} />
+          <RequestsHub employee={employee} onView={manage ? setOpen : undefined} />
         </CardContent>
       </Card>
+
+      {manage && <RequestWorkflowDialog request={open} onClose={() => setOpen(null)} />}
 
       <AddRequestDialog
         open={adding}

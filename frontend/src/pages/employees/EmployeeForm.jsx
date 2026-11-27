@@ -1650,7 +1650,7 @@ export default function EmployeeForm({ self }) {
   // opened below them, if one has been.
   // Requests opens on its first category and that category's first kind
   // (Financing, Salary Advance), so there is something to read straight away.
-  const [requestCategory, setRequestCategory] = useState(justCreated?.category || REQUEST_CATEGORIES[0].key);
+  const [, setRequestCategory] = useState(justCreated?.category || REQUEST_CATEGORIES[0].key);
   const [requestsTab, setRequestsTab] = useState(justCreated?.key || REQUEST_CATEGORIES[0].items[0].key);
   // What is open under Employee Management: nothing until a card is chosen.
   const [managementTab, setManagementTab] = useState(MANAGEMENT_ITEMS[0].key);
@@ -2188,12 +2188,10 @@ export default function EmployeeForm({ self }) {
   // own, or the one that request is kept on.
   const requestItem = REQUEST_ITEMS.find((item) => item.key === requestsTab) || null;
   const isManagement = isEditMode && !self && activeSection === "management";
-  // On My Profile, Requests is the one list of every request (MyRequests);
-  // the per-kind screens below are for management on someone's record.
+  // Requests is the one list of every request (MyRequests), on My Profile
+  // and on someone's record alike, as Employees 3 shows it.
   const shownSection = isRequests
-    ? self
-      ? null
-      : requestItem?.section
+    ? null
     : isManagement
       ? managementTab
       : activeSection;
@@ -2864,10 +2862,10 @@ export default function EmployeeForm({ self }) {
 
           {/* My Profile: the employee's own requests, all kinds in one list,
               and Add Request (Smart Request or a type chosen by hand). */}
-          {isRequests && self && (
+          {isRequests && (
             <div className="space-y-3">
               <nav aria-label="Breadcrumb" className="text-sm">
-                <span className="text-primary/60">My Profile</span>
+                <span className="text-primary/60">{self ? "My Profile" : "Administration"}</span>
                 <span aria-hidden="true" className="px-2 text-primary/40">/</span>
                 <span className="font-semibold text-primary" aria-current="page">Requests</span>
               </nav>
@@ -2875,38 +2873,8 @@ export default function EmployeeForm({ self }) {
                 employee={record}
                 onBack={() => selectSection(requestsBack.key)}
                 backLabel={requestsBack.label}
+                manage={!self}
               />
-            </div>
-          )}
-
-          {/* Requests heads its own page: the way back to the employee's
-              information, then its mark and its name. */}
-          {isRequests && !self && (
-            <div className="space-y-3">
-            <nav aria-label="Breadcrumb" className="text-sm">
-              <span className="text-primary/60">{self ? "My Profile" : "Administration"}</span>
-              <span aria-hidden="true" className="px-2 text-primary/40">/</span>
-              <span className="font-semibold text-primary" aria-current="page">Requests</span>
-            </nav>
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                onClick={() => selectSection(requestsBack.key)}
-                title={requestsBack.label}
-                className="flex size-9 shrink-0 items-center justify-center rounded-md text-primary transition-colors hover:bg-menu-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <ArrowLeft className="size-5 rtl:rotate-180" aria-hidden="true" />
-                <span className="sr-only">{requestsBack.label}</span>
-              </button>
-              <span aria-hidden="true" className="h-9 w-px bg-container-border" />
-              <LayoutGrid strokeWidth={1.5} aria-hidden="true" className="size-8 shrink-0 text-primary" />
-              <h1 className="text-2xl font-bold text-primary">Requests</h1>
-              {/* A request made by describing it, whichever kind it turns
-                  out to be - so it sits with the page, not with one list. */}
-              <div className="ms-auto">
-                <SmartRequest employee={record} />
-              </div>
-            </div>
             </div>
           )}
 
@@ -2928,97 +2896,6 @@ export default function EmployeeForm({ self }) {
               )}
             </div>
           )}
-
-          {/* Every kind of request in one row, each its mark in a box and its
-              name under it, joined like steps. The chosen kind's box is lit
-              and the line either side of it is drawn in navy. */}
-          {isRequests && !self && (() => {
-            const chosenIndex = REQUEST_CATEGORIES.findIndex((c) => c.key === requestCategory);
-            return (
-            <nav
-              aria-label="Request types"
-              className="overflow-x-auto rounded-xl border border-container-border bg-card px-4 py-4"
-            >
-              <ol className="flex min-w-max">
-                {REQUEST_CATEGORIES.map((category, index) => {
-                  const Icon = category.icon;
-                  const lit = index === chosenIndex;
-                  const last = index === REQUEST_CATEGORIES.length - 1;
-                  return (
-                    <li key={category.key} className="relative flex min-w-36 flex-1 flex-col items-center">
-                      {!last && (
-                        <span
-                          aria-hidden="true"
-                          className="absolute start-[calc(50%+40px)] end-[calc(-50%+40px)] top-7 flex h-0.5 overflow-hidden rounded-full bg-slate-200"
-                        >
-                          <span className={cn("h-full w-1/2", lit && "bg-primary")} />
-                          <span className={cn("h-full w-1/2", index + 1 === chosenIndex && "bg-primary")} />
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => openRequestCategory(category.key)}
-                        aria-current={lit ? "true" : undefined}
-                        className="group flex flex-col items-center gap-2 rounded-md px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <span
-                          className={cn(
-                            "flex size-14 items-center justify-center rounded-xl border transition-colors",
-                            lit
-                              ? "border-blue-200 bg-blue-50 text-primary"
-                              : "border-container-border bg-card text-primary/60 group-hover:text-primary"
-                          )}
-                        >
-                          <Icon strokeWidth={1.5} aria-hidden="true" className="size-7" />
-                        </span>
-                        <span
-                          className={cn(
-                            "whitespace-nowrap text-sm",
-                            lit ? "font-bold text-primary" : "font-medium text-primary/60 group-hover:text-primary"
-                          )}
-                        >
-                          {category.short || category.label}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ol>
-            </nav>
-            );
-          })()}
-
-          {/* The chosen category's kinds, as tabs. Each kind opens on an
-              overview of its own - its counts and the AI's reading are in
-              it - so nothing here says them a second time. */}
-          {isRequests && !self && (() => {
-            const category = REQUEST_CATEGORIES.find((c) => c.key === requestCategory);
-            if (!category) return null;
-            return (
-              <div role="tablist" aria-label={category.label} className="flex flex-wrap gap-2">
-                {category.items.map((item) => {
-                  const opened = item.key === requestsTab;
-                  return (
-                    <button
-                      key={item.key}
-                      type="button"
-                      role="tab"
-                      aria-selected={opened}
-                      onClick={() => chooseRequest({ ...item, category: category.key })}
-                      className={cn(
-                        "min-w-36 rounded-lg border px-5 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        opened
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "bg-white text-primary hover:bg-menu-hover"
-                      )}
-                    >
-                      {item.tabLabel || item.label}
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })()}
 
           {/* Employee Management heads its own page as Requests does, then
               lists what it opens: each its mark, its name and what it holds,
@@ -3135,11 +3012,11 @@ export default function EmployeeForm({ self }) {
           {/* On the merged page the three boxes are the frame, so the
               page's own card steps out of the way rather than drawing a
               border around three borders. */}
-          {/* On Requests, nothing is drawn below the cards until one is opened. */}
+          {/* Requests is its own page (MyRequests): nothing is drawn below it. */}
           <Card
             className={cn(
               (isInfo || isDocuments || isRequests) && "border-0 bg-transparent shadow-none",
-              isRequests && (self || !requestItem) && "hidden",
+              isRequests && "hidden",
               isManagement && !managementTab && "hidden"
             )}
           >
@@ -5380,12 +5257,6 @@ export default function EmployeeForm({ self }) {
                     employee={formData}
                     canEdit={!self}
                   />
-                )}
-
-                {/* A request with no page of its own yet says so, rather
-                    than having one made up for it. */}
-                {isRequests && !self && requestItem && !requestItem.section && (
-                  <EmptyState>{requestItem.label} requests are not set up yet.</EmptyState>
                 )}
 
                 {shownSection === "daily" && (
