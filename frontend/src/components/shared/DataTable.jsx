@@ -107,7 +107,7 @@ export default function DataTable({
    * the middle of each cell, and the Additional Columns strip as a box of its
    * own under the table. A column says `align: "center"` to centre its cells.
    */
-  look,
+  look = "sheet",
   itemLabel,
   exportFileName = "export.csv",
   onAdd,
@@ -645,12 +645,16 @@ export default function DataTable({
                           look === "sheet"
                             ? "border-e border-container-border px-4 py-3 text-center align-middle text-[15px] font-bold text-primary last:border-e-0"
                             : "px-4 py-3 text-start align-top text-[13px] font-semibold text-table-head-ink",
-                          column.className
+                          column.className,
+                          // The sheet centres every heading, whichever way
+                          // its column's figures read.
+                          look === "sheet" && "text-center"
                         )}
                         style={{ width: column.width }}
                       >
                         {sortTypes[column.key] ? (
                           <SortButton
+                            className={look === "sheet" ? "text-center" : undefined}
                             onSort={() => toggleSort(column.key)}
                             direction={
                               sort?.key === column.key ? sort.direction : null

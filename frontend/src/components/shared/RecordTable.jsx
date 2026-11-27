@@ -9,12 +9,11 @@ export { SkeletonRows, ErrorRow } from "./TableStates";
 /**
  * The one table every list of records is drawn with.
  *
- * Standard 07: the body is frameless. There are no lines between columns -
- * only a rule under each row - because the padding already separates one
- * column from the next, and a full grid of lines competes with the data it is
- * supposed to be organising. The frame is a single outer border with the
- * container radius, and no shadow: a list is part of the page, not something
- * floating over it.
+ * Drawn as the client's Employees sheet draws its table, the one look every
+ * SADEED table has (as DataTable's "sheet"): centred bold headings, a thin
+ * rule between columns and under each row, plain white rows, content in the
+ * middle of each cell. The frame is a single outer border with the container
+ * radius, and no shadow.
  *
  * Anything a particular table needs on top of that is passed as a class; the
  * frame itself is not re-described in each file.
@@ -68,14 +67,17 @@ export function Th({ width, className, children, sortable, direction, onSort }) 
         direction === "asc" ? "ascending" : direction === "desc" ? "descending" : undefined
       }
       className={cn(
-        "px-4 py-3 text-start text-xs font-semibold text-table-head-ink",
-        className
+        "border-e border-container-border px-4 py-3 align-middle text-[15px] font-bold text-primary last:border-e-0",
+        className,
+        // Every heading centred, as the sheet draws them, whichever way its
+        // column's figures read.
+        "text-center"
       )}
     >
       {/* Sortable by the system's sorting standard (lib/sorting.js): pass
           the props useTableSort's sortProps(key) gives. */}
       {sortable && onSort ? (
-        <SortButton direction={direction} onSort={onSort}>
+        <SortButton direction={direction} onSort={onSort} className="text-center">
           {children}
         </SortButton>
       ) : (
@@ -115,7 +117,7 @@ export function Row({ className, children }) {
   return (
     <tr
       className={cn(
-        "border-b border-container-border align-top last:border-0",
+        "border-b border-container-border align-middle last:border-0",
         className
       )}
     >
@@ -127,7 +129,10 @@ export function Row({ className, children }) {
 export function Td({ className, colSpan, children }) {
   return (
     <td
-      className={cn("px-4 py-3 align-top text-start", className)}
+      className={cn(
+        "border-e border-container-border px-4 py-3 align-middle text-start last:border-e-0",
+        className
+      )}
       colSpan={colSpan}
     >
       {children}
