@@ -89,7 +89,42 @@ class UnifiedRequestTest extends ApiTestCase
 
         $this->assertNull($this->value($draft, 'deductMonth'));
         $this->assertNull($this->value($draft, 'purpose'));
-        $this->assertEqualsCanonicalizing(['deductMonth', 'purpose'], $draft['missing']);
+        // The purpose is not on the Add Request sheet: optional, never asked for.
+        $this->assertEqualsCanonicalizing(['deductMonth'], $draft['missing']);
+    }
+
+    public function test_a_salary_advance_review_shows_only_the_month_and_the_amount(): void
+    {
+        $this->gemini(['type' => 'salaryAdvance', 'confidence' => 0.9, 'summary' => 'x', 'amount' => 300, 'deductMonth' => 'December', 'deductYear' => '2026']);
+
+        $draft = $this->as('aisha')->postJson($this->api('requests/interpret'), ['text' => 'I need a salary advance of 300 OMR deducted from December'])->json('data');
+
+        $shown = array_column(array_filter($draft['fields'], fn ($field) => ! $field['hidden']), 'key');
+        $this->assertEqualsCanonicalizing(['amount', 'deductMonth', 'deductYear'], $shown);
+        $this->assertSame([], $draft['missing']);
+        // What was written still travels with the request, as its remarks.
+        $this->assertSame('I need a salary advance of 300 OMR deducted from December', $this->value($draft, 'reason'));
+    }
+
+    public function test_a_salary_advance_is_submitted_with_only_the_month_and_the_amount(): void
+    {
+        $id = $this->as('aisha')->postJson($this->api('requests/submit'), [
+            'type' => 'salaryAdvance',
+            'fields' => ['amount' => 300, 'deductMonth' => 'December', 'deductYear' => '2026'],
+        ])->assertCreated()->json('data.record.id');
+
+        $advance = \App\Models\SalaryAdvance::findOrFail($id);
+        $this->assertSame(\App\Models\SalaryAdvance::OTHER_PURPOSE, $advance->purpose);
+        $this->assertNull($advance->purpose_other);
+    }
+
+    public function test_every_optional_field_is_hidden_from_the_review(): void
+    {
+        foreach (array_keys(\App\Services\Requests\RequestCatalog::TYPES) as $type) {
+            foreach (\App\Services\Requests\RequestCatalog::fields($type) as $field) {
+                $this->assertSame(! $field['required'], $field['hidden'], $type.'.'.$field['key']);
+            }
+        }
     }
 
     public function test_when_gemini_is_down_the_plain_reader_takes_over(): void
@@ -154,7 +189,8 @@ class UnifiedRequestTest extends ApiTestCase
     {
         $this->as('aisha')->postJson($this->api('requests/submit'), ['type' => 'salaryAdvance', 'fields' => ['amount' => 300]])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['deductMonth', 'deductYear', 'purpose']);
+            ->assertJsonValidationErrors(['deductMonth', 'deductYear'])
+            ->assertJsonMissingValidationErrors('purpose');
     }
 
     public function test_leave_overtime_and_a_grievance_are_created_from_their_fields(): void
@@ -245,9 +281,8 @@ class UnifiedRequestTest extends ApiTestCase
 
         $draft = $this->as('aisha')->postJson($this->api('requests/interpret'), ['text' => 'I need a salary advance of 300 OMR'])->json('data');
 
-        $this->assertSame(['deductMonth', 'deductYear', 'purpose'], array_column($draft['questions'], 'key'));
-        $this->assertSame('What is the advance for?', $draft['questions'][2]['question']);
-        $this->assertContains('Emergency Case', $draft['questions'][2]['options']);
+        // Only what the sheet asks for: the month. The purpose is not asked.
+        $this->assertSame(['deductMonth', 'deductYear'], array_column($draft['questions'], 'key'));
         $this->assertTrue($draft['financial']);
         $this->assertSame('Aisha Al Kindi', $draft['employee']['name']);
         $this->assertSame(['Net Salary', 'Advance Available'], array_column($draft['employee']['facts'], 'label'));

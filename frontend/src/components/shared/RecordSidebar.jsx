@@ -118,6 +118,9 @@ export default function RecordSidebar({
   backLabel = "Back",
   title,
   subtitle,
+  // Drawn in place of the title and subtitle on the open rail, where a page
+  // wants more than a name at its head (My Profile: photo, number, title).
+  header,
   groups = [],
   active,
   onSelect,
@@ -333,12 +336,16 @@ export default function RecordSidebar({
         )}
 
         <div className="flex items-start justify-between gap-2">
+          {header ? (
+            <div className="min-w-0 flex-1">{header}</div>
+          ) : (
           <div className="min-w-0">
             <p className="truncate text-lg font-bold text-primary">{title}</p>
             {subtitle && (
               <p className="truncate text-sm text-muted-foreground">{subtitle}</p>
             )}
           </div>
+          )}
           <button
             type="button"
             onClick={toggleCollapsed}

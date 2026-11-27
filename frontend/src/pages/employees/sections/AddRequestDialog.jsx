@@ -117,7 +117,10 @@ const dropDraft = (employeeId) => {
  * year apart; the two are shown as one choice and filled in together.
  */
 function formFields(draft) {
-  const fields = draft?.fields || [];
+  // Only what the design sheets show: a field the server marks `hidden` (the
+  // optional purpose and remarks) is not drawn. Its value still travels with
+  // the request - the Smart Request text is kept as the request's remarks.
+  const fields = (draft?.fields || []).filter((field) => !field.hidden);
   if (draft?.type !== "salaryAdvance") return fields;
   const rest = fields.filter((field) => field.key !== "deductMonth" && field.key !== "deductYear");
   return [{ key: "__deduction", label: "Deduction Month", kind: "deduction", required: true }, ...rest];
@@ -921,6 +924,7 @@ function FormField({ field, values, onChange, error, disabled }) {
   const Icon = KIND_ICON[field.kind] || Type;
   const wide = field.kind === "longText";
   const value = values[field.key] ?? "";
+  const money = field.kind === "number" && /\(OMR\)/.test(field.label);
 
   const options =
     field.kind === "select"
@@ -998,7 +1002,9 @@ function FormField({ field, values, onChange, error, disabled }) {
         ) : (
           <Input
             id={id}
-            value={value ?? ""}
+            // An amount in OMR reads with its three decimals, as on the sheet ("300.000").
+            value={money && typeof value === "number" ? value.toFixed(3) : value ?? ""}
+            onBlur={() => money && Number(value) > 0 && onChange(field.key, Number(value).toFixed(3))}
             inputMode={field.kind === "number" ? "decimal" : undefined}
             onChange={(event) =>
               onChange(
@@ -1167,12 +1173,8 @@ function SubmittedDialog({ created, onClose }) {
               Request No.: <span className="numeric-value text-xl font-extrabold">{created.requestNo}</span>
             </p>
           )}
-          <p className="text-sm text-primary/75">
-            Your {created?.typeLabel?.toLowerCase()} request is now with management. Follow its status in the Requests list.
-          </p>
-          <Button type="button" onClick={onClose} className="min-w-32">
-            Done
-          </Button>
+          {/* As the sheet: the tick, the words and the number - nothing more.
+              The window closes with its ×, Escape, or a click outside. */}
         </div>
       </DialogContent>
     </Dialog>

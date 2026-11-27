@@ -74,7 +74,10 @@ export const INTAKE_FIELDS = {
   gender: { label: "Gender", step: "personal" },
   nationality: { label: "Nationality", step: "personal" },
   personalEmail: { label: "Personal Email", step: "personal" },
-  phone: { label: "Phone Number", step: "personal" },
+  phone: { label: "Mobile Number", step: "personal" },
+  // The one email Add Employee asks for ("Email Address"): the record's own
+  // email, the one the firm writes to and the sign-in is suggested from.
+  workEmail: { label: "Email Address", step: "personal" },
   address: { label: "Address", step: "personal" },
   emergencyName: { label: "Emergency Contact Name", step: "personal" },
   emergencyPhone: { label: "Emergency Contact Phone", step: "personal" },
@@ -83,16 +86,16 @@ export const INTAKE_FIELDS = {
   department: { label: "Department (Circle)", step: "employment" },
   occupation: { label: "Job Title", step: "employment" },
   grade: { label: "Grade", step: "employment" },
-  workEmail: { label: "Work Email", step: "employment" },
+  practiceLevel: { label: "Lawyer Grade / Practice Level", step: "personal" },
   employmentType: { label: "Employment Type", step: "contract" },
   contractType: { label: "Contract Type", step: "contract" },
   dateOfJoining: { label: "Date of Joining", step: "contract" },
   noticePeriod: { label: "Notice Period", step: "contract" },
-  civilId: { label: "Civil ID / Resident Card No.", step: "identity" },
-  idExpiry: { label: "Civil ID / Resident Card Expiry", step: "identity" },
-  passportNumber: { label: "Passport No.", step: "identity" },
+  civilId: { label: "Civil ID Number", step: "identity" },
+  idExpiry: { label: "ID Expiry Date", step: "identity" },
+  passportNumber: { label: "Passport Number", step: "identity" },
   passportExpiry: { label: "Passport Expiry Date", step: "identity" },
-  lawyerCardNo: { label: "Lawyer Card No.", step: "identity" },
+  lawyerCardNo: { label: "Lawyer Card Number", step: "identity" },
   lawyerCardExpiry: { label: "Lawyer Card Expiry Date", step: "identity" },
   salary: { label: "Basic Salary", step: "payroll" },
   housing: { label: "Housing Allowance", step: "payroll" },
@@ -115,7 +118,7 @@ export const fieldElementId = (key) => INTAKE_FIELDS[key]?.el || key;
  * the bank's paper for the account.
  */
 const IDENTITY = ["employeeName", "arabicName", "dateOfBirth", "gender", "nationality", "civilId", "idExpiry", "passportNumber", "passportExpiry"];
-const CONTACT = ["personalEmail", "phone", "address", "emergencyName", "emergencyPhone"];
+const CONTACT = ["personalEmail", "workEmail", "phone", "address", "emergencyName", "emergencyPhone"];
 const sourceOrder = (key) =>
   IDENTITY.includes(key)
     ? ["civilId", "passport", "lawyerCard", "contract", "cv", "bank", "education", "other"]
@@ -127,64 +130,58 @@ const sourceOrder = (key) =>
 export const CONFIDENCE_FLOOR = 80;
 
 /**
- * The fields a finished profile cannot be without. Some depend on others: a
- * lawyer's card for a lawyer, the Fund's number for somebody registered, the
- * leaving details for somebody inactive.
+ * The fields Add Employee cannot finish without: exactly the starred fields
+ * on the client's sheets, step by step - nothing the sheets do not ask for.
+ * Some depend on the setup answers: a lawyer's practice level for a lawyer,
+ * a temporary contract's dates, a trainee's training period, pay and bank
+ * for somebody who is paid.
+ *
+ * Not here, because the sheets do not ask for them: the Date of Joining
+ * (set by the server when the record is created - see EmployeeRequest) and
+ * the Salary Effective Date (today, unless a record already says otherwise).
  */
+export const isLawyer = (values) =>
+  values.professionalClassification
+    ? values.professionalClassification === "Lawyer"
+    : values.occupation === "Lawyer";
+
 export const requiredFields = (values) => [
+  // Personal Information, in the sheet's order.
   "arabicName",
   "employeeName",
-  "dateOfBirth",
   "gender",
+  "highestEducation",
+  "dateOfBirth",
   "nationality",
+  "civilId",
+  "idExpiry",
+  "languages",
+  ...(isLawyer(values) ? ["practiceLevel"] : []),
   "phone",
-  "address",
-  "emergencyName",
-  "emergencyPhone",
-  "status",
-  ...(values.status === "Inactive"
-    ? ["lastWorkingDate", "decisionMaker"]
-    : [
-        "branch",
-        "position",
-        "department",
-        "occupation",
-        // A grade is a lawyer's practice level or a consultant's seniority:
-        // only the Judicial circle has one.
-        ...(values.department === "Judicial" ? ["grade"] : []),
-        "workEmail",
-      ]),
+  "workEmail",
+  // Employment & Contract Information.
+  "branch",
+  "department",
+  "occupation",
   "contractType",
-  "dateOfJoining",
   // A temporary contract runs between two dates; a permanent one has neither.
   ...(values.contractType === "Fixed-term" ? ["contractStartDate", "employmentEndDate"] : []),
   // Only a trainee has a training period.
   ...(values.staffCategory === "Intern / Trainee" ? ["trainingStart", "trainingEnd"] : []),
   "noticePeriod",
-  "civilId",
-  "idExpiry",
-  ...(values.professionalClassification === "Lawyer" ||
-  (!values.professionalClassification && values.occupation === "Lawyer")
-    ? ["lawyerCardNo", "lawyerCardExpiry"]
-    : []),
-  // Pay and bank only for somebody who is paid: an unpaid trainee has
-  // neither, and their Payroll & Banking step does not apply.
-  ...(values.paid === "No"
-    ? []
-    : // IBAN and SWIFT are asked for but optional: the account number is
-      // what a local transfer is made to.
-      ["salaryEffectiveDate", "salary", "bankName", "accountHolder", "accountNumber"]),
-  ...(values.socialProtection === "Yes" && values.staffCategory !== "Intern / Trainee"
-    ? ["spRegistrationNo", "spRegistrationDate"]
-    : []),
+  // Payroll & Banking - only for somebody who is paid: an unpaid trainee has
+  // neither, and the step does not apply. IBAN and SWIFT are optional.
+  ...(values.paid === "No" ? [] : ["salary", "bankName", "accountHolder", "accountNumber"]),
 ];
+
+/** Whether a required field is still empty: a list (Languages) with nothing in it is. */
+export const isEmptyValue = (value) => (Array.isArray(value) ? value.length === 0 : !value);
 
 /** The step a required field is asked on, for those not filled by papers. */
 const REQUIRED_STEP = {
-  status: "employment",
-  lastWorkingDate: "employment",
-  decisionMaker: "employment",
-  salaryEffectiveDate: "payroll",
+  highestEducation: "personal",
+  languages: "personal",
+  practiceLevel: "personal",
   contractStartDate: "contract",
   employmentEndDate: "contract",
   trainingStart: "contract",
@@ -239,7 +236,7 @@ const DEMO = {
     transport: ["50.000", 93],
   },
   cv: {
-    personalEmail: ["salma.harthy@example.com", 95],
+    workEmail: ["salma.harthy@example.com", 95],
     phone: ["9123 4567", 96],
     address: ["Al Khuwair, Muscat", 90],
   },

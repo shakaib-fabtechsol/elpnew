@@ -41,7 +41,7 @@ export function LanguagesField({ id = "languages", value = [], onChange, require
     <div className="form-field space-y-2">
       <Label htmlFor={id}>
         Languages
-        {required && <span className="ms-0.5 text-red-600">*</span>}
+        {required && <span aria-hidden="true" className="ms-1 text-destructive">*</span>}
       </Label>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

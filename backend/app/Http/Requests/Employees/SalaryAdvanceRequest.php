@@ -17,7 +17,9 @@ class SalaryAdvanceRequest extends ApiRequest
             'amount' => ['required', 'numeric', 'gt:0'],
             'deductMonth' => ['required', Rule::in(SalaryAdvance::MONTHS)],
             'deductYear' => ['required', 'integer', 'between:'.$year.','.($year + 1)],
-            'purpose' => ['required', Rule::in(SalaryAdvance::PURPOSES)],
+            // The Add Request sheet asks only for the month and the amount, so
+            // the purpose is optional; the controller fills it in.
+            'purpose' => ['nullable', Rule::in(SalaryAdvance::PURPOSES)],
             'purposeOther' => ['nullable', 'string', 'max:120', 'required_if:purpose,'.SalaryAdvance::OTHER_PURPOSE],
             'reason' => ['nullable', 'string', 'max:500'],
         ];

@@ -104,7 +104,10 @@ class EmployeeRequest extends ApiRequest
 
             'status' => ['nullable', Rule::in(['Active', 'Inactive'])],
             'branch' => $text(60),
-            'dateOfJoining' => [$creating ? 'required' : 'sometimes', 'date_format:Y-m-d'],
+            // Not asked on Add Employee (the client's sheets have no such
+            // field): left out on create, it is set as the record is made -
+            // see columns(). Once a record has one, a change cannot empty it.
+            'dateOfJoining' => [$creating ? 'nullable' : 'sometimes', 'date_format:Y-m-d'],
             'employmentType' => ['nullable', Rule::in(['Full-Time', 'Part-Time', 'Temporary'])],
             'employmentEndDate' => [
                 ...$date,
@@ -220,6 +223,17 @@ class EmployeeRequest extends ApiRequest
             if (array_key_exists($key, $data) && $data[$key] === null) {
                 unset($data[$key]);
             }
+        }
+
+        // The Date of Joining, when a new record is made without one: the
+        // day a trainee's training starts, the day a temporary contract
+        // starts, otherwise the day the record is created.
+        if ($this->isMethod('post') && empty($data['date_of_joining'])) {
+            $data['date_of_joining'] = match (true) {
+                ($data['staff_category'] ?? null) === 'Intern / Trainee' && filled($data['training_start'] ?? null) => $data['training_start'],
+                ($data['contract_type'] ?? null) === 'Fixed-term' && filled($data['contract_start_date'] ?? null) => $data['contract_start_date'],
+                default => now()->toDateString(),
+            };
         }
 
         // Empty money fields are zero, not "nothing".

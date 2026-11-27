@@ -98,6 +98,39 @@ class PermissionTest extends ApiTestCase
         $this->assertSame(['Judicial'], array_values(array_unique($ids)));
     }
 
+    public function test_record_access_can_name_a_branch_as_the_add_employee_sheet_does(): void
+    {
+        // "Department / Branch": Salalah reaches the people working there.
+        $this->grant(self::AISHA, ['scope' => 'department', 'departments' => ['Salalah']]);
+
+        $this->as('aisha')->getJson($this->api('employees/'.self::AHMED))->assertOk();     // Salalah
+        $this->as('aisha')->getJson($this->api('employees/'.self::SARAH))->assertForbidden(); // Muscat
+
+        $rows = $this->as('aisha')->getJson($this->api('employees').'?perPage=100')->json('data');
+        foreach ($rows as $row) {
+            $this->assertTrue($row['id'] === self::AISHA || $row['branch'] === 'Salalah', 'Reached '.$row['name']);
+        }
+
+        $this->as('admin')->putJson($this->api('employees/'.self::AISHA.'/permissions'), $this->state(['scope' => 'department', 'departments' => ['Nizwa']]))
+            ->assertUnprocessable()->assertJsonValidationErrors('departments.0');
+    }
+
+    public function test_the_add_employee_catalogue_has_the_sheets_rows_and_choices(): void
+    {
+        $page = $this->as('admin')->getJson($this->api('permissions/catalog'))->assertOk()->json('data');
+        $modules = array_merge(...array_map(fn ($group) => array_column($group['modules'], 'key'), $page['catalog']));
+
+        // Documents and Reports are rows of the sheet; they are modules now.
+        $this->assertContains('documents', $modules);
+        $this->assertContains('reports', $modules);
+        $this->assertSame(['Muscat', 'Salalah'], $page['branchOptions']);
+        $this->assertSame(['Judicial', 'Administrative', 'Financial / Accounting'], $page['departmentOptions']);
+        // Legal Practice: matter and document access.
+        $lawyer = collect($page['templates'])->firstWhere('value', 'lawyer')['grants'];
+        $this->assertContains('documents.edit', $lawyer);
+        $this->assertContains('reports.view', $lawyer);
+    }
+
     public function test_approving_follows_the_permission_and_the_approval_limit(): void
     {
         $id = $this->advance('ahmed', 300);

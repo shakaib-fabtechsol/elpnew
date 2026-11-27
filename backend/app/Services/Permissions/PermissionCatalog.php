@@ -43,11 +43,15 @@ final class PermissionCatalog
         'workspace' => ['Workspace', 'What the employee sees on signing in', [
             'dashboard' => ['Dashboard', 'Summary, hearings, deadlines and tasks', ['view']],
             'circulars' => ['Circulars', 'Firm circulars and their acknowledgements', self::CRUD],
+            // A row of Add Employee's System Permissions sheet.
+            'reports' => ['Reports', 'Firm reports and their figures', ['view', 'create', 'edit', 'delete', 'approve']],
         ]],
         'legal' => ['Clients & Cases', 'The legal work of the firm', [
-            'clients' => ['Clients', 'Client records and their contacts', self::CRUD],
+            'clients' => ['Clients', 'Client records and their contacts', [...self::CRUD, 'approve']],
             'cases' => ['Cases', 'Active cases, registration, hearings and judgments', self::CRUD],
             'courtFees' => ['Court Fees', 'Court fee payments and their approval', ['view', 'create', 'edit', 'approve', 'reject', 'pay']],
+            // A row of Add Employee's System Permissions sheet: the papers of a matter.
+            'documents' => ['Documents', 'Matter documents and filed papers', [...self::CRUD, 'approve']],
         ]],
         'records' => ['Employee Records', 'Other employees\' files, within the record access set above', [
             'employees' => ['Employee Records', 'Personal, employment and contract information', self::CRUD],
@@ -142,6 +146,20 @@ final class PermissionCatalog
     }
 
     /**
+     * The branches an employee works at (employees.branch). Record access
+     * "by department" can name a branch as well - the System Permissions
+     * sheet chooses one "Department / Branch" - and it reaches the people of
+     * that branch. Both are held in the same `departments` list.
+     */
+    public const BRANCHES = ['Muscat', 'Salalah'];
+
+    /** What record access by department may name: a department or a branch. */
+    public static function reaches(): array
+    {
+        return [...self::departments(), ...self::BRANCHES];
+    }
+
+    /**
      * A template's permissions, record access and limits.
      *
      * @return array{grants:list<string>,scope:string}
@@ -162,17 +180,18 @@ final class PermissionCatalog
                 ...$selfService,
                 ...$of(['financingRequests', 'entitlementRequests', 'allowanceRequests', 'endOfServiceRequests', 'salaries', 'expenses', 'paymentRequests', 'courtFees'], ['pay']),
                 ...$of(['salaries', 'expenses', 'paymentRequests', 'taxes', 'suppliers'], ['view', 'create', 'edit']),
-                ...$of(['employees', 'employeeDocuments', 'payroll', 'bankDetails', 'clients', 'courtFees', 'firmSettings'], ['view']),
+                ...$of(['employees', 'employeeDocuments', 'payroll', 'bankDetails', 'clients', 'courtFees', 'firmSettings', 'reports'], ['view']),
             ])],
             'lawyer' => ['scope' => 'own', 'grants' => self::clean([
                 ...$selfService,
-                ...$of(['clients', 'cases'], ['view', 'create', 'edit']),
+                ...$of(['clients', 'cases', 'documents'], ['view', 'create', 'edit']),
                 ...$of(['courtFees', 'expenses', 'paymentRequests'], ['view', 'create']),
+                ...$of(['reports'], ['view']),
             ])],
             'execution' => ['scope' => 'own', 'grants' => self::clean([
                 ...$selfService,
                 ...$of(['cases'], ['view', 'edit']),
-                ...$of(['clients'], ['view']),
+                ...$of(['clients', 'documents'], ['view']),
                 ...$of(['courtFees'], ['view', 'create']),
             ])],
             default => ['scope' => 'own', 'grants' => self::clean($selfService)],

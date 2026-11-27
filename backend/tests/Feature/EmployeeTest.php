@@ -42,6 +42,42 @@ class EmployeeTest extends ApiTestCase
             ->assertJsonPath('data.netSalary', 1000);
     }
 
+    public function test_an_employee_is_created_from_only_the_add_employee_sheets_fields(): void
+    {
+        // Personal Information, Employment & Contract, Payroll & Banking: the
+        // starred fields of the client's sheets and nothing else.
+        $sheet = [
+            'arabicName' => 'سالم الهنائي', 'employeeName' => 'Salim Al Hinai', 'gender' => 'Male',
+            'highestEducation' => "Bachelor's Degree", 'dateOfBirth' => '1992-04-10', 'nationality' => 'Omani',
+            'civilId' => '99887766', 'idExpiry' => '2030-01-01', 'languages' => ['Arabic', 'English'],
+            'dialCode' => '+968', 'phone' => '9123 4567', 'workEmail' => 'salim.hinai@example.com',
+            'professionalClassification' => 'Lawyer', 'practiceLevel' => 'Primary Court Lawyer',
+            'branch' => 'Muscat', 'department' => 'Judicial', 'occupation' => 'Lawyer',
+            'contractType' => 'Indefinite-term', 'noticePeriod' => '1 Month',
+            'salary' => 900, 'special' => 150,
+            'bankName' => 'Bank Muscat', 'accountHolder' => 'Salim Al Hinai', 'accountNumber' => '0312 0456 7890',
+        ];
+
+        $this->as('admin')->postJson($this->api('employees'), $sheet)
+            ->assertCreated()
+            ->assertJsonPath('data.workEmail', 'salim.hinai@example.com')
+            ->assertJsonPath('data.status', 'Active')
+            // No Date of Joining on the sheet: the record is given today.
+            ->assertJsonPath('data.dateOfJoining', now()->toDateString())
+            ->assertJsonPath('data.netSalary', 1050);
+
+        // A temporary contract joins on its start, a trainee on the training's.
+        $this->as('admin')->postJson($this->api('employees'), [
+            ...$sheet, 'civilId' => '99887767', 'workEmail' => 'temp@example.com', 'contractType' => 'Fixed-term',
+            'contractStartDate' => '2026-12-01', 'employmentEndDate' => '2027-11-30',
+        ])->assertCreated()->assertJsonPath('data.dateOfJoining', '2026-12-01');
+
+        $this->as('admin')->postJson($this->api('employees'), [
+            ...$sheet, 'civilId' => '99887768', 'workEmail' => 'trainee@example.com', 'staffCategory' => 'Intern / Trainee',
+            'occupation' => 'Trainee Lawyer', 'trainingStart' => '2027-01-03', 'trainingEnd' => '2027-06-30',
+        ])->assertCreated()->assertJsonPath('data.dateOfJoining', '2027-01-03');
+    }
+
     public function test_setup_answers_are_kept_and_an_unpaid_trainee_needs_no_salary(): void
     {
         $this->as('admin')->postJson($this->api('employees'), [

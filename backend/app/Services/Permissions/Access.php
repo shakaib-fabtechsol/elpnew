@@ -148,7 +148,9 @@ final class Access
 
         return match (self::scope($user)) {
             'all' => true,
-            'department' => in_array($employee->department, self::departments($user), true),
+            // A department or a branch, whichever was named.
+            'department' => in_array($employee->department, self::departments($user), true)
+                || in_array($employee->branch, self::departments($user), true),
             default => false,
         };
     }
@@ -160,7 +162,8 @@ final class Access
             'all' => $query,
             'department' => $query->where(fn (Builder $q) => $q
                 ->where($column, $user->employee_id)
-                ->orWhereIn($column, Employee::whereIn('department', self::departments($user))->select('id'))),
+                ->orWhereIn($column, Employee::whereIn('department', self::departments($user))
+                    ->orWhereIn('branch', self::departments($user))->select('id'))),
             default => $query->where($column, $user->employee_id),
         };
     }

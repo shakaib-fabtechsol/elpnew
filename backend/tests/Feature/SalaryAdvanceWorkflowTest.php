@@ -50,6 +50,16 @@ class SalaryAdvanceWorkflowTest extends ApiTestCase
             ->assertJsonPath('data.2.action', 'Request submitted');
     }
 
+    public function test_the_purpose_is_optional_and_read_from_the_remarks(): void
+    {
+        $plain = $this->as('aisha')->postJson($this->api('salary-advances'), ['amount' => 300, 'deductMonth' => 'December', 'deductYear' => 2026])
+            ->assertCreated()->json('data.id');
+        $this->assertSame(SalaryAdvance::OTHER_PURPOSE, SalaryAdvance::findOrFail($plain)->purpose);
+
+        $said = $this->submit(['purpose' => null, 'reason' => 'For my son\'s school fees.'])->assertCreated()->json('data.id');
+        $this->assertSame('Education Expenses', SalaryAdvance::findOrFail($said)->purpose);
+    }
+
     public function test_cannot_ask_for_more_than_the_salary_leaves(): void
     {
         // Net 2034 less SA-13 (300, deducted in October - not yet reached? October is this month, so reached).

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CONFIDENCE_FLOOR, extractDemo, intakeType, mapExtraction, needsReview, requiredFields } from "./documentIntake";
+import { CONFIDENCE_FLOOR, extractDemo, intakeType, isEmptyValue, mapExtraction, needsReview, requiredFields } from "./documentIntake";
 import { employeesApi } from "@/lib/api/modules/employees";
 
 // How long the demo takes to read a paper, so the step shows it working.
@@ -153,7 +153,7 @@ export function useDocumentIntake(formData, setFormData) {
   // Field marks are shown once there is something read and nothing still reading.
   const settled = docs.length > 0 && !busy;
   const reviewKeys = Object.keys(meta).filter((key) => needsReview(meta[key], formData[key]));
-  const missingKeys = requiredFields(formData).filter((key) => !formData[key]);
+  const missingKeys = requiredFields(formData).filter((key) => isEmptyValue(formData[key]));
   // A read paper waits on review while anything it said does: a value too
   // unsure to take, or one another paper disagrees with. Once settled, it is
   // Processed.

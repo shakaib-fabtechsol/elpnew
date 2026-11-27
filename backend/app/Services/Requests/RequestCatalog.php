@@ -131,13 +131,20 @@ final class RequestCatalog
      * kind: number | text | longText | date | month (YYYY-MM) | monthName
      *       ("November 2026") | select
      *
-     * @return list<array{key:string,label:string,kind:string,required:bool,options?:list<string>}>
+     * The review shows only what the client's design sheets show: for a
+     * salary advance just the deduction month and the amount; for every
+     * other kind, its required fields. An optional field is still part of
+     * the request - the Smart Request text lands in `reason`, a purpose read
+     * from it in `purpose` - but it is carried silently (`hidden`), never
+     * drawn as a box to fill in.
+     *
+     * @return list<array{key:string,label:string,kind:string,required:bool,hidden:bool,options?:list<string>}>
      */
     public static function fields(string $type): array
     {
         $year = (int) now()->format('Y');
         $f = fn (string $key, string $label, string $kind, bool $required = true, array $options = []) => [
-            'key' => $key, 'label' => $label, 'kind' => $kind, 'required' => $required,
+            'key' => $key, 'label' => $label, 'kind' => $kind, 'required' => $required, 'hidden' => ! $required,
             ...($options ? ['options' => $options] : []),
         ];
 
@@ -146,7 +153,8 @@ final class RequestCatalog
                 $f('amount', 'Advance Amount (OMR)', 'number'),
                 $f('deductMonth', 'Deduct From Salary Of', 'select', true, SalaryAdvance::MONTHS),
                 $f('deductYear', 'Year', 'select', true, [(string) $year, (string) ($year + 1)]),
-                $f('purpose', 'Purpose', 'select', true, SalaryAdvance::PURPOSES),
+                // Not on the sheet: optional, read from the request text when it says.
+                $f('purpose', 'Purpose', 'select', false, SalaryAdvance::PURPOSES),
                 $f('reason', 'Additional Remarks', 'longText', false),
             ],
             'loan' => [
@@ -278,9 +286,9 @@ final class RequestCatalog
         return match ($type) {
             'salaryAdvance' => ['endpoint' => $endpoint, 'file' => null, 'body' => [
                 'amount' => $v['amount'], 'deductMonth' => $v['deductMonth'], 'deductYear' => (int) $v['deductYear'],
-                'purpose' => $v['purpose'], 'reason' => $v['reason'],
+                'purpose' => $v['purpose'] ?? null, 'reason' => $v['reason'] ?? null,
                 // "Other" has to say what it is; the remarks are where it was said.
-                'purposeOther' => $v['purpose'] === SalaryAdvance::OTHER_PURPOSE ? mb_substr((string) $v['reason'], 0, 120) : null,
+                'purposeOther' => ($v['purpose'] ?? null) === SalaryAdvance::OTHER_PURPOSE ? mb_substr((string) $v['reason'], 0, 120) : null,
             ]],
             'loan' => ['endpoint' => $endpoint, 'file' => 'attachment', 'body' => [
                 'loanAmount' => $v['amount'], 'monthly' => $v['monthly'], 'startMonth' => $v['startMonth'], 'comment' => $v['reason'],

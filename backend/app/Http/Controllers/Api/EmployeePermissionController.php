@@ -53,6 +53,7 @@ class EmployeePermissionController extends Controller
             'templates' => array_map(fn ($key, $label) => ['value' => $key, 'label' => $label, ...PermissionCatalog::template($key)], array_keys($templates), $templates),
             'scopes' => array_map(fn ($key, $label) => ['value' => $key, 'label' => $label], array_keys(PermissionCatalog::SCOPES), PermissionCatalog::SCOPES),
             'departmentOptions' => PermissionCatalog::departments(),
+            'branchOptions' => PermissionCatalog::BRANCHES,
         ]]);
     }
 
@@ -261,7 +262,8 @@ class EmployeePermissionController extends Controller
             'grants.*' => ['string'],
             'scope' => ['required', Rule::in(array_keys(PermissionCatalog::SCOPES))],
             'departments' => ['nullable', 'array', 'required_if:scope,department'],
-            'departments.*' => [Rule::in(PermissionCatalog::departments())],
+            // A department or a branch (see PermissionCatalog::BRANCHES).
+            'departments.*' => [Rule::in(PermissionCatalog::reaches())],
             'approvalLimit' => ['nullable', 'numeric', 'min:0', 'max:999999999'],
             'paymentLimit' => ['nullable', 'numeric', 'min:0', 'max:999999999'],
         ], ['departments.required_if' => 'Choose at least one department.']);

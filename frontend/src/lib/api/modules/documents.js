@@ -88,6 +88,24 @@ export async function viewDocument(paper) {
   }
 }
 
+/**
+ * A filed picture (the employee's photo) as an address an <img> can show:
+ * fetched with the signed-in user's token, since the copy is not public.
+ * Resolves to "" when it cannot be had; the caller revokes what it gets.
+ */
+export async function paperImageUrl(paper) {
+  if (paper.fileUrl) return paper.fileUrl;
+  try {
+    const response = await fetch(BASE + "/" + paper.downloadPath, {
+      headers: { Authorization: "Bearer " + getToken() },
+    });
+    if (!response.ok) return "";
+    return URL.createObjectURL(await response.blob());
+  } catch {
+    return "";
+  }
+}
+
 /** Saves a filed paper's copy to the computer, under the name it was filed with. */
 export async function downloadDocument(paper) {
   try {
