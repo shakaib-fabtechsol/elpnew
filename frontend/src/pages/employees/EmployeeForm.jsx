@@ -2693,6 +2693,9 @@ export default function EmployeeForm({ self }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    // Only this form's own submit saves: a form inside it (an asset's details,
+    // a dialog) is sent on by React to here, and must not save the step.
+    if (e.target !== e.currentTarget) return;
     // The documents page saves each paper with its own button; Enter in one
     // of its fields must not save, or leave, the record around it. Nor may it
     // on Employee Information or Requests, where nothing is saved this way -

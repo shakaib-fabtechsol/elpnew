@@ -187,11 +187,17 @@ function DetailsForm({ type, form, errors, saving, onChange, onSubmit }) {
   });
 
   return (
-    <form
-      noValidate
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit();
+    // Not a <form>: on Add Employee this sits inside that page's own form,
+    // and a form inside a form makes the browser submit - and reload - the
+    // page. Add to Register is a plain button; Enter in a field does the same.
+    <div
+      role="group"
+      aria-label={type + " details"}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && e.target.tagName === "INPUT") {
+          e.preventDefault();
+          onSubmit();
+        }
       }}
       className="rounded-xl border border-container-border bg-slate-50/60 p-5"
     >
@@ -212,12 +218,12 @@ function DetailsForm({ type, form, errors, saving, onChange, onSubmit }) {
         </Field>
       </div>
       <div className="mt-4 flex justify-end">
-        <Button type="submit" disabled={saving}>
+        <Button type="button" disabled={saving} onClick={() => onSubmit()}>
           <Plus className="me-1 size-4" aria-hidden="true" />
           {saving ? "Adding…" : "Add to Register"}
         </Button>
       </div>
-    </form>
+    </div>
   );
 }
 
@@ -240,17 +246,9 @@ function CloseDialog({ closing, saving, onCancel, onConfirm }) {
             {returning ? "Returned" : "Disposed"}.
           </DialogDescription>
         </DialogHeader>
-        <form
-          noValidate
-          className="space-y-4"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (!date) return setError("Enter the date.");
-            if (asset?.issueDate && date < asset.issueDate) return setError("The date cannot be before the item was issued.");
-            if (date > today()) return setError("The date cannot be in the future.");
-            setError((await onConfirm(date, notes)) || "");
-          }}
-        >
+        {/* A plain group, not a <form>, for the same reason as the details:
+            this window opens over a page that is itself a form. */}
+        <div className="space-y-4">
           <Field id="asset-close-date" label={returning ? "Return Date" : "Disposal Date"} required error={error}>
             <DateField id="asset-close-date" value={date} min={asset?.issueDate} max={today()} onChange={(e) => setDate(e.target.value)} />
           </Field>
@@ -268,11 +266,20 @@ function CloseDialog({ closing, saving, onCancel, onConfirm }) {
             <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
               Cancel
             </Button>
-            <Button type="submit" disabled={saving}>
+            <Button
+              type="button"
+              disabled={saving}
+              onClick={async () => {
+                if (!date) return setError("Enter the date.");
+                if (asset?.issueDate && date < asset.issueDate) return setError("The date cannot be before the item was issued.");
+                if (date > today()) return setError("The date cannot be in the future.");
+                setError((await onConfirm(date, notes)) || "");
+              }}
+            >
               {saving ? "Saving…" : returning ? "Record Return" : "Record Disposal"}
             </Button>
           </DialogFooter>
-        </form>
+        </div>
       </DialogContent>
     </Dialog>
   );
