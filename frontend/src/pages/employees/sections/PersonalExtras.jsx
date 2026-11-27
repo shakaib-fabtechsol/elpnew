@@ -150,7 +150,7 @@ export function CvField({ value, onChange, facts }) {
     setWriting(false);
     if (read?.summary) {
       onChange(read.summary);
-      setEngine(read.available ? "ai" : "rules");
+      setEngine(read.available ? "ai" : read.reason === "unanswered" ? "unanswered" : "rules");
       setEditing(false);
     }
   };
@@ -216,9 +216,11 @@ export function CvField({ value, onChange, facts }) {
             </Button>
           </div>
         )}
-        {engine === "rules" && !editing && (
+        {(engine === "rules" || engine === "unanswered") && !editing && (
           <p className="mt-1.5 text-xs text-muted-foreground">
-            Written from the details on file - no AI service is connected. Review it before saving.
+            {engine === "unanswered"
+              ? "Written from the details on file - the AI service did not answer. Review it before saving, or try again later."
+              : "Written from the details on file - no AI service is connected. Review it before saving."}
           </p>
         )}
       </div>

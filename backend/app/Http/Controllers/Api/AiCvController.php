@@ -56,11 +56,12 @@ class AiCvController extends Controller
                     return response()->json(['data' => ['available' => true, 'engine' => $ai->engine(), 'summary' => $summary]]);
                 }
             } catch (AiUnavailable) {
-                // Worded by rule below.
+                // Worded by rule below; the screen says the AI did not answer.
+                return response()->json(['data' => ['available' => false, 'engine' => 'rules', 'reason' => 'unanswered', 'summary' => $this->byRule($facts)]]);
             }
         }
 
-        return response()->json(['data' => ['available' => false, 'engine' => 'rules', 'summary' => $this->byRule($facts)]]);
+        return response()->json(['data' => ['available' => false, 'engine' => 'rules', 'reason' => $ai->available() ? 'unanswered' : 'off', 'summary' => $this->byRule($facts)]]);
     }
 
     /** The same facts, put into sentences without a model. */
